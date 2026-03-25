@@ -142,10 +142,9 @@ function createPanel() {
 let _lastState = null;
 let _prevState = null;
 let _lastTurn = 0;
-let _changedKeys = new Set(); // tracks which fields changed this turn
+let _changedKeys = new Set();
 let _staleWarning = false;
-let _onRevertTurn = null;
-let _lastCommitTxIds = []; // TX ids from the last commit, for revert
+let _lastCommitTxIds = [];
 
 function renderAllSections() {
     const container = document.getElementById('gl-all-sections');
