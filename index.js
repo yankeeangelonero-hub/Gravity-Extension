@@ -302,22 +302,34 @@ async function onUserMessage(messageId) {
 
 // ─── OOC Command Injections (from UI buttons) ─────────────────────────────────
 
-function injectOOCCommand(text) {
+function injectOOCCommand(text, leadingMessage) {
     _pendingOOCInjection = text;
     injectPrompt();
-    // Also send as user message so the LLM sees it in chat
-    const context = SillyTavern.getContext();
-    context.sendSystemMessage?.('generic', text, { isSmallSys: true });
+    // Insert leading message into chat input for the player to send
+    const textarea = document.getElementById('send_textarea');
+    if (textarea && leadingMessage) {
+        textarea.value = leadingMessage;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.focus();
+    }
 }
 
 function handleSetupButton() {
     if (isSetupActive()) {
         cancelSetup();
+        showSetupPhase(null);
         toastr.info('Setup cancelled.');
     } else {
         startSetup();
+        showSetupPhase(getPhaseLabel());
         injectPrompt();
-        toastr.info('Setup started — Phase 1: Voice & Tone');
+        // Insert leading message into chat input
+        const textarea = document.getElementById('send_textarea');
+        if (textarea) {
+            textarea.value = 'OOC: Let\'s set up a new game.';
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            textarea.focus();
+        }
     }
 }
 
@@ -376,9 +388,17 @@ async function handleOOCButton(command) {
         return;
     }
 
+    const LEADING_MESSAGES = {
+        preflight: 'OOC: Run a preflight check.',
+        chapter_close: 'OOC: Close this chapter.',
+        timeskip: 'OOC: Timeskip.',
+        archive: 'OOC: Archive and consolidate.',
+        eval: 'OOC: Full system evaluation.',
+    };
+
     const prompt = OOC_PROMPTS[command];
     if (prompt) {
-        injectOOCCommand(prompt);
+        injectOOCCommand(prompt, LEADING_MESSAGES[command] || `OOC: ${command}`);
     }
 }
 
@@ -390,7 +410,8 @@ async function handlePromoteButton() {
 Promote ${name} from KNOWN to TRACKED (or TRACKED to PRINCIPAL).
 1. Draft dossier from chat context (want, doing, cost, 1-2 constraints, reads, noticed details, stance)
 2. Present to player for confirmation
-3. On confirmation, emit ledger commands for tier change + dossier fields + constraints`);
+3. On confirmation, emit ledger commands for tier change + dossier fields + constraints`,
+    `OOC: Promote ${name}.`);
 }
 
 async function handleRetireButton() {
@@ -398,7 +419,8 @@ async function handleRetireButton() {
     const name = await Popup.show.input('Retire Character', 'Character name to retire:');
     if (!name) return;
     injectOOCCommand(`[OOC: RETIRE ${name}]
-Retire ${name} to KNOWN tier. Emit tier transition. Dossier goes dormant.`);
+Retire ${name} to KNOWN tier. Emit tier transition. Dossier goes dormant.`,
+    `OOC: Retire ${name}.`);
 }
 
 // ─── Export/Import/New for UI ──────────────────────────────────────────────────
