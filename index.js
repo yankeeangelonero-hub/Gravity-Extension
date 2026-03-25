@@ -14,7 +14,7 @@ import { computeState } from './state-compute.js';
 import { formatStateView, formatReadme, formatCharacterEntry } from './state-view.js';
 import { extractLedgerBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
-import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
+import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning, setIntimateMode } from './ui-panel.js';
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback } from './setup-wizard.js';
 
 const MODULE_NAME = 'gravity-ledger';
@@ -38,6 +38,7 @@ const MAX_CORRECTION_ATTEMPTS = 3;
 let _pendingCorrections = [];
 let _pendingReinforcement = null;
 let _pendingOOCInjection = null;
+let _intimacyMode = false;
 
 /**
  * Add failed lines to the correction queue.
@@ -200,11 +201,20 @@ async function onMessageReceived(messageId) {
         message.mes = extraction.cleanedMessage;
     }
 
-    // No block found
+    // No block found — suppress during intimacy mode
     if (!extraction.found) {
-        _pendingReinforcement = getReinforcement(extraction, _turnCounter);
+        if (!_intimacyMode) {
+            _pendingReinforcement = getReinforcement(extraction, _turnCounter);
+        }
         injectPrompt();
         return;
+    }
+
+    // If we receive a ledger block during intimacy, auto-exit intimacy mode
+    if (_intimacyMode && extraction.found && extraction.transactions.length > 0) {
+        _intimacyMode = false;
+        setIntimateMode(false);
+        console.log(`${LOG_PREFIX} Ledger block received during intimacy — auto-exiting intimacy mode.`);
     }
 
     // Extraction-level errors (failed lines from command parser)
@@ -301,15 +311,12 @@ async function onUserMessage(messageId) {
     }
 }
 
-// ─── OOC Command Injections (from UI buttons) ─────────────────────────────────
+// ─── UI Button Handlers ────────────────────────────────────────────────────────
 
-function injectOOCCommand(text, leadingMessage) {
-    _pendingOOCInjection = text;
-    injectPrompt();
-    // Insert leading message into chat input for the player to send
+function insertChatMessage(text) {
     const textarea = document.getElementById('send_textarea');
-    if (textarea && leadingMessage) {
-        textarea.value = leadingMessage;
+    if (textarea) {
+        textarea.value = text;
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
         textarea.focus();
     }
@@ -324,105 +331,72 @@ function handleSetupButton() {
         startSetup();
         showSetupPhase(getPhaseLabel());
         injectPrompt();
-        // Insert leading message into chat input
-        const textarea = document.getElementById('send_textarea');
-        if (textarea) {
-            textarea.value = 'OOC: Let\'s set up a new game.';
-            textarea.dispatchEvent(new Event('input', { bubbles: true }));
-            textarea.focus();
-        }
+        insertChatMessage('OOC: Let\'s set up a new game.');
     }
 }
 
-// OOC tool prompts for buttons
-const OOC_PROMPTS = {
-    preflight: `[OOC: PREFLIGHT — Mid-chapter constraint review]
-Enter psychologist voice. Read the current state and audit:
-- For each principal constraint: test count, evidence, integrity, direction, projection
-- Shedding order: unchanged or revised?
-- Collision health: active count, tightening vs stalling
-- System check: turns since consolidation, entity registry, timestamps, constants populated
-Output the review. Ask if player wants to fix issues or continue.`,
+function handleIntimateButton() {
+    _intimacyMode = !_intimacyMode;
+    setIntimateMode(_intimacyMode);
 
-    chapter_close: `[OOC: CHAPTER TRANSITION — Multi-step protocol]
-Execute Step 1 this response:
-1. Chapter summary (3-5 sentences, key beats, turning point)
-2. Author reflection (planned vs actual)
-3. Arc check (closer to answered?)
-Say "Step 1 complete. Type 'continue' for health check."`,
-
-    timeskip: `[OOC: TIMESKIP]
-The player wants to skip ahead. Ask how long, then:
-1. Consolidation snapshot
-2. Advance the world (characters, constraints, collisions, factions)
-3. Health check post-advance
-4. Emit advance transactions
-5. Write landing scene with full deduction + ledger`,
-
-    archive: `[OOC: ARCHIVE — Consolidation]
-Review recent prose for missed ledger transactions. Check for:
-- Constraint tests never recorded
-- Collision distance changes missed
-- READS updates not captured
-- Noticed details that fired but weren't removed
-Emit catch-up transactions with original timestamps.`,
-
-    eval: `[OOC: FULL SYSTEM EVALUATION]
-Deep diagnostic across 5 phases:
-1. Read state view + transaction history
-2. Hot state integrity (principal, cast, PC, collisions)
-3. Cold state integrity (ledger entities)
-4. Cross-reference (action-state drift)
-5. Structural (data integrity)
-Output pass counts, issues, and AMEND transactions for fixes.`,
-};
-
-async function handleOOCButton(command) {
-    if (command === 'snapshot') {
-        // Snapshot runs locally, no LLM needed
-        try {
-            const snap = await createSnapshot(_currentState, 'Manual snapshot');
-            toastr.success(`Snapshot #${snap.id} created.`);
-        } catch (err) {
-            toastr.error('Snapshot failed: ' + err.message);
-        }
-        return;
-    }
-
-    const LEADING_MESSAGES = {
-        preflight: 'OOC: Run a preflight check.',
-        chapter_close: 'OOC: Close this chapter.',
-        timeskip: 'OOC: Timeskip.',
-        archive: 'OOC: Archive and consolidate.',
-        eval: 'OOC: Full system evaluation.',
-    };
-
-    const prompt = OOC_PROMPTS[command];
-    if (prompt) {
-        injectOOCCommand(prompt, LEADING_MESSAGES[command] || `OOC: ${command}`);
+    if (_intimacyMode) {
+        _pendingOOCInjection = INTIMATE_PROMPT;
+        injectPrompt();
+        insertChatMessage('OOC: Begin intimate scene.');
+        toastr.info('Intimacy mode ON — ledger paused.');
+    } else {
+        _pendingOOCInjection = INTIMATE_EXIT_PROMPT;
+        injectPrompt();
+        insertChatMessage('OOC: Scene ends.');
+        toastr.info('Intimacy mode OFF — ledger resumed.');
     }
 }
 
-async function handlePromoteButton() {
-    const { Popup } = SillyTavern.getContext();
-    const name = await Popup.show.input('Promote Character', 'Character name to promote:');
-    if (!name) return;
-    injectOOCCommand(`[OOC: PROMOTE ${name}]
-Promote ${name} from KNOWN to TRACKED (or TRACKED to PRINCIPAL).
-1. Draft dossier from chat context (want, doing, cost, 1-2 constraints, reads, noticed details, stance)
-2. Present to player for confirmation
-3. On confirmation, emit ledger commands for tier change + dossier fields + constraints`,
-    `OOC: Promote ${name}.`);
-}
+const INTIMATE_PROMPT = `[INTIMACY MODE — ACTIVE]
 
-async function handleRetireButton() {
-    const { Popup } = SillyTavern.getContext();
-    const name = await Popup.show.input('Retire Character', 'Character name to retire:');
-    if (!name) return;
-    injectOOCCommand(`[OOC: RETIRE ${name}]
-Retire ${name} to KNOWN tier. Emit tier transition. Dossier goes dormant.`,
-    `OOC: Retire ${name}.`);
-}
+Deduction and ledger PAUSE during this scene. Pure prose and choices until the scene ends.
+
+Gate check first:
+- Has the relationship earned this moment?
+- Has the narrative escalated naturally?
+- Is consent plausible within character dynamics?
+
+If gate passes, begin the interactive scene:
+
+Each turn: 200-400 words of sensory prose + 3-4 clickable options as HTML buttons:
+<div class="option-container">
+<button class="option-button" onclick="document.getElementById('send_textarea').value=this.textContent;document.getElementById('send_textarea').dispatchEvent(new Event('input',{bubbles:true}))">Option text here</button>
+</div>
+
+Rotate choice frameworks across turns:
+- Sensation type (gentle / urgent / exploratory / overwhelming)
+- Power dynamic (lead / follow / match / surrender)
+- Emotional register (tender / desperate / playful / raw)
+- Body focus (hands / mouth / skin / weight)
+
+Every 2-3 turns: partner interiority flash (2-4 sentences, first-person from their POV).
+
+Check collision distances each turn — the world doesn't pause even if the ledger does.
+
+Scene ends on: climax, aftercare, interruption, or "OOC: fade to black"
+
+Do NOT emit ledger blocks during the scene.`;
+
+const INTIMATE_EXIT_PROMPT = `[INTIMACY MODE — ENDED]
+
+The intimate scene has concluded. Resume normal operation.
+
+Emit post-scene ledger commands:
+> READ char:[principal] target=[pc] "[updated interpretation after intimacy]" -- Post-intimacy read
+> MAP_SET char:[principal] field=intimate_history key=ENCOUNTERS value="[count]" -- Encounter count
+> MAP_SET char:[principal] field=intimate_history key=DYNAMIC value="[who led, power pattern]" -- Dynamic
+> MAP_SET char:[principal] field=intimate_history key=DISCOVERED value="[vulnerabilities/preferences found]" -- Discovered
+> APPEND char:[principal] field=key_moments value="[timestamp] [what happened — emotional truth, not mechanics]" -- Key moment
+
+Check: did any constraint get pressured during the scene? If so:
+> MOVE constraint:[id] field=integrity [FROM]->[TO] -- Post-intimacy pressure
+
+Resume full deduction + ledger blocks from next turn.`;
 
 // ─── Revert Turn ───────────────────────────────────────────────────────────────
 
@@ -502,9 +476,7 @@ async function handleImportData(data) {
         onExport: handleExportData,
         onImport: handleImportData,
         onSetup: handleSetupButton,
-        onOOC: handleOOCButton,
-        onPromote: handlePromoteButton,
-        onRetire: handleRetireButton,
+        onIntimate: handleIntimateButton,
         onRevertTurn: handleRevertTurn,
     });
 

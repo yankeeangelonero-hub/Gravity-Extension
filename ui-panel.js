@@ -18,18 +18,15 @@ let _onExport = null;
 let _onImport = null;
 let _onNew = null;
 let _onSetup = null;
-let _onOOC = null;
-let _onPromote = null;
-let _onRetire = null;
+let _onIntimate = null;
+let _onRevertTurn = null;
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onOOC, onPromote, onRetire, onRevertTurn }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onIntimate, onRevertTurn }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
     _onSetup = onSetup;
-    _onOOC = onOOC;
-    _onPromote = onPromote;
-    _onRetire = onRetire;
+    _onIntimate = onIntimate;
     _onRevertTurn = onRevertTurn;
 }
 
@@ -101,14 +98,7 @@ function createPanel() {
         </div>
         <div class="gl-cmd-bar" id="gl-cmd-bar">
             <button class="gl-cmd-btn" data-cmd="setup" title="Setup Wizard (or cancel)"><i class="fa-solid fa-wand-magic-sparkles"></i> Setup</button>
-            <button class="gl-cmd-btn" data-cmd="save" title="Create snapshot"><i class="fa-solid fa-floppy-disk"></i></button>
-            <button class="gl-cmd-btn" data-cmd="preflight" title="Preflight check"><i class="fa-solid fa-stethoscope"></i></button>
-            <button class="gl-cmd-btn" data-cmd="eval" title="Full audit"><i class="fa-solid fa-microscope"></i></button>
-            <button class="gl-cmd-btn" data-cmd="archive" title="Archive / consolidate"><i class="fa-solid fa-box-archive"></i></button>
-            <button class="gl-cmd-btn" data-cmd="chapter_close" title="Close chapter"><i class="fa-solid fa-flag-checkered"></i></button>
-            <button class="gl-cmd-btn" data-cmd="timeskip" title="Timeskip"><i class="fa-solid fa-forward"></i></button>
-            <button class="gl-cmd-btn" data-cmd="promote" title="Promote character"><i class="fa-solid fa-arrow-up"></i></button>
-            <button class="gl-cmd-btn" data-cmd="retire" title="Retire character"><i class="fa-solid fa-arrow-down"></i></button>
+            <button class="gl-cmd-btn" data-cmd="intimate" id="gl-intimate-btn" title="Toggle intimacy mode"><i class="fa-solid fa-heart"></i> Intimate</button>
         </div>
         <div class="gl-setup-indicator gl-hidden" id="gl-setup-indicator">
             <span id="gl-setup-label"></span>
@@ -136,10 +126,7 @@ function createPanel() {
 
         switch (cmd) {
             case 'setup': if (_onSetup) _onSetup(); break;
-            case 'save': if (_onOOC) _onOOC('snapshot'); break;
-            case 'promote': if (_onPromote) _onPromote(); break;
-            case 'retire': if (_onRetire) _onRetire(); break;
-            default: if (_onOOC) _onOOC(cmd); break;
+            case 'intimate': if (_onIntimate) _onIntimate(); break;
         }
     });
 
@@ -809,4 +796,14 @@ function showSetupPhase(label) {
     }
 }
 
-export { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning, PANEL_ID };
+function setIntimateMode(active) {
+    const btn = document.getElementById('gl-intimate-btn');
+    if (btn) {
+        btn.classList.toggle('gl-intimate-active', active);
+        btn.innerHTML = active
+            ? '<i class="fa-solid fa-heart"></i> Intimate (ON)'
+            : '<i class="fa-solid fa-heart"></i> Intimate';
+    }
+}
+
+export { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning, setIntimateMode, PANEL_ID };
