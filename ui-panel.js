@@ -22,7 +22,7 @@ let _onOOC = null;
 let _onPromote = null;
 let _onRetire = null;
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onOOC, onPromote, onRetire }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onOOC, onPromote, onRetire, onRevertTurn }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
@@ -30,6 +30,7 @@ function setCallbacks({ onExport, onImport, onNew, onSetup, onOOC, onPromote, on
     _onOOC = onOOC;
     _onPromote = onPromote;
     _onRetire = onRetire;
+    _onRevertTurn = onRevertTurn;
 }
 
 let _currentBookName = '';
@@ -152,7 +153,12 @@ function createPanel() {
 }
 
 let _lastState = null;
+let _prevState = null;
 let _lastTurn = 0;
+let _changedKeys = new Set(); // tracks which fields changed this turn
+let _staleWarning = false;
+let _onRevertTurn = null;
+let _lastCommitTxIds = []; // TX ids from the last commit, for revert
 
 function renderAllSections() {
     const container = document.getElementById('gl-all-sections');
@@ -211,7 +217,7 @@ function renderAllSections() {
 
 // ─── Update Panel ───────────────────────────────────────────────────────────────
 
-function updatePanel(state, turn) {
+function updatePanel(state, turn, committedTxIds) {
     if (!document.getElementById(PANEL_ID)) createPanel();
 
     const statusEl = document.getElementById('gl-status');
@@ -225,14 +231,124 @@ function updatePanel(state, turn) {
         return;
     }
 
+    // Compute changed keys by comparing prev and current state
+    _changedKeys = new Set();
+    if (_prevState && _lastTurn !== turn) {
+        computeChangedKeys(_prevState, state, '');
+    }
+
+    _prevState = _lastState ? structuredClone(_lastState) : null;
     _lastState = state;
     _lastTurn = turn;
+    if (committedTxIds) _lastCommitTxIds = committedTxIds;
 
-    if (statusEl) statusEl.textContent = 'active';
+    if (statusEl) statusEl.textContent = _staleWarning ? 'stale — eval recommended' : 'active';
     if (turnEl) turnEl.textContent = `Turn ${turn}`;
     if (txEl) txEl.textContent = `TX ${state.lastTxId ?? 0}`;
 
     renderAllSections();
+
+    // Apply change highlights after render
+    if (_changedKeys.size > 0) {
+        applyChangeHighlights();
+        showRevertButton(true);
+        // Auto-clear highlights after 8 seconds
+        setTimeout(() => {
+            document.querySelectorAll('.gl-changed').forEach(el => el.classList.remove('gl-changed'));
+            showRevertButton(false);
+        }, 8000);
+    }
+}
+
+function computeChangedKeys(prev, curr, prefix) {
+    if (!prev || !curr) return;
+    for (const collection of ['characters', 'constraints', 'collisions', 'chapters', 'factions']) {
+        const pc = prev[collection] || {};
+        const cc = curr[collection] || {};
+        for (const id of new Set([...Object.keys(pc), ...Object.keys(cc)])) {
+            if (!pc[id]) { _changedKeys.add(`${collection}.${id}`); continue; }
+            if (!cc[id]) { _changedKeys.add(`${collection}.${id}`); continue; }
+            for (const f of new Set([...Object.keys(pc[id] || {}), ...Object.keys(cc[id] || {})])) {
+                if (JSON.stringify(pc[id]?.[f]) !== JSON.stringify(cc[id]?.[f])) {
+                    _changedKeys.add(`${collection}.${id}.${f}`);
+                    _changedKeys.add(`${collection}.${id}`);
+                }
+            }
+        }
+    }
+    for (const s of ['world', 'pc', 'divination']) {
+        const ps = prev[s] || {};
+        const cs = curr[s] || {};
+        for (const f of new Set([...Object.keys(ps), ...Object.keys(cs)])) {
+            if (f === '_history') continue;
+            if (JSON.stringify(ps[f]) !== JSON.stringify(cs[f])) {
+                _changedKeys.add(`${s}.${f}`);
+            }
+        }
+    }
+    if (JSON.stringify(prev.story_summary) !== JSON.stringify(curr.story_summary)) {
+        _changedKeys.add('story_summary');
+    }
+}
+
+function applyChangeHighlights() {
+    // Highlight character tabs that changed
+    document.querySelectorAll('.gl-char-tab').forEach(tab => {
+        const id = tab.dataset.charid;
+        if (_changedKeys.has(`characters.${id}`) || (id === 'pc' && [..._changedKeys].some(k => k.startsWith('pc.')))) {
+            tab.classList.add('gl-changed');
+        }
+    });
+    // Highlight section headers that have changes
+    document.querySelectorAll('.gl-section').forEach(section => {
+        const sid = section.dataset.section;
+        let hasChanges = false;
+        if (sid === 'characters') hasChanges = [..._changedKeys].some(k => k.startsWith('characters.') || k.startsWith('constraints.') || k.startsWith('pc.'));
+        if (sid === 'world') hasChanges = [..._changedKeys].some(k => k.startsWith('world.') || k.startsWith('factions.'));
+        if (sid === 'collisions') hasChanges = [..._changedKeys].some(k => k.startsWith('collisions.'));
+        if (sid === 'arc') hasChanges = [..._changedKeys].some(k => k.startsWith('chapters.') || k === 'story_summary');
+        if (sid === 'divination') hasChanges = [..._changedKeys].some(k => k.startsWith('divination.'));
+        if (hasChanges) section.querySelector('.gl-section-header')?.classList.add('gl-changed');
+    });
+    // Highlight constraint cards that changed
+    document.querySelectorAll('.gl-constraint-card').forEach(card => {
+        // Try to find constraint id from the card content
+        const title = card.querySelector('.gl-constraint-title')?.textContent || '';
+        for (const key of _changedKeys) {
+            if (key.startsWith('constraints.') && title) {
+                card.classList.add('gl-changed');
+                break;
+            }
+        }
+    });
+    // Highlight collision cards that changed
+    document.querySelectorAll('.gl-collision-card').forEach(card => {
+        card.classList.add('gl-changed');
+    });
+}
+
+function showRevertButton(show) {
+    let btn = document.getElementById('gl-revert-btn');
+    if (show && !btn) {
+        btn = document.createElement('button');
+        btn.id = 'gl-revert-btn';
+        btn.className = 'gl-revert-btn';
+        btn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Revert Turn';
+        btn.addEventListener('click', () => {
+            if (_onRevertTurn) _onRevertTurn(_lastCommitTxIds);
+        });
+        const footer = document.querySelector(`#${PANEL_ID} .gl-footer`);
+        if (footer) footer.appendChild(btn);
+    } else if (!show && btn) {
+        btn.remove();
+    }
+}
+
+function setStaleWarning(stale) {
+    _staleWarning = stale;
+    const statusEl = document.getElementById('gl-status');
+    if (statusEl) statusEl.textContent = stale ? 'stale — eval recommended' : 'active';
+    if (stale) toastr.warning('Message swiped/deleted — ledger may be out of sync. Run Eval to check.');
 }
 
 // ─── Tab 1: Characters ──────────────────────────────────────────────────────────
@@ -693,4 +809,4 @@ function showSetupPhase(label) {
     }
 }
 
-export { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, PANEL_ID };
+export { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning, PANEL_ID };

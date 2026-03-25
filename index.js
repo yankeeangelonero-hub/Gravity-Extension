@@ -14,7 +14,7 @@ import { computeState } from './state-compute.js';
 import { formatStateView, formatReadme, formatCharacterEntry } from './state-view.js';
 import { extractLedgerBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
-import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase } from './ui-panel.js';
+import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback } from './setup-wizard.js';
 
 const MODULE_NAME = 'gravity-ledger';
@@ -256,7 +256,8 @@ async function onMessageReceived(messageId) {
                 checkPhaseCompletion(committed, _currentState);
             }
 
-            updatePanel(_currentState, _turnCounter);
+            const commitIds = committed.map(tx => tx.tx);
+            updatePanel(_currentState, _turnCounter, commitIds);
 
             if (_turnCounter % _autoSnapshotInterval === 0) {
                 await createSnapshot(_currentState, `Auto-snapshot turn ${_turnCounter}`);
@@ -423,6 +424,49 @@ Retire ${name} to KNOWN tier. Emit tier transition. Dossier goes dormant.`,
     `OOC: Retire ${name}.`);
 }
 
+// ─── Revert Turn ───────────────────────────────────────────────────────────────
+
+async function handleRevertTurn(txIds) {
+    if (!txIds || txIds.length === 0) {
+        toastr.warning('Nothing to revert.');
+        return;
+    }
+    try {
+        const { Popup } = SillyTavern.getContext();
+        const result = await Popup.show.confirm('Revert Turn', `Revert ${txIds.length} transactions from the last turn?`);
+        if (!result) return;
+
+        // Remove the transactions from the ledger
+        const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+        const data = chatMetadata['gravity_ledger'];
+        if (data && data.transactions) {
+            data.transactions = data.transactions.filter(tx => !txIds.includes(tx.tx));
+            data.lastTxId = data.transactions.length > 0 ? Math.max(...data.transactions.map(t => t.tx || 0)) : 0;
+            await saveMetadata();
+        }
+
+        // Reinitialize to recompute state
+        resetLedger();
+        await initialize(true);
+        toastr.success(`Reverted ${txIds.length} transactions.`);
+    } catch (err) {
+        console.error(`${LOG_PREFIX} Revert failed:`, err);
+        toastr.error('Revert failed: ' + err.message);
+    }
+}
+
+// ─── Swipe/Delete Detection ────────────────────────────────────────────────────
+
+function onMessageSwiped() {
+    console.log(`${LOG_PREFIX} Message swiped — ledger may be stale.`);
+    setStaleWarning(true);
+}
+
+function onMessageDeleted() {
+    console.log(`${LOG_PREFIX} Message deleted — ledger may be stale.`);
+    setStaleWarning(true);
+}
+
 // ─── Export/Import/New for UI ──────────────────────────────────────────────────
 
 async function handleNewLedger() {
@@ -461,6 +505,7 @@ async function handleImportData(data) {
         onOOC: handleOOCButton,
         onPromote: handlePromoteButton,
         onRetire: handleRetireButton,
+        onRevertTurn: handleRevertTurn,
     });
 
     // Setup wizard phase change callback
@@ -478,6 +523,8 @@ async function handleImportData(data) {
     eventSource.on(event_types.CHAT_CHANGED, onChatChanged);
     eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
     eventSource.on(event_types.USER_MESSAGE_RENDERED, onUserMessage);
+    eventSource.on(event_types.MESSAGE_SWIPED, onMessageSwiped);
+    eventSource.on(event_types.MESSAGE_DELETED, onMessageDeleted);
 
     // Re-inject prompts before generation
     eventSource.on(event_types.GENERATION_STARTED, () => {

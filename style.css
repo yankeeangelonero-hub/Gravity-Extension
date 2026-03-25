@@ -120,6 +120,16 @@
 .gl-badge-CLOSING   { background:#2a2a1a; color:#aa6; }
 .gl-badge-CLOSED    { background:#2a2a2a; color:#888; }
 
+/* Change highlighting */
+#gravity-ledger-panel .gl-changed { animation:gl-flash 2s ease-out; border-color:#da6 !important; }
+@keyframes gl-flash { 0% { background:rgba(218,166,100,.25); } 100% { background:transparent; } }
+#gravity-ledger-panel .gl-section-header.gl-changed { border-left:3px solid #da6; }
+#gravity-ledger-panel .gl-char-tab.gl-changed { border-color:#da6; color:#da6; }
+
+/* Revert button */
+#gravity-ledger-panel .gl-revert-btn { background:rgba(255,100,100,.15); border:1px solid #f66; border-radius:3px; color:#f88; font-size:9px; padding:2px 8px; cursor:pointer; margin-left:auto; }
+#gravity-ledger-panel .gl-revert-btn:hover { background:rgba(255,100,100,.3); }
+
 .gl-empty { font-size:11px; opacity:.35; font-style:italic; padding:8px 0; text-align:center; }
 
 /* Toggle button in wand menu */
