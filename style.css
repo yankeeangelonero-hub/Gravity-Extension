@@ -19,7 +19,6 @@
 #gravity-ledger-panel .gl-cmd-btn { background:rgba(255,255,255,.05); border:1px solid #444; border-radius:3px; color:inherit; font-size:10px; padding:3px 6px; cursor:pointer; transition:background .15s; white-space:nowrap; }
 #gravity-ledger-panel .gl-cmd-btn:hover { background:rgba(255,255,255,.12); }
 #gravity-ledger-panel .gl-cmd-btn i { margin-right:2px; }
-#gravity-ledger-panel .gl-intimate-active { background:rgba(255,100,150,.2); border-color:#f6a; color:#f9c; }
 
 /* Setup indicator */
 #gravity-ledger-panel .gl-setup-indicator { display:flex; align-items:center; gap:6px; padding:4px 8px; background:#2a2a3a; border-bottom:1px solid #88f; flex-shrink:0; font-size:11px; }

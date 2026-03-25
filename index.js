@@ -14,7 +14,7 @@ import { computeState } from './state-compute.js';
 import { formatStateView, formatReadme, formatCharacterEntry } from './state-view.js';
 import { extractLedgerBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
-import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning, setIntimateMode } from './ui-panel.js';
+import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback } from './setup-wizard.js';
 
 const MODULE_NAME = 'gravity-ledger';
@@ -38,7 +38,6 @@ const MAX_CORRECTION_ATTEMPTS = 3;
 let _pendingCorrections = [];
 let _pendingReinforcement = null;
 let _pendingOOCInjection = null;
-let _intimacyMode = false;
 
 /**
  * Add failed lines to the correction queue.
@@ -201,7 +200,7 @@ async function onMessageReceived(messageId) {
         message.mes = extraction.cleanedMessage;
     }
 
-    // No block found — always reinforce, even during intimacy
+    // No block found
     if (!extraction.found) {
         _pendingReinforcement = getReinforcement(extraction, _turnCounter);
         injectPrompt();
@@ -326,73 +325,6 @@ function handleSetupButton() {
     }
 }
 
-function handleIntimateButton() {
-    _intimacyMode = !_intimacyMode;
-    setIntimateMode(_intimacyMode);
-
-    if (_intimacyMode) {
-        _pendingOOCInjection = INTIMATE_PROMPT;
-        injectPrompt();
-        insertChatMessage('OOC: Begin intimate scene.');
-        toastr.info('Intimacy mode ON — ledger paused.');
-    } else {
-        _pendingOOCInjection = INTIMATE_EXIT_PROMPT;
-        injectPrompt();
-        insertChatMessage('OOC: Scene ends.');
-        toastr.info('Intimacy mode OFF — ledger resumed.');
-    }
-}
-
-const INTIMATE_PROMPT = `[INTIMACY MODE — ACTIVE]
-
-Deduction and ledger PAUSE during this scene. Pure prose and choices until the scene ends.
-
-Gate check first:
-- Has the relationship earned this moment?
-- Has the narrative escalated naturally?
-- Is consent plausible within character dynamics?
-
-If gate passes, begin the interactive scene:
-
-Each turn: 200-400 words of sensory prose + 3-4 clickable options as HTML buttons:
-<div class="option-container">
-<button class="option-button" onclick="document.getElementById('send_textarea').value=this.textContent;document.getElementById('send_textarea').dispatchEvent(new Event('input',{bubbles:true}))">Option text here</button>
-</div>
-
-Rotate choice frameworks across turns:
-- Sensation type (gentle / urgent / exploratory / overwhelming)
-- Power dynamic (lead / follow / match / surrender)
-- Emotional register (tender / desperate / playful / raw)
-- Body focus (hands / mouth / skin / weight)
-
-Every 2-3 turns: partner interiority flash (2-4 sentences, first-person from their POV).
-
-Check collision distances each turn — the world doesn't pause even if the ledger does.
-
-Scene ends on: climax, aftercare, interruption, or "OOC: fade to black"
-
-STILL emit a ---LEDGER--- block each turn during intimacy. Track:
-- Collision distance changes (the world doesn't pause)
-- Constraint pressure if tested
-- Key moments worth recording
-- If nothing changed: (empty)`;
-
-const INTIMATE_EXIT_PROMPT = `[INTIMACY MODE — ENDED]
-
-The intimate scene has concluded. Resume normal operation.
-
-Emit post-scene ledger commands:
-> READ char:[principal] target=[pc] "[updated interpretation after intimacy]" -- Post-intimacy read
-> MAP_SET char:[principal] field=intimate_history key=ENCOUNTERS value="[count]" -- Encounter count
-> MAP_SET char:[principal] field=intimate_history key=DYNAMIC value="[who led, power pattern]" -- Dynamic
-> MAP_SET char:[principal] field=intimate_history key=DISCOVERED value="[vulnerabilities/preferences found]" -- Discovered
-> APPEND char:[principal] field=key_moments value="[timestamp] [what happened — emotional truth, not mechanics]" -- Key moment
-
-Check: did any constraint get pressured during the scene? If so:
-> MOVE constraint:[id] field=integrity [FROM]->[TO] -- Post-intimacy pressure
-
-Resume full deduction + ledger blocks from next turn.`;
-
 // ─── Revert Turn ───────────────────────────────────────────────────────────────
 
 async function handleRevertTurn(txIds) {
@@ -471,7 +403,6 @@ async function handleImportData(data) {
         onExport: handleExportData,
         onImport: handleImportData,
         onSetup: handleSetupButton,
-        onIntimate: handleIntimateButton,
         onRevertTurn: handleRevertTurn,
     });
 
