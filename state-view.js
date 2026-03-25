@@ -203,6 +203,20 @@ function formatStateView(state) {
         }
     }
 
+    // Story Summary
+    const summary = Array.isArray(state.story_summary) ? state.story_summary : [];
+    if (summary.length) {
+        lines.push('');
+        lines.push('STORY SO FAR');
+        for (const s of summary) {
+            const text = typeof s === 'object' ? s.text : s;
+            const time = typeof s === 'object' ? (s.t || '') : '';
+            lines.push(`  ${time ? time + ' ' : ''}${text}`);
+        }
+    }
+    lines.push('');
+    lines.push('NOTE: After major events or chapter closes, APPEND summary with a brief story beat.');
+
     lines.push('');
     lines.push('═══ END STATE VIEW ═══');
     return lines.join('\n');
