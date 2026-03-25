@@ -201,20 +201,11 @@ async function onMessageReceived(messageId) {
         message.mes = extraction.cleanedMessage;
     }
 
-    // No block found — suppress during intimacy mode
+    // No block found — always reinforce, even during intimacy
     if (!extraction.found) {
-        if (!_intimacyMode) {
-            _pendingReinforcement = getReinforcement(extraction, _turnCounter);
-        }
+        _pendingReinforcement = getReinforcement(extraction, _turnCounter);
         injectPrompt();
         return;
-    }
-
-    // If we receive a ledger block during intimacy, auto-exit intimacy mode
-    if (_intimacyMode && extraction.found && extraction.transactions.length > 0) {
-        _intimacyMode = false;
-        setIntimateMode(false);
-        console.log(`${LOG_PREFIX} Ledger block received during intimacy — auto-exiting intimacy mode.`);
     }
 
     // Extraction-level errors (failed lines from command parser)
@@ -380,7 +371,11 @@ Check collision distances each turn — the world doesn't pause even if the ledg
 
 Scene ends on: climax, aftercare, interruption, or "OOC: fade to black"
 
-Do NOT emit ledger blocks during the scene.`;
+STILL emit a ---LEDGER--- block each turn during intimacy. Track:
+- Collision distance changes (the world doesn't pause)
+- Constraint pressure if tested
+- Key moments worth recording
+- If nothing changed: (empty)`;
 
 const INTIMATE_EXIT_PROMPT = `[INTIMACY MODE — ENDED]
 
