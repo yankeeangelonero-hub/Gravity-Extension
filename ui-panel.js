@@ -17,11 +17,19 @@ const TOGGLE_ID = 'gravity-ledger-toggle';
 let _onExport = null;
 let _onImport = null;
 let _onNew = null;
+let _onSetup = null;
+let _onOOC = null;
+let _onPromote = null;
+let _onRetire = null;
 
-function setCallbacks({ onExport, onImport, onNew }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onOOC, onPromote, onRetire }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
+    _onSetup = onSetup;
+    _onOOC = onOOC;
+    _onPromote = onPromote;
+    _onRetire = onRetire;
 }
 
 let _currentBookName = '';
@@ -90,6 +98,21 @@ function createPanel() {
             <button class="gl-toolbar-btn gl-toolbar-btn-icon" id="gl-btn-export" title="Export"><i class="fa-solid fa-file-export"></i></button>
             <button class="gl-popup-close" id="gl-close-btn" title="Close">&times;</button>
         </div>
+        <div class="gl-cmd-bar" id="gl-cmd-bar">
+            <button class="gl-cmd-btn" data-cmd="setup" title="Setup Wizard (or cancel)"><i class="fa-solid fa-wand-magic-sparkles"></i> Setup</button>
+            <button class="gl-cmd-btn" data-cmd="save" title="Create snapshot"><i class="fa-solid fa-floppy-disk"></i></button>
+            <button class="gl-cmd-btn" data-cmd="preflight" title="Preflight check"><i class="fa-solid fa-stethoscope"></i></button>
+            <button class="gl-cmd-btn" data-cmd="eval" title="Full audit"><i class="fa-solid fa-microscope"></i></button>
+            <button class="gl-cmd-btn" data-cmd="archive" title="Archive / consolidate"><i class="fa-solid fa-box-archive"></i></button>
+            <button class="gl-cmd-btn" data-cmd="chapter_close" title="Close chapter"><i class="fa-solid fa-flag-checkered"></i></button>
+            <button class="gl-cmd-btn" data-cmd="timeskip" title="Timeskip"><i class="fa-solid fa-forward"></i></button>
+            <button class="gl-cmd-btn" data-cmd="promote" title="Promote character"><i class="fa-solid fa-arrow-up"></i></button>
+            <button class="gl-cmd-btn" data-cmd="retire" title="Retire character"><i class="fa-solid fa-arrow-down"></i></button>
+        </div>
+        <div class="gl-setup-indicator gl-hidden" id="gl-setup-indicator">
+            <span id="gl-setup-label"></span>
+            <button class="gl-cmd-btn gl-cancel-btn" id="gl-setup-cancel">Cancel</button>
+        </div>
         <div class="gl-popup-body" id="gl-all-sections"></div>
         <div class="gl-footer">
             <span id="gl-turn">Turn 0</span>
@@ -103,7 +126,26 @@ function createPanel() {
     document.getElementById('gl-btn-import').addEventListener('click', handleImport);
     document.getElementById('gl-btn-export').addEventListener('click', handleExport);
 
-    // No top-level tab switching — all sections render at once
+    // Command buttons
+    document.getElementById('gl-cmd-bar').addEventListener('click', (e) => {
+        const btn = e.target.closest('.gl-cmd-btn');
+        if (!btn) return;
+        const cmd = btn.dataset.cmd;
+        if (!cmd) return;
+
+        switch (cmd) {
+            case 'setup': if (_onSetup) _onSetup(); break;
+            case 'save': if (_onOOC) _onOOC('snapshot'); break;
+            case 'promote': if (_onPromote) _onPromote(); break;
+            case 'retire': if (_onRetire) _onRetire(); break;
+            default: if (_onOOC) _onOOC(cmd); break;
+        }
+    });
+
+    // Setup cancel button
+    document.getElementById('gl-setup-cancel')?.addEventListener('click', () => {
+        if (_onSetup) _onSetup(); // toggles cancel
+    });
 
     initDrag(panel, document.getElementById('gl-drag-handle'));
     console.log('[GravityLedger] Panel created.');
@@ -639,4 +681,16 @@ function initDrag(panel, handle) {
     document.addEventListener('mouseup', () => { isDragging = false; panel.style.transition = ''; });
 }
 
-export { createPanel, updatePanel, setCallbacks, setBookName, PANEL_ID };
+function showSetupPhase(label) {
+    const indicator = document.getElementById('gl-setup-indicator');
+    const labelEl = document.getElementById('gl-setup-label');
+    if (!indicator) return;
+    if (label) {
+        indicator.classList.remove('gl-hidden');
+        if (labelEl) labelEl.textContent = label;
+    } else {
+        indicator.classList.add('gl-hidden');
+    }
+}
+
+export { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, PANEL_ID };

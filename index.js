@@ -14,7 +14,8 @@ import { computeState } from './state-compute.js';
 import { formatStateView, formatReadme, formatCharacterEntry } from './state-view.js';
 import { extractLedgerBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
-import { createPanel, updatePanel, setCallbacks, setBookName } from './ui-panel.js';
+import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase } from './ui-panel.js';
+import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback } from './setup-wizard.js';
 
 const MODULE_NAME = 'gravity-ledger';
 const LOG_PREFIX = '[GravityLedger]';
@@ -34,8 +35,9 @@ let _currentChatId = null;
 // ─── Self-Correcting Feedback ──────────────────────────────────────────────────
 
 const MAX_CORRECTION_ATTEMPTS = 3;
-let _pendingCorrections = []; // { lineNum, error, raw, attempts }
+let _pendingCorrections = [];
 let _pendingReinforcement = null;
+let _pendingOOCInjection = null;
 
 /**
  * Add failed lines to the correction queue.
@@ -94,6 +96,22 @@ function injectPrompt() {
         // Format readme
         const readme = formatReadme();
         setExtensionPrompt(`${MODULE_NAME}_readme`, readme, PROMPT_IN_CHAT, 0);
+
+        // Setup wizard phase prompt (overrides corrections when active)
+        const setupPrompt = getPhasePrompt();
+        if (setupPrompt) {
+            setExtensionPrompt(`${MODULE_NAME}_setup`, setupPrompt, PROMPT_IN_CHAT, 0);
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_setup`, '', PROMPT_NONE, 0);
+        }
+
+        // OOC command injection (from buttons)
+        if (_pendingOOCInjection) {
+            setExtensionPrompt(`${MODULE_NAME}_ooc`, _pendingOOCInjection, PROMPT_IN_CHAT, 0);
+            _pendingOOCInjection = null;
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_ooc`, '', PROMPT_NONE, 0);
+        }
 
         // Corrections + reinforcement
         let injection = '';
@@ -233,6 +251,11 @@ async function onMessageReceived(messageId) {
             // Clear corrections that were fixed by these commits
             clearMatchedCorrections(committed);
 
+            // Check if setup wizard phase should advance
+            if (isSetupActive()) {
+                checkPhaseCompletion(committed, _currentState);
+            }
+
             updatePanel(_currentState, _turnCounter);
 
             if (_turnCounter % _autoSnapshotInterval === 0) {
@@ -277,6 +300,107 @@ async function onUserMessage(messageId) {
     }
 }
 
+// ─── OOC Command Injections (from UI buttons) ─────────────────────────────────
+
+function injectOOCCommand(text) {
+    _pendingOOCInjection = text;
+    injectPrompt();
+    // Also send as user message so the LLM sees it in chat
+    const context = SillyTavern.getContext();
+    context.sendSystemMessage?.('generic', text, { isSmallSys: true });
+}
+
+function handleSetupButton() {
+    if (isSetupActive()) {
+        cancelSetup();
+        toastr.info('Setup cancelled.');
+    } else {
+        startSetup();
+        injectPrompt();
+        toastr.info('Setup started — Phase 1: Voice & Tone');
+    }
+}
+
+// OOC tool prompts for buttons
+const OOC_PROMPTS = {
+    preflight: `[OOC: PREFLIGHT — Mid-chapter constraint review]
+Enter psychologist voice. Read the current state and audit:
+- For each principal constraint: test count, evidence, integrity, direction, projection
+- Shedding order: unchanged or revised?
+- Collision health: active count, tightening vs stalling
+- System check: turns since consolidation, entity registry, timestamps, constants populated
+Output the review. Ask if player wants to fix issues or continue.`,
+
+    chapter_close: `[OOC: CHAPTER TRANSITION — Multi-step protocol]
+Execute Step 1 this response:
+1. Chapter summary (3-5 sentences, key beats, turning point)
+2. Author reflection (planned vs actual)
+3. Arc check (closer to answered?)
+Say "Step 1 complete. Type 'continue' for health check."`,
+
+    timeskip: `[OOC: TIMESKIP]
+The player wants to skip ahead. Ask how long, then:
+1. Consolidation snapshot
+2. Advance the world (characters, constraints, collisions, factions)
+3. Health check post-advance
+4. Emit advance transactions
+5. Write landing scene with full deduction + ledger`,
+
+    archive: `[OOC: ARCHIVE — Consolidation]
+Review recent prose for missed ledger transactions. Check for:
+- Constraint tests never recorded
+- Collision distance changes missed
+- READS updates not captured
+- Noticed details that fired but weren't removed
+Emit catch-up transactions with original timestamps.`,
+
+    eval: `[OOC: FULL SYSTEM EVALUATION]
+Deep diagnostic across 5 phases:
+1. Read state view + transaction history
+2. Hot state integrity (principal, cast, PC, collisions)
+3. Cold state integrity (ledger entities)
+4. Cross-reference (action-state drift)
+5. Structural (data integrity)
+Output pass counts, issues, and AMEND transactions for fixes.`,
+};
+
+async function handleOOCButton(command) {
+    if (command === 'snapshot') {
+        // Snapshot runs locally, no LLM needed
+        try {
+            const snap = await createSnapshot(_currentState, 'Manual snapshot');
+            toastr.success(`Snapshot #${snap.id} created.`);
+        } catch (err) {
+            toastr.error('Snapshot failed: ' + err.message);
+        }
+        return;
+    }
+
+    const prompt = OOC_PROMPTS[command];
+    if (prompt) {
+        injectOOCCommand(prompt);
+    }
+}
+
+async function handlePromoteButton() {
+    const { Popup } = SillyTavern.getContext();
+    const name = await Popup.show.input('Promote Character', 'Character name to promote:');
+    if (!name) return;
+    injectOOCCommand(`[OOC: PROMOTE ${name}]
+Promote ${name} from KNOWN to TRACKED (or TRACKED to PRINCIPAL).
+1. Draft dossier from chat context (want, doing, cost, 1-2 constraints, reads, noticed details, stance)
+2. Present to player for confirmation
+3. On confirmation, emit ledger commands for tier change + dossier fields + constraints`);
+}
+
+async function handleRetireButton() {
+    const { Popup } = SillyTavern.getContext();
+    const name = await Popup.show.input('Retire Character', 'Character name to retire:');
+    if (!name) return;
+    injectOOCCommand(`[OOC: RETIRE ${name}]
+Retire ${name} to KNOWN tier. Emit tier transition. Dossier goes dormant.`);
+}
+
 // ─── Export/Import/New for UI ──────────────────────────────────────────────────
 
 async function handleNewLedger() {
@@ -311,7 +435,23 @@ async function handleImportData(data) {
         onNew: handleNewLedger,
         onExport: handleExportData,
         onImport: handleImportData,
+        onSetup: handleSetupButton,
+        onOOC: handleOOCButton,
+        onPromote: handlePromoteButton,
+        onRetire: handleRetireButton,
     });
+
+    // Setup wizard phase change callback
+    setPhaseCallback((phase) => {
+        showSetupPhase(phase > 0 ? getPhaseLabel() : null);
+        injectPrompt();
+        updatePanel(_currentState, _turnCounter);
+        if (phase === 0 && _lastPhase > 0) {
+            toastr.success('Setup complete!');
+        }
+        _lastPhase = phase;
+    });
+    let _lastPhase = 0;
 
     eventSource.on(event_types.CHAT_CHANGED, onChatChanged);
     eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
