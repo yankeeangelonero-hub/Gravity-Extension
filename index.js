@@ -452,6 +452,18 @@ function handleAdvanceButton() {
     insertChatMessage(`*${pcName} waits, watching.*`);
 }
 
+function handleGoodTurnButton() {
+    // Boost compliance score — set last turn to perfect
+    if (_turnScores.length > 0) {
+        const last = _turnScores[_turnScores.length - 1];
+        last.deduction = true;
+        last.ledger = true;
+    }
+    _pendingReinforcement = '[GRAVITY: Last response was excellent. Maintain this level of quality — full deduction, clean ledger, strong prose. +10 points.]';
+    injectPrompt();
+    toastr.success('Flagged as good turn');
+}
+
 function handleRegisterButton() {
     insertChatMessage('OOC: promote ');
 }
@@ -638,6 +650,7 @@ async function handleImportData(data) {
         onRegister: handleRegisterButton,
         onAdvance: handleAdvanceButton,
         onRevertTurn: handleRevertTurn,
+        onGoodTurn: handleGoodTurnButton,
     });
 
     // Setup wizard phase change callback

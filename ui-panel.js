@@ -23,8 +23,9 @@ let _onChapterClose = null;
 let _onRegister = null;
 let _onAdvance = null;
 let _onRevertTurn = null;
+let _onGoodTurn = null;
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
@@ -34,6 +35,7 @@ function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapte
     _onRegister = onRegister;
     _onAdvance = onAdvance;
     _onRevertTurn = onRevertTurn;
+    _onGoodTurn = onGoodTurn;
 }
 
 let _currentBookName = '';
@@ -108,6 +110,7 @@ function createPanel() {
             <button class="gl-cmd-btn" data-cmd="chapter_close" title="Close chapter"><i class="fa-solid fa-flag-checkered"></i> Close Ch.</button>
             <button class="gl-cmd-btn" data-cmd="register" title="Register/promote NPC"><i class="fa-solid fa-user-plus"></i> Register</button>
             <button class="gl-cmd-btn" data-cmd="advance" title="Yield initiative — let the world move"><i class="fa-solid fa-play"></i> Advance</button>
+            <button class="gl-cmd-btn" data-cmd="good_turn" title="Flag last response as well done"><i class="fa-solid fa-thumbs-up"></i> Good</button>
         </div>
         <div class="gl-setup-indicator gl-hidden" id="gl-setup-indicator">
             <span id="gl-setup-label"></span>
@@ -139,6 +142,7 @@ function createPanel() {
             case 'chapter_close': if (_onChapterClose) _onChapterClose(); break;
             case 'register': if (_onRegister) _onRegister(); break;
             case 'advance': if (_onAdvance) _onAdvance(); break;
+            case 'good_turn': if (_onGoodTurn) _onGoodTurn(); break;
         }
     });
 
