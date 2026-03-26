@@ -556,17 +556,66 @@ function handleSetupButton() {
 function handleAdvanceButton() {
     const pcName = _currentState?.pc?.name || '{{user}}';
     const doing = _currentState?.pc?.doing || 'what they were doing';
-    const divSystem = _currentState?.divination?.active_system;
 
-    // Build divination directive if system is active — roll a real random card
-    let divDirective = '';
-    if (divSystem) {
-        const cardNum = Math.floor(Math.random() * 22); // 0-21 Major Arcana
-        divDirective = `\nDIVINATION: The ${divSystem} system drew card #${cardNum}. Read the card's meaning from the preset and interpret it for this moment. The draw colors the world's move — it does not prescribe it. Record with SET divination field=last_draw.`;
+    // Check for ripe collisions (distance ≤ 1, ACTIVE or SIMMERING)
+    const ripeCollisions = [];
+    if (_currentState) {
+        for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+            const dist = parseInt(col.distance, 10);
+            if (isNaN(dist)) continue;
+            const status = (col.status || '').toUpperCase();
+            if (dist <= 1 && (status === 'ACTIVE' || status === 'SIMMERING')) {
+                const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
+                ripeCollisions.push({ id, col, forces });
+                // Mark as fired so the passive arrival check in injectPrompt doesn't double-fire
+                _firedCollisionArrivals.add(id);
+            }
+        }
     }
 
-    // Inject world-advance directive
-    _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
+    // Roll one card for the whole advance
+    const cardNum = Math.floor(Math.random() * 22);
+    const cardReading = ARCANA_TABLE[cardNum];
+
+    if (ripeCollisions.length > 0) {
+        // Advance = collision detonation. The ripe collision IS the thing that happens.
+        const collisionBlocks = ripeCollisions.map(a =>
+            `COLLISION: "${a.col.name || a.id}"
+Forces: ${a.forces}
+Cost: ${a.col.cost || 'unspecified'}
+${a.col.target_constraint ? `Target constraint: ${a.col.target_constraint}` : ''}`
+        ).join('\n\n');
+
+        _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} yields the turn. The world moves.
+
+THE ARCANA DREW: #${cardNum} — ${cardReading}
+The card shapes the CIRCUMSTANCE of what happens — not the outcome.
+
+${ripeCollisions.length === 1 ? 'A collision has arrived:' : 'These collisions have arrived:'}
+
+${collisionBlocks}
+
+This is the world's turn and this collision detonates NOW. You have FULL LICENSE to make it happen — move NPCs into the scene, spawn threats, have someone arrive with information, trigger events, create new characters, use environmental disasters. Whatever it takes to force this issue into the player's immediate reality.
+
+Write the situation, not the resolution. The player must respond to it.
+
+THIS COLLISION IS NOW SPENT. After this scene, MOVE its status to RESOLVED. There is no going back — it detonated.
+
+WHAT HAPPENS NEXT depends on what the confrontation produces:
+• CLEAN — the tension dissolves. No scar. MOVE to RESOLVED.
+• COSTLY — someone paid. MOVE to RESOLVED. Record the cost.
+• EVOLUTION — the confrontation reveals a different tension. MOVE to RESOLVED, then CREATE a new collision from what surfaced.
+
+No collision survives detonation. If the tension persists in a new shape, CREATE a fresh collision.
+
+Record the draw: SET divination field=last_draw value="[card name]"
+Full turn: deduction + prose + ledger block.]`;
+    } else {
+        // No ripe collisions — normal world-advance with multi-beat structure
+        _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
+
+THE ARCANA DREW: #${cardNum} — ${cardReading}
+The card colors the world's move — it does not prescribe it.
 
 This is the world's turn. You may write MULTIPLE BEATS and CUT between character angles:
 
@@ -584,9 +633,12 @@ PICK from Gravity_State_View:
 - A pressure point cracks
 - A collision tightens because the world moved
 - A dormant character's WANT pulls them back
-${divDirective}
-Full turn: deduction + prose + ledger block.]`;
 
+Record the draw: SET divination field=last_draw value="[card name]"
+Full turn: deduction + prose + ledger block.]`;
+    }
+
+    injectPrompt();
     insertChatMessage(`*${pcName} continues ${doing}.*`);
 }
 
