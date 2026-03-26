@@ -128,6 +128,19 @@ function injectPrompt() {
             setExtensionPrompt(`${MODULE_NAME}_inject`, '', PROMPT_NONE, 0);
         }
 
+        // Style exemplars — inject last 5 good paragraphs flagged by the player
+        const { chatMetadata } = SillyTavern.getContext();
+        const exemplars = chatMetadata?.['gravity_exemplars'] || [];
+        if (exemplars.length > 0) {
+            const recent = exemplars.slice(-5);
+            const exLines = recent.map((ex, i) => `  ${i + 1}. "${ex.text}"`).join('\n');
+            setExtensionPrompt(`${MODULE_NAME}_exemplars`,
+                `[STYLE EXEMPLARS — the player flagged these as excellent prose. Match this quality and voice:\n${exLines}]`,
+                PROMPT_IN_CHAT, 0);
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_exemplars`, '', PROMPT_NONE, 0);
+        }
+
         // Faction heartbeat — every 10 turns, check if factions have been active
         if (_turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
             const factions = Object.values(_currentState.factions || {});
@@ -193,37 +206,6 @@ If nothing changed: (empty)]`,
             PROMPT_IN_CHAT, 0);
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
-    }
-}
-
-// ─── Turn Scoring (manual only) ───────────────────────────────────────────────
-
-const SCORE_WINDOW = 10;
-const _turnScores = []; // { turn, good: bool, feedback: string|null }
-
-function recordManualScore(good, feedback = null) {
-    _turnScores.push({ turn: _turnCounter, good, feedback });
-    if (_turnScores.length > SCORE_WINDOW) _turnScores.shift();
-}
-
-function getScoreInjection() {
-    if (_turnScores.length === 0) return null;
-
-    const recent = _turnScores.slice(-SCORE_WINDOW);
-    const goodCount = recent.filter(s => s.good).length;
-    const badCount = recent.filter(s => !s.good).length;
-    const score = Math.round((goodCount / recent.length) * 100);
-
-    // Only inject when there's recent feedback
-    const last = recent[recent.length - 1];
-    if (last.good) {
-        return `[GRAVITY COMPLIANCE: ${score}/100 (${goodCount} good, ${badCount} flagged in last ${recent.length} turns)\n  Last response was excellent. Maintain this quality. +10 points.]`;
-    } else {
-        const lines = [`[GRAVITY COMPLIANCE: ${score}/100 (${goodCount} good, ${badCount} flagged in last ${recent.length} turns)`];
-        lines.push(`  ⚠ Last response flagged: ${last.feedback || 'quality issue'} — -10 points.`);
-        if (score < 50) lines.push('  Score below 50 — output quality degraded. Correct the flagged issues.');
-        lines.push(']');
-        return lines.join('\n');
     }
 }
 
@@ -495,21 +477,26 @@ Full turn: deduction + prose + ledger block.]`;
     insertChatMessage(`*${pcName} continues ${doing}.*`);
 }
 
-function handleGoodTurnButton() {
-    recordManualScore(true);
-    _pendingReinforcement = getScoreInjection();
-    injectPrompt();
-    toastr.success('Flagged as good turn');
-}
+async function handleGoodTurnButton() {
+    const { Popup, chatMetadata, saveMetadata } = SillyTavern.getContext();
+    const text = await Popup.show.input('Good Prose', 'Paste the paragraph(s) you liked:');
+    if (!text) return;
 
-async function handleBadTurnButton() {
-    const { Popup } = SillyTavern.getContext();
-    const feedback = await Popup.show.input('Flag Issue', 'What went wrong? (e.g., "dropped deduction", "ledger missing", "constraint not tracked", "prose quality")');
-    if (!feedback) return;
-    recordManualScore(false, feedback);
-    _pendingReinforcement = getScoreInjection();
+    // Store exemplar in chatMetadata
+    if (!chatMetadata['gravity_exemplars']) chatMetadata['gravity_exemplars'] = [];
+    chatMetadata['gravity_exemplars'].push({
+        text: text.trim(),
+        turn: _turnCounter,
+        _ts: Date.now(),
+    });
+    // Keep last 10
+    if (chatMetadata['gravity_exemplars'].length > 10) {
+        chatMetadata['gravity_exemplars'].shift();
+    }
+    await saveMetadata();
+
     injectPrompt();
-    toastr.warning('Flagged as bad turn');
+    toastr.success('Exemplar saved');
 }
 
 function handleRegisterButton() {
@@ -701,7 +688,6 @@ async function handleImportData(data) {
         onAdvance: handleAdvanceButton,
         onRevertTurn: handleRevertTurn,
         onGoodTurn: handleGoodTurnButton,
-        onBadTurn: handleBadTurnButton,
     });
 
     // Setup wizard phase change callback
@@ -727,6 +713,27 @@ async function handleImportData(data) {
         if (_initialized) injectPrompt();
     });
 
+    // Quick-access buttons above chat input
+    createInputButtons();
+
     console.log(`${LOG_PREFIX} Extension registered.`);
     initialize().catch(err => console.error(`${LOG_PREFIX} Init error:`, err));
 })();
+
+function createInputButtons() {
+    const sendForm = document.getElementById('form_sheld');
+    if (!sendForm) return;
+
+    const bar = document.createElement('div');
+    bar.id = 'gl-input-bar';
+    bar.innerHTML = `
+        <button class="gl-input-btn" id="gl-input-advance" title="Advance — world takes a turn"><i class="fa-solid fa-play"></i> Advance</button>
+        <button class="gl-input-btn" id="gl-input-skip" title="Timeskip"><i class="fa-solid fa-forward"></i> Skip</button>
+        <button class="gl-input-btn" id="gl-input-good" title="Flag good prose — paste exemplar"><i class="fa-solid fa-thumbs-up"></i> Good</button>
+    `;
+    sendForm.insertBefore(bar, sendForm.firstChild);
+
+    document.getElementById('gl-input-advance').addEventListener('click', handleAdvanceButton);
+    document.getElementById('gl-input-skip').addEventListener('click', handleTimeskipButton);
+    document.getElementById('gl-input-good').addEventListener('click', handleGoodTurnButton);
+}

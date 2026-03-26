@@ -135,3 +135,9 @@
 /* Toggle button in wand menu */
 #gravity-ledger-toggle { cursor:pointer; }
 #gravity-ledger-toggle i { width:16px; text-align:center; }
+
+/* Quick-access buttons above chat input */
+#gl-input-bar { display:flex; gap:4px; padding:4px 8px; justify-content:flex-start; }
+#gl-input-bar .gl-input-btn { background:rgba(255,255,255,.05); border:1px solid #444; border-radius:4px; color:#ccc; font-size:11px; padding:4px 10px; cursor:pointer; transition:background .15s; font-family:inherit; }
+#gl-input-bar .gl-input-btn:hover { background:rgba(255,255,255,.12); color:#fff; }
+#gl-input-bar .gl-input-btn i { margin-right:3px; }
