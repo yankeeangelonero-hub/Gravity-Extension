@@ -128,6 +128,21 @@ function injectPrompt() {
             setExtensionPrompt(`${MODULE_NAME}_inject`, '', PROMPT_NONE, 0);
         }
 
+        // Faction heartbeat — every 10 turns, check if factions have been active
+        if (_turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
+            const factions = Object.values(_currentState.factions || {});
+            if (factions.length > 0) {
+                const factionNames = factions.map(f => `${f.name || f.id} (${f.objective || '?'})`).join(', ');
+                setExtensionPrompt(`${MODULE_NAME}_faction`,
+                    `[FACTION HEARTBEAT — Turn ${_turnCounter}. Active factions: ${factionNames}.\nFactions execute operations independently of the player. If no faction has visibly acted in recent turns, one MUST advance NOW — patrol, checkpoint, delivery, order, broadcast, recruitment, surveillance. The world does not revolve around the PC. Show the evidence arriving: a sound, a rumor, a presence, a consequence.]`,
+                    PROMPT_IN_CHAT, 0);
+            } else {
+                setExtensionPrompt(`${MODULE_NAME}_faction`, '', PROMPT_NONE, 0);
+            }
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_faction`, '', PROMPT_NONE, 0);
+        }
+
         // Permanent nudge — always present at depth 0, every turn
         setExtensionPrompt(`${MODULE_NAME}_nudge`,
             `[SYSTEM: Your response is INCOMPLETE without a ---LEDGER--- block at the end. This is mandatory.
