@@ -557,18 +557,28 @@ function handleAdvanceButton() {
     const pcName = _currentState?.pc?.name || '{{user}}';
     const doing = _currentState?.pc?.doing || 'what they were doing';
 
-    // Check for ripe collisions (distance ≤ 1, ACTIVE or SIMMERING)
+    // Check for ripe collisions (distance ≤ 1, ACTIVE or SIMMERING, not yet fired)
     const ripeCollisions = [];
+    // Check for in-progress collisions (already detonated but not yet RESOLVED)
+    const inProgressCollisions = [];
     if (_currentState) {
         for (const [id, col] of Object.entries(_currentState.collisions || {})) {
             const dist = parseInt(col.distance, 10);
-            if (isNaN(dist)) continue;
             const status = (col.status || '').toUpperCase();
-            if (dist <= 1 && (status === 'ACTIVE' || status === 'SIMMERING')) {
+
+            // Fresh arrival — hasn't fired yet
+            if (!isNaN(dist) && dist <= 1 && (status === 'ACTIVE' || status === 'SIMMERING') && !_firedCollisionArrivals.has(id)) {
                 const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
                 ripeCollisions.push({ id, col, forces });
-                // Mark as fired so the passive arrival check in injectPrompt doesn't double-fire
                 _firedCollisionArrivals.add(id);
+            }
+            // Already detonated — dist ≤ 1 and fired but still ACTIVE, or RESOLVING
+            else if (
+                (status === 'RESOLVING') ||
+                (!isNaN(dist) && dist <= 1 && status === 'ACTIVE' && _firedCollisionArrivals.has(id))
+            ) {
+                const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
+                inProgressCollisions.push({ id, col, forces });
             }
         }
     }
@@ -610,8 +620,32 @@ No collision survives detonation. If the tension persists in a new shape, CREATE
 
 Record the draw: SET divination field=last_draw value="[card name]"
 Full turn: deduction + prose + ledger block.]`;
+    } else if (inProgressCollisions.length > 0) {
+        // Collision already detonated but not resolved — player is yielding, push it forward
+        const collisionBlocks = inProgressCollisions.map(a =>
+            `"${a.col.name || a.id}" [${a.col.status}] — Forces: ${a.forces}
+Cost: ${a.col.cost || 'unspecified'}`
+        ).join('\n');
+
+        _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} yields the turn. A collision is in progress.
+
+THE ARCANA DREW: #${cardNum} — ${cardReading}
+The card shapes what happens next — not the outcome.
+
+IN-PROGRESS COLLISION:
+${collisionBlocks}
+
+The player is not acting — they are letting this play out. CONTINUE driving the confrontation forward. Escalate, complicate, or force the moment to its crisis. NPCs act, consequences land, the situation demands response.
+
+This collision is already spent — it MUST reach RESOLVED. Either the confrontation concludes this turn (MOVE to RESOLVED) or it escalates further, but it cannot stall. If it resolves, record the outcome:
+• CLEAN — tension dissolves. MOVE to RESOLVED.
+• COSTLY — someone paid. MOVE to RESOLVED. Record the cost.
+• EVOLUTION — MOVE to RESOLVED, CREATE a new collision from what surfaced.
+
+Record the draw: SET divination field=last_draw value="[card name]"
+Full turn: deduction + prose + ledger block.]`;
     } else {
-        // No ripe collisions — normal world-advance with multi-beat structure
+        // No ripe or in-progress collisions — normal world-advance with multi-beat structure
         _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
 
 THE ARCANA DREW: #${cardNum} — ${cardReading}
