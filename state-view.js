@@ -198,7 +198,7 @@ function formatStateView(state) {
         }
     }
     lines.push('');
-    lines.push('NOTE: After major events or chapter closes, APPEND summary with a brief story beat.');
+    lines.push('NOTE: APPEND summary after every significant scene — not just chapter closes. Summaries are the primary continuity mechanism. Each entry should capture what happened, who was involved, what changed emotionally or materially, and any sensory or textural detail that makes the moment specific. 2-4 sentences per entry. These summaries replace chat history as context — if it\'s not here, it\'s forgotten.');
 
     lines.push('');
     lines.push('═══ END STATE VIEW ═══');
@@ -260,7 +260,7 @@ SET — overwrite a field
   > SET pc field=name value="Autumn" -- Init PC
 
 APPEND — add to an array field
-  > APPEND char:tifa field=key_moments value="[Day 1 — 22:00] Confronted Cloud about memories at the well. Composure broke for one beat." -- Pivotal scene
+  > APPEND char:tifa field=key_moments value="[Day 1 — 22:00] Confronted Cloud about memories at the well. Her hands stayed flat on the stone — controlled — but her voice broke register on 'you promised.' Composure recovered in two breaths. Cloud didn't notice. Autumn did." -- Pivotal scene
   > APPEND char:tifa field=noticed_details value="Cloud flinched when she said Sephiroth — micro-expression, jaw tightened" -- Chekhov detail
   > APPEND world field=pressure_points value="Shinra patrols increasing in slums — checkpoints tightening" -- Rising tension
   > APPEND pc field=demonstrated_traits value="Mirror technique — uses Tifa's own caregiving style to bypass her defenses. Effective without being aggressive." -- Observed trait pattern
@@ -293,9 +293,11 @@ DIVINATION — record current draw only (no history accumulation)
   > SET divination field=active_system value="arcana" -- Set active system
   > SET divination field=last_draw value="XIV — Temperance" -- Record draw (overwrites previous)
 
-STORY SUMMARY — append-only story beats (include after major events)
-  > APPEND summary field=text value="Ch1: Ada and Autumn meet in the safehouse. Trust tentative." -- Chapter 1 summary
-  > APPEND summary field=text value="The Organization's surveillance was discovered." -- Key event
+STORY SUMMARY — append after every significant scene, not just chapter closes
+  Summaries are the primary continuity mechanism — they replace chat history as context.
+  Each entry: 2-4 sentences capturing what happened, who was involved, what changed, and specific sensory/textural detail.
+  > APPEND summary field=text value="Ch1 'Wrong Place': Tifa pulled Autumn from Reactor 1 rubble. Both entered a burning building for a trapped survivor — Autumn engineered the stairwell collapse to create an exit. Back at Seventh Heaven she cleaned his wound first, before her own. Stew, couch, silence. The asymmetry established: she knows everything about what just happened to his life. He knows nothing." -- Chapter 1 summary
+  > APPEND summary field=text value="The white balm footnote. Autumn's ingredient list included 'accelerates tissue repair, no scarring' — handwritten, specific, professional-grade. Tifa touched the cut above her eyebrow. Cloud saw. The gap between what Autumn claims to be and what he demonstrably knows widened." -- Key event
 
 STATE MACHINES (MOVE between adjacent states only, no skipping):
   Character tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL

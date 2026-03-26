@@ -309,10 +309,10 @@ WHAT TO TRACK every turn — check each, emit if changed:
 - Collision distance changes (SET distance)
 - READS updates when a character's interpretation shifts (READ)
 - Noticed details gained or fired (APPEND / REMOVE)
-- Key moments worth recording (APPEND key_moments)
+- Key moments worth recording — include sensory detail and emotional texture (APPEND key_moments)
 - World state changes (SET world_state)
 - PC demonstrated traits, reputation, timeline (APPEND / MAP_SET)
-- Story summary after major events (APPEND summary)
+- Story summary after EVERY significant scene — 2-4 sentences with texture, not just plot points (APPEND summary)
 - Pressure point cleanup — REMOVE fired/stale entries, don't just accumulate
 If nothing changed: (empty)]`,
             PROMPT_IN_CHAT, 0);
@@ -345,7 +345,7 @@ function checkArraySizes(state) {
             warnings.push(`${char.name || id} NOTICED_DETAILS: ${noticed.length} entries — REMOVE fired/resolved details.`);
         }
         const moments = char.key_moments;
-        if (Array.isArray(moments) && moments.length > 15) {
+        if (Array.isArray(moments) && moments.length > 25) {
             warnings.push(`${char.name || id} KEY_MOMENTS: ${moments.length} entries — consolidate to most significant.`);
         }
     }
