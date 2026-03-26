@@ -325,6 +325,105 @@ function handleSetupButton() {
     }
 }
 
+async function handleTimeskipButton() {
+    const { Popup } = SillyTavern.getContext();
+    const duration = await Popup.show.input('Timeskip', 'How much time passes? (e.g., "3 days", "a week", "until morning")');
+    if (!duration) return;
+
+    // Auto-snapshot before timeskip
+    if (_currentState) {
+        try {
+            await createSnapshot(_currentState, `Pre-timeskip snapshot`);
+            console.log(`${LOG_PREFIX} Pre-timeskip snapshot created.`);
+        } catch (err) {
+            console.warn(`${LOG_PREFIX} Pre-timeskip snapshot failed:`, err);
+        }
+    }
+
+    _pendingOOCInjection = `[SYSTEM OVERRIDE: The user has initiated a time skip of "${duration}". FOR THIS RESPONSE ONLY, suspend your current character persona and act as an impartial, omniscient narrator called "The Passage of Time".
+
+1. THE INTERRUPTION PROTOCOL: Evaluate the requested duration against the logical realities of the world. If the player is fleeing danger, wanted by authorities, or ignoring an active threat, calculate if they would realistically be caught before the skip ends. If yes, ABORT the skip early and drop them immediately into the confrontation.
+
+2. THE BUTTERFLY EFFECT: Advance the agendas of ALL off-screen factions, tracked NPCs, and active collisions. The world moves without the player. For each tracked character: advance DOING, check constraints, update stance. For each collision: compress distance. For world: advance factions, world state, pressure points.
+
+3. FORMAT: Your response must strictly follow this structure:
+   Paragraph 1: THE SUMMARY — The passage of time. What the player did during the skip (routines, projects, rest). Success or failure of their goals. New [Day N] timestamp.
+   Paragraph 2: THE WORLD STATE — How factions, NPCs, and background forces changed. What moved while the player wasn't looking.
+   Paragraph 3: THE HOOK — A real-time physical transition or interruption that ends the skip. Something demands response NOW.
+   Paragraph 4: Hand agency back to the player.
+
+4. LEDGER: Emit a full ---LEDGER--- block recording ALL state changes from the skip:
+   - SET/MOVE on characters (doing, want, constraint pressure)
+   - SET on collisions (distance changes)
+   - MOVE on collisions (status changes if distances compressed enough)
+   - SET on world (world_state, faction advances)
+   - APPEND on world (new pressure_points)
+   - APPEND on pc (timeline entries for the skip period)
+   - APPEND on summary (brief skip summary)
+
+Do NOT close the chapter. The story continues.]`;
+
+    injectPrompt();
+    insertChatMessage(`OOC: Timeskip — ${duration}`);
+}
+
+async function handleChapterCloseButton() {
+    _pendingOOCInjection = `[SYSTEM OVERRIDE: The user has requested a chapter close. Pause narrative and execute the full chapter transition protocol across multiple responses.
+
+═══ RESPONSE 1 — EVALUATION (this turn) ═══
+
+A. HEALTH CHECK — audit the ledger state:
+   - Collision audit: any stale (5+ turns unchanged), orphaned, or overloaded?
+   - Constraint audit: principal's integrity accurate? Drift between ledger state and actual events?
+   - Continuity: contradictions between stored state and recent prose?
+   - Loaded guns: noticed details that never fired? Details that fired but weren't removed?
+   - Missing state: events that happened in prose but never got recorded?
+   Emit catch-up transactions for anything missed.
+
+B. CHAPTER SUMMARY — the chapter that just ended:
+   - Key beats, turning point, what changed. 3-5 sentences.
+   - APPEND this to summary entity.
+
+C. ARC EVALUATION — honest narrative self-assessment:
+   - I planned: [from chapter plan / central tension]
+   - The player forced: [how they disrupted it]
+   - The story went: [actual trajectory]
+   - What worked narratively and what didn't
+   - Collisions: which resolved, which didn't, which spawned
+
+D. ASK THE PLAYER — present choices for the next chapter:
+   1. Where do you want to start next? (specific scene/location/moment — sanity check: is this reachable from current state?)
+   2. How much time passes before the next chapter opens?
+   3. Focus: what should the next chapter be about? (or let me decide)
+   4. Tone shift: should the tone rules change?
+   5. Cast changes: promote, retire, or shift focus?
+   Answer as much or as little as you want. Silence = I decide.
+
+═══ RESPONSE 2 — TRANSITION (after player answers) ═══
+
+A. SANITY CHECK the player's requested starting point:
+   - Is it reachable given current world state, character positions, and timeline?
+   - If not: explain why and propose the closest realistic alternative.
+
+B. TIMESKIP to the new starting point:
+   - Advance all tracked characters (DOING, constraints, reads, stance)
+   - Advance all collisions (compress distances, check for arrivals)
+   - Advance world (factions, world state, pressure points)
+   - Check: would any interruption logically occur during the skip?
+
+C. EMIT LEDGER BLOCK:
+   - MOVE chapter: OPEN->CLOSING->CLOSED for old chapter
+   - CREATE new chapter (number, title, status=OPEN, arc, central_tension, target_collisions)
+   - All timeskip advances (SET/MOVE on characters, collisions, world)
+   - APPEND summary with chapter summary
+   - APPEND pc timeline entries for skip period
+
+D. WRITE the opening of the new chapter — the player lands in the result, not a summary. Full deduction + prose + ledger block.]`;
+
+    injectPrompt();
+    insertChatMessage('OOC: Close this chapter.');
+}
+
 // ─── Revert Turn ───────────────────────────────────────────────────────────────
 
 async function handleRevertTurn(txIds) {
@@ -403,6 +502,8 @@ async function handleImportData(data) {
         onExport: handleExportData,
         onImport: handleImportData,
         onSetup: handleSetupButton,
+        onTimeskip: handleTimeskipButton,
+        onChapterClose: handleChapterCloseButton,
         onRevertTurn: handleRevertTurn,
     });
 
