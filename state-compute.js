@@ -20,6 +20,32 @@
  * @property {Object} _history - field change history per entity
  */
 
+/**
+ * Simple string similarity (Dice coefficient on bigrams).
+ * Returns 0.0–1.0. Used for duplicate APPEND detection.
+ */
+function stringSimilarity(a, b) {
+    if (a === b) return 1;
+    if (a.length < 2 || b.length < 2) return 0;
+    const lower = s => s.toLowerCase().trim();
+    const bigrams = s => {
+        const set = new Map();
+        const str = lower(s);
+        for (let i = 0; i < str.length - 1; i++) {
+            const bi = str.substring(i, i + 2);
+            set.set(bi, (set.get(bi) || 0) + 1);
+        }
+        return set;
+    };
+    const aBi = bigrams(a);
+    const bBi = bigrams(b);
+    let intersection = 0;
+    for (const [bi, count] of aBi) {
+        intersection += Math.min(count, bBi.get(bi) || 0);
+    }
+    return (2 * intersection) / (a.length - 1 + b.length - 1);
+}
+
 function createEmptyState() {
     return {
         characters: {},
@@ -160,7 +186,15 @@ function applyTransaction(state, tx) {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
                 if (!Array.isArray(target[tx.d.f])) target[tx.d.f] = [];
-                target[tx.d.f].push(tx.d.v);
+                // Duplicate detection — reject appends >80% similar to existing entry
+                const newVal = typeof tx.d.v === 'string' ? tx.d.v : JSON.stringify(tx.d.v);
+                const isDuplicate = target[tx.d.f].some(existing => {
+                    const existingStr = typeof existing === 'string' ? existing : JSON.stringify(existing);
+                    return stringSimilarity(existingStr, newVal) > 0.8;
+                });
+                if (!isDuplicate) {
+                    target[tx.d.f].push(tx.d.v);
+                }
             }
             break;
         }

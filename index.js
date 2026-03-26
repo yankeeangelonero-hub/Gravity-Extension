@@ -147,11 +147,44 @@ WHAT TO TRACK every turn — check each, emit if changed:
 - World state changes (SET world_state)
 - PC demonstrated traits, reputation, timeline (APPEND / MAP_SET)
 - Story summary after major events (APPEND summary)
+- Pressure point cleanup — REMOVE fired/stale entries, don't just accumulate
 If nothing changed: (empty)]`,
             PROMPT_IN_CHAT, 0);
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
     }
+}
+
+// ─── Array Size Checks ────────────────────────────────────────────────────────
+
+const ARRAY_SIZE_LIMITS = {
+    pressure_points: { path: s => s.world?.pressure_points, label: 'PRESSURE_POINTS', cap: 10 },
+    demonstrated_traits: { path: s => s.pc?.demonstrated_traits, label: 'PC TRAITS', cap: 12 },
+    timeline: { path: s => s.pc?.timeline, label: 'PC TIMELINE', cap: 20 },
+};
+
+function checkArraySizes(state) {
+    if (!state) return null;
+    const warnings = [];
+    for (const [key, cfg] of Object.entries(ARRAY_SIZE_LIMITS)) {
+        const arr = cfg.path(state);
+        if (Array.isArray(arr) && arr.length > cfg.cap) {
+            warnings.push(`${cfg.label}: ${arr.length} entries (cap ${cfg.cap}) — consolidate. REMOVE resolved/stale/duplicate entries.`);
+        }
+    }
+    // Check per-character arrays
+    for (const [id, char] of Object.entries(state.characters || {})) {
+        const noticed = char.noticed_details;
+        if (Array.isArray(noticed) && noticed.length > 15) {
+            warnings.push(`${char.name || id} NOTICED_DETAILS: ${noticed.length} entries — REMOVE fired/resolved details.`);
+        }
+        const moments = char.key_moments;
+        if (Array.isArray(moments) && moments.length > 15) {
+            warnings.push(`${char.name || id} KEY_MOMENTS: ${moments.length} entries — consolidate to most significant.`);
+        }
+    }
+    if (warnings.length === 0) return null;
+    return `[LEDGER HYGIENE WARNING — arrays over capacity:\n${warnings.map(w => '  • ' + w).join('\n')}\nUse REMOVE to prune stale entries. Pressure points that fired or resolved are history, not live wires.]`;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -291,8 +324,14 @@ async function onMessageReceived(messageId) {
         }
     }
 
+    // Check array sizes and warn if bloated
+    const sizeWarnings = checkArraySizes(_currentState);
+
     // Build reinforcement
     _pendingReinforcement = getReinforcement(extraction, _turnCounter);
+    if (sizeWarnings) {
+        _pendingReinforcement = (_pendingReinforcement || '') + '\n' + sizeWarnings;
+    }
     if (allErrors.length > 0 && validTxns.length > 0) {
         _pendingReinforcement = (_pendingReinforcement || '') +
             `\n[LEDGER: ${validTxns.length} TX committed, ${allErrors.length} failed.]`;

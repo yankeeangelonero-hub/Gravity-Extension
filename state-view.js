@@ -301,6 +301,12 @@ STATE MACHINES (MOVE between adjacent states only, no skipping):
   Collision status:     SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED (or CRASHED from ACTIVE/RESOLVING)
   Chapter status:       PLANNED → OPEN → CLOSING → CLOSED
 
+HYGIENE — keep arrays clean:
+  - Pressure points: REMOVE when resolved or fired. These are live wires, not history.
+  - Noticed details: REMOVE when fired (used in scene) or no longer relevant.
+  - Before APPEND: check if a similar entry already exists. Update or skip, don't duplicate.
+  - The extension warns when arrays exceed capacity. Heed the warning — consolidate.
+
 VOLUME PER TURN:
   Quiet dialogue: 1–2 lines
   Normal scene: 2–4 lines
