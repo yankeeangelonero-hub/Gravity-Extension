@@ -463,10 +463,12 @@ function handleAdvanceButton() {
     const doing = _currentState?.pc?.doing || 'what they were doing';
     const divSystem = _currentState?.divination?.active_system;
 
-    // Build divination directive if system is active
-    const divDirective = divSystem
-        ? `\nDIVINATION: Draw one card from the ${divSystem} system. The draw colors the world's move — it does not prescribe it. Record with SET divination field=last_draw.`
-        : '';
+    // Build divination directive if system is active — roll a real random card
+    let divDirective = '';
+    if (divSystem) {
+        const cardNum = Math.floor(Math.random() * 22); // 0-21 Major Arcana
+        divDirective = `\nDIVINATION: The ${divSystem} system drew card #${cardNum}. Read the card's meaning from the preset and interpret it for this moment. The draw colors the world's move — it does not prescribe it. Record with SET divination field=last_draw.`;
+    }
 
     // Inject world-advance directive
     _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
