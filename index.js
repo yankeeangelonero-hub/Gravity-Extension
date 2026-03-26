@@ -155,49 +155,35 @@ If nothing changed: (empty)]`,
     }
 }
 
-// ─── Turn Scoring ─────────────────────────────────────────────────────────────
+// ─── Turn Scoring (manual only) ───────────────────────────────────────────────
 
 const SCORE_WINDOW = 10;
-const _turnScores = []; // { turn, deduction: bool, ledger: bool }
+const _turnScores = []; // { turn, good: bool, feedback: string|null }
 
-function recordTurnScore(turn, component, passed) {
-    let entry = _turnScores.find(s => s.turn === turn);
-    if (!entry) {
-        entry = { turn, deduction: true, ledger: true };
-        _turnScores.push(entry);
-        if (_turnScores.length > SCORE_WINDOW) _turnScores.shift();
-    }
-    entry[component] = passed;
+function recordManualScore(good, feedback = null) {
+    _turnScores.push({ turn: _turnCounter, good, feedback });
+    if (_turnScores.length > SCORE_WINDOW) _turnScores.shift();
 }
 
-function getTurnScoreInjection() {
-    if (_turnScores.length < 2) return null;
+function getScoreInjection() {
+    if (_turnScores.length === 0) return null;
 
     const recent = _turnScores.slice(-SCORE_WINDOW);
-    const deductionHits = recent.filter(s => s.deduction).length;
-    const ledgerHits = recent.filter(s => s.ledger).length;
-    const total = recent.length;
-    const score = Math.round(((deductionHits + ledgerHits) / (total * 2)) * 100);
+    const goodCount = recent.filter(s => s.good).length;
+    const badCount = recent.filter(s => !s.good).length;
+    const score = Math.round((goodCount / recent.length) * 100);
 
-    const warnings = [];
-    // Check last turn specifically
+    // Only inject when there's recent feedback
     const last = recent[recent.length - 1];
-    if (!last.deduction) {
-        warnings.push('DEDUCTION BLOCK MISSING — mandatory every turn. -10 points.');
+    if (last.good) {
+        return `[GRAVITY COMPLIANCE: ${score}/100 (${goodCount} good, ${badCount} flagged in last ${recent.length} turns)\n  Last response was excellent. Maintain this quality. +10 points.]`;
+    } else {
+        const lines = [`[GRAVITY COMPLIANCE: ${score}/100 (${goodCount} good, ${badCount} flagged in last ${recent.length} turns)`];
+        lines.push(`  ⚠ Last response flagged: ${last.feedback || 'quality issue'} — -10 points.`);
+        if (score < 50) lines.push('  Score below 50 — output quality degraded. Correct the flagged issues.');
+        lines.push(']');
+        return lines.join('\n');
     }
-    if (!last.ledger) {
-        warnings.push('LEDGER BLOCK MISSING — mandatory every turn. -10 points.');
-    }
-
-    if (warnings.length === 0 && score >= 90) return null;
-
-    const lines = [`[GRAVITY COMPLIANCE: ${score}/100 (last ${total} turns)`];
-    if (deductionHits < total) lines.push(`  Deduction: ${deductionHits}/${total} turns`);
-    if (ledgerHits < total) lines.push(`  Ledger: ${ledgerHits}/${total} turns`);
-    for (const w of warnings) lines.push(`  ⚠ ${w}`);
-    if (score < 70) lines.push('  Score below 70 — output quality degraded. Full deduction + ledger block required to recover.');
-    lines.push(']');
-    return lines.join('\n');
 }
 
 // ─── Array Size Checks ────────────────────────────────────────────────────────
@@ -292,10 +278,6 @@ async function onMessageReceived(messageId) {
 
     _turnCounter++;
 
-    // Check for deduction block before anything strips it
-    const hasDeduction = /[-—–]{2,3}\s*DEDUCTION\s*[-—–]{2,3}/i.test(message.mes);
-    recordTurnScore(_turnCounter, 'deduction', hasDeduction);
-
     // Extract ledger block (command-style or legacy JSON)
     const extraction = extractLedgerBlock(message.mes);
 
@@ -306,10 +288,7 @@ async function onMessageReceived(messageId) {
 
     // No block found
     if (!extraction.found) {
-        recordTurnScore(_turnCounter, 'ledger', false);
         _pendingReinforcement = getReinforcement(extraction, _turnCounter);
-        const scoreInj = getTurnScoreInjection();
-        if (scoreInj) _pendingReinforcement = (_pendingReinforcement || '') + '\n' + scoreInj;
         injectPrompt();
         return;
     }
@@ -376,9 +355,6 @@ async function onMessageReceived(messageId) {
         }
     }
 
-    // Record ledger compliance
-    recordTurnScore(_turnCounter, 'ledger', true);
-
     // Check array sizes and warn if bloated
     const sizeWarnings = checkArraySizes(_currentState);
 
@@ -396,12 +372,6 @@ async function onMessageReceived(messageId) {
             message: e.error,
             fix: 'Resubmit corrected line',
         })));
-    }
-
-    // Append compliance score
-    const scoreInjection = getTurnScoreInjection();
-    if (scoreInjection) {
-        _pendingReinforcement = (_pendingReinforcement || '') + '\n' + scoreInjection;
     }
 
     injectPrompt();
@@ -453,15 +423,20 @@ function handleAdvanceButton() {
 }
 
 function handleGoodTurnButton() {
-    // Boost compliance score — set last turn to perfect
-    if (_turnScores.length > 0) {
-        const last = _turnScores[_turnScores.length - 1];
-        last.deduction = true;
-        last.ledger = true;
-    }
-    _pendingReinforcement = '[GRAVITY: Last response was excellent. Maintain this level of quality — full deduction, clean ledger, strong prose. +10 points.]';
+    recordManualScore(true);
+    _pendingReinforcement = getScoreInjection();
     injectPrompt();
     toastr.success('Flagged as good turn');
+}
+
+async function handleBadTurnButton() {
+    const { Popup } = SillyTavern.getContext();
+    const feedback = await Popup.show.input('Flag Issue', 'What went wrong? (e.g., "dropped deduction", "ledger missing", "constraint not tracked", "prose quality")');
+    if (!feedback) return;
+    recordManualScore(false, feedback);
+    _pendingReinforcement = getScoreInjection();
+    injectPrompt();
+    toastr.warning('Flagged as bad turn');
 }
 
 function handleRegisterButton() {
@@ -651,6 +626,7 @@ async function handleImportData(data) {
         onAdvance: handleAdvanceButton,
         onRevertTurn: handleRevertTurn,
         onGoodTurn: handleGoodTurnButton,
+        onBadTurn: handleBadTurnButton,
     });
 
     // Setup wizard phase change callback
