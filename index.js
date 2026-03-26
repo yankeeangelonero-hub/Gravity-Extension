@@ -127,6 +127,11 @@ function injectPrompt() {
         } else {
             setExtensionPrompt(`${MODULE_NAME}_inject`, '', PROMPT_NONE, 0);
         }
+
+        // Permanent nudge — always present at depth 0, every turn
+        setExtensionPrompt(`${MODULE_NAME}_nudge`,
+            '[SYSTEM: Your response is INCOMPLETE without a ---LEDGER--- block at the end. After your prose, append ---LEDGER--- with one command per line, then ---END LEDGER---. This is mandatory. If nothing changed: ---LEDGER---\n(empty)\n---END LEDGER---]',
+            PROMPT_IN_CHAT, 0);
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
     }
