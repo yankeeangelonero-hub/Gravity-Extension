@@ -134,7 +134,7 @@ function injectPrompt() {
             if (factions.length > 0) {
                 const factionNames = factions.map(f => `${f.name || f.id} (${f.objective || '?'})`).join(', ');
                 setExtensionPrompt(`${MODULE_NAME}_faction`,
-                    `[FACTION HEARTBEAT — Turn ${_turnCounter}. Active factions: ${factionNames}.\nFactions execute operations independently of the player. If no faction has visibly acted in recent turns, one MUST advance NOW — patrol, checkpoint, delivery, order, broadcast, recruitment, surveillance. The world does not revolve around the PC. Show the evidence arriving: a sound, a rumor, a presence, a consequence.]`,
+                    `[FACTION HEARTBEAT — Turn ${_turnCounter}. Active factions: ${factionNames}.\nFactions execute operations independently of the player. Faction leaders command subordinates — a boss offscreen issues orders that arrive through minions, patrols, broadcasts, supply changes. If no faction has visibly acted in recent turns, one MUST advance NOW. The world does not revolve around the PC. Show the evidence arriving.]`,
                     PROMPT_IN_CHAT, 0);
             } else {
                 setExtensionPrompt(`${MODULE_NAME}_faction`, '', PROMPT_NONE, 0);
@@ -160,7 +160,7 @@ function injectPrompt() {
             }
             if (dormant.length > 0) {
                 setExtensionPrompt(`${MODULE_NAME}_dormant`,
-                    `[DORMANT CHARACTERS — these TRACKED/PRINCIPAL characters have not acted or been updated recently:\n${dormant.map(d => '  • ' + d).join('\n')}\nThey have their own WANT and DOING. Advance them — a conversation they start, a decision they make offscreen, a consequence of their DOING that arrives in the scene. Characters are not furniture.]`,
+                    `[DORMANT CHARACTERS — gravity still pulls these characters toward collision:\n${dormant.map(d => '  • ' + d).join('\n')}\nGravity is constant — however weak, it pulls toward collision. Their WANT is a force. Their DOING has consequences. Advance them toward the nearest collision — or spawn a new one from their WANT intersecting the current situation. Faction leaders issue orders through subordinates even when offscreen.]`,
                     PROMPT_IN_CHAT, 0);
             } else {
                 setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
@@ -461,17 +461,23 @@ function handleSetupButton() {
 function handleAdvanceButton() {
     const pcName = _currentState?.pc?.name || '{{user}}';
     const doing = _currentState?.pc?.doing || 'what they were doing';
+    const divSystem = _currentState?.divination?.active_system;
+
+    // Build divination directive if system is active
+    const divDirective = divSystem
+        ? `\nDIVINATION: Draw one card from the ${divSystem} system. The draw colors the world's move — it does not prescribe it. Record with SET divination field=last_draw.`
+        : '';
 
     // Inject world-advance directive
     _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
 
 This is the world's turn. Read Gravity_State_View and pick at least ONE:
 - An NPC in the scene acts on their own WANT or DOING — starts a conversation, reacts to something, makes a decision
-- A character arrives or departs for their own reasons
-- A faction's operation advances visibly (news, patrol, delivery, rumor)
+- A faction leader issues an order through subordinates — the consequence arrives as evidence (a patrol, a checkpoint, a messenger, a rumor)
 - A pressure point shows its first crack
-- A collision tightens because an NPC did something, not because the PC did
-
+- A collision tightens because an NPC or faction moved, not because the PC did
+- A dormant character's WANT pulls them back into the story
+${divDirective}
 The PC is present but backgrounded — still ${doing}. Show what the world does around them.
 
 Full turn: deduction + prose + ledger block.]`;
