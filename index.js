@@ -7,7 +7,7 @@
  * Format: Command-style lines with self-correcting feedback loop
  */
 
-import { init as initLedger, reset as resetLedger, append, getAllTransactions, exportData, importData } from './ledger-store.js';
+import { init as initLedger, reset as resetLedger, append, getAllTransactions, getTransactionsForEntity, exportData, importData } from './ledger-store.js';
 import { initSnapshots, computeCurrentState, createSnapshot } from './snapshot-mgr.js';
 import { validateBatch, formatErrors } from './consistency.js';
 import { computeState } from './state-compute.js';
@@ -141,6 +141,32 @@ function injectPrompt() {
             }
         } else {
             setExtensionPrompt(`${MODULE_NAME}_faction`, '', PROMPT_NONE, 0);
+        }
+
+        // Dormant character check — every 15 turns, flag characters with no recent activity
+        const DORMANT_THRESHOLD = 20; // transactions since last activity
+        if (_turnCounter > 0 && _turnCounter % 15 === 0 && _currentState) {
+            const allTx = getAllTransactions();
+            const totalTx = allTx.length;
+            const dormant = [];
+            for (const [id, char] of Object.entries(_currentState.characters || {})) {
+                if (char.tier === 'UNKNOWN' || char.tier === 'KNOWN') continue;
+                const charTxns = getTransactionsForEntity(id);
+                const lastTx = charTxns.length > 0 ? charTxns[charTxns.length - 1].tx : 0;
+                const gap = totalTx - lastTx;
+                if (gap >= DORMANT_THRESHOLD) {
+                    dormant.push(`${char.name || id} [${char.tier}] — WANT: ${char.want || '?'}, DOING: ${char.doing || '?'} — last activity ${gap} transactions ago`);
+                }
+            }
+            if (dormant.length > 0) {
+                setExtensionPrompt(`${MODULE_NAME}_dormant`,
+                    `[DORMANT CHARACTERS — these TRACKED/PRINCIPAL characters have not acted or been updated recently:\n${dormant.map(d => '  • ' + d).join('\n')}\nThey have their own WANT and DOING. Advance them — a conversation they start, a decision they make offscreen, a consequence of their DOING that arrives in the scene. Characters are not furniture.]`,
+                    PROMPT_IN_CHAT, 0);
+            } else {
+                setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
+            }
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
         }
 
         // Permanent nudge — always present at depth 0, every turn
