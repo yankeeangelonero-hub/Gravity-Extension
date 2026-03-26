@@ -39,6 +39,37 @@ let _pendingCorrections = [];
 let _pendingReinforcement = null;
 let _pendingOOCInjection = null;
 
+// ─── Collision Arrival Tracking ───────────────────────────────────────────────
+
+// Set of collision IDs that have already had their arrival injection fired.
+// Cleared on chat change. Prevents re-firing every turn while at dist 0.
+let _firedCollisionArrivals = new Set();
+
+const ARCANA_TABLE = [
+    'The Fool — A leap into the unknown. Something begins that nobody planned.',
+    'The Magician — Resources align. Skill meets opportunity.',
+    'The High Priestess — Hidden knowledge surfaces. Intuition over logic.',
+    'The Empress — Abundance, shelter, aid. The world provides.',
+    'The Emperor — Authority intervenes. Structure, control, hierarchy.',
+    'The Hierophant — Tradition and institutions assert themselves.',
+    'The Lovers — A choice between two paths. Relationship tested.',
+    'The Chariot — Willpower overcomes. Victory through determination.',
+    'Strength — Quiet power. Patience defeats force.',
+    'The Hermit — Isolation clarifies. Truth found in solitude.',
+    'Wheel of Fortune — Fate intervenes. What was rising falls. What was falling rises.',
+    'Justice — Consequences arrive precisely. The math is exact.',
+    'The Hanged Man — Sacrifice or suspension. New perspective from discomfort.',
+    'Death — Transformation. Something ends so something else can exist.',
+    'Temperance — Balance and synthesis. The middle path works this time.',
+    'The Devil — Chains chosen or discovered. The comfortable trap.',
+    'The Tower — Catastrophic revelation. A structure collapses. No one is ready.',
+    'The Star — Hope after devastation. The reason to keep going.',
+    'The Moon — Deception, illusion, fear. Nothing is what it appears.',
+    'The Sun — Clarity and success. The rare clean win.',
+    'Judgement — Reckoning. The past demands an answer.',
+    'The World — Completion. A cycle closes. The full picture visible.',
+];
+
 /**
  * Add failed lines to the correction queue.
  * If a line has been retried too many times, drop it.
@@ -182,6 +213,87 @@ function injectPrompt() {
             setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
         }
 
+        // Collision arrival — fires when any collision reaches distance ≤ 1 and hasn't been flagged yet
+        if (_currentState) {
+            const arrivals = [];
+            for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+                if (_firedCollisionArrivals.has(id)) continue;
+                const dist = parseInt(col.distance, 10);
+                if (isNaN(dist)) continue;
+                const status = (col.status || '').toUpperCase();
+                if (dist <= 1 && (status === 'ACTIVE' || status === 'SIMMERING')) {
+                    const cardNum = Math.floor(Math.random() * 22);
+                    const cardReading = ARCANA_TABLE[cardNum];
+                    const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
+                    arrivals.push({ id, col, cardNum, cardReading, forces });
+                    _firedCollisionArrivals.add(id);
+                }
+            }
+
+            // Stale RESOLVING check — collisions stuck in RESOLVING too long
+            const staleResolving = [];
+            const totalTxCount = getAllTransactions().length;
+            for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+                if ((col.status || '').toUpperCase() !== 'RESOLVING') continue;
+                if (_firedCollisionArrivals.has(id + '_stale')) continue;
+                // Check how many transactions since it entered RESOLVING
+                const statusHist = (_currentState._history || {})[`collision:${id}:status`] || [];
+                const lastMove = statusHist[statusHist.length - 1];
+                if (lastMove && lastMove.tx) {
+                    const txSince = totalTxCount - lastMove.tx;
+                    if (txSince >= 15) { // ~3 turns worth of transactions
+                        staleResolving.push({ id, col, txSince });
+                        _firedCollisionArrivals.add(id + '_stale');
+                    }
+                }
+            }
+
+            if (arrivals.length > 0) {
+                const blocks = arrivals.map(a =>
+                    `═══ COLLISION ARRIVAL: "${a.col.name || a.id}" ═══
+Forces: ${a.forces}
+Cost: ${a.col.cost || 'unspecified'}
+${a.col.target_constraint ? `Target constraint: ${a.col.target_constraint}` : ''}
+
+THE ARCANA DREW: #${a.cardNum} — ${a.cardReading}
+
+This collision has reached distance ${a.col.distance}. It detonates NOW.
+
+You have FULL LICENSE to make this happen. Move NPCs into the scene. Spawn threats. Have someone arrive with information. Trigger events. Create new characters. Use environmental disasters. Whatever it takes to force this issue into the player's immediate reality.
+
+The tarot card shapes the CIRCUMSTANCE of how this collision arrives — not the outcome. Write the situation, not the resolution. The player must respond to it.
+
+THIS COLLISION IS NOW SPENT. After this scene, MOVE its status to RESOLVED. There is no going back — it detonated.
+
+WHAT HAPPENS NEXT depends on what the confrontation produces:
+• CLEAN — the tension dissolves. Forces coexist or one yields. No scar. MOVE to RESOLVED.
+• COSTLY — it resolves, but someone paid. Trust spent, secrets exposed, resources lost. MOVE to RESOLVED. Record the cost in character state.
+• EVOLUTION — the confrontation reveals a deeper or different tension. MOVE to RESOLVED, then CREATE a new collision from what actually surfaced. The old collision is done — the new one tracks what it mutated into.
+
+In ALL cases this collision is RESOLVED after the player responds. If the underlying tension persists in a new shape, CREATE a fresh collision to track it. No collision survives detonation.
+
+Do NOT let this collision continue to simmer. Do NOT write around it. The issue is HERE.`
+                ).join('\n\n');
+
+                setExtensionPrompt(`${MODULE_NAME}_arrival`, blocks, PROMPT_IN_CHAT, 0);
+                console.log(`${LOG_PREFIX} Collision arrival fired for: ${arrivals.map(a => a.id).join(', ')}`);
+            } else {
+                setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
+            }
+
+            if (staleResolving.length > 0) {
+                const staleBlock = staleResolving.map(s =>
+                    `[STALE COLLISION — "${s.col.name || s.id}" has been RESOLVING for ${s.txSince}+ transactions. This collision already detonated — MOVE it to RESOLVED now. If the tension persists in a new form, CREATE a new collision to track it. No collision survives past detonation.]`
+                ).join('\n');
+                setExtensionPrompt(`${MODULE_NAME}_stale`, staleBlock, PROMPT_IN_CHAT, 0);
+            } else {
+                setExtensionPrompt(`${MODULE_NAME}_stale`, '', PROMPT_NONE, 0);
+            }
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
+            setExtensionPrompt(`${MODULE_NAME}_stale`, '', PROMPT_NONE, 0);
+        }
+
         // Permanent nudge — always present at depth 0, every turn
         setExtensionPrompt(`${MODULE_NAME}_nudge`,
             `[SYSTEM: Your response is INCOMPLETE without a ---LEDGER--- block at the end. This is mandatory.
@@ -258,6 +370,7 @@ async function initialize(force = false) {
     _turnCounter = 0;
     _pendingCorrections = [];
     _pendingReinforcement = null;
+    _firedCollisionArrivals = new Set();
 
     if (!chatId) {
         console.log(`${LOG_PREFIX} No active chat.`);
