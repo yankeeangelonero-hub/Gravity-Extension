@@ -136,6 +136,14 @@
 #gravity-ledger-toggle { cursor:pointer; }
 #gravity-ledger-toggle i { width:16px; text-align:center; }
 
+/* Exemplar cards */
+#gravity-ledger-panel .gl-exemplar-card { border:1px solid #444; border-radius:4px; padding:6px 8px; margin:4px 0; background:rgba(255,255,255,.02); position:relative; }
+#gravity-ledger-panel .gl-exemplar-text { font-size:10px; line-height:1.5; opacity:.85; font-style:italic; }
+#gravity-ledger-panel .gl-exemplar-actions { display:flex; gap:4px; margin-top:4px; justify-content:flex-end; }
+#gravity-ledger-panel .gl-exemplar-btn { background:none; border:1px solid #555; border-radius:3px; color:#aaa; font-size:9px; padding:2px 6px; cursor:pointer; transition:background .15s; }
+#gravity-ledger-panel .gl-exemplar-btn:hover { background:rgba(255,255,255,.1); color:#fff; }
+#gravity-ledger-panel .gl-exemplar-remove:hover { color:#f66; border-color:#f66; }
+
 /* Quick-access buttons above chat input */
 #gl-input-bar { display:flex; gap:4px; padding:4px 8px; justify-content:flex-start; }
 #gl-input-bar .gl-input-btn { background:rgba(255,255,255,.05); border:1px solid #444; border-radius:4px; color:#ccc; font-size:11px; padding:4px 10px; cursor:pointer; transition:background .15s; font-family:inherit; }

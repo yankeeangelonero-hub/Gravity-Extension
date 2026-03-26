@@ -172,6 +172,7 @@ function renderAllSections() {
         { id: 'collisions', icon: 'fa-burst', title: 'Collisions', html: renderCollisions(_lastState) },
         { id: 'arc', icon: 'fa-book-open', title: 'Arc & Chapters', html: renderArc(_lastState) },
         { id: 'divination', icon: 'fa-star', title: 'Divination', html: renderDivination(_lastState) },
+        { id: 'exemplars', icon: 'fa-thumbs-up', title: 'Style Exemplars', html: renderExemplars() },
     ];
 
     container.innerHTML = sections.map(s => `
@@ -213,6 +214,39 @@ function renderAllSections() {
             const target = toggle.nextElementSibling;
             if (target) target.style.display = target.style.display === 'none' ? 'block' : 'none';
             toggle.classList.toggle('open');
+        });
+    });
+
+    // Exemplar edit/remove buttons
+    container.querySelectorAll('.gl-exemplar-edit').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const idx = parseInt(btn.dataset.idx, 10);
+            const { chatMetadata, saveMetadata, Popup } = SillyTavern.getContext();
+            const exemplars = chatMetadata?.['gravity_exemplars'] || [];
+            if (idx < 0 || idx >= exemplars.length) return;
+            const current = typeof exemplars[idx] === 'object' ? exemplars[idx].text : exemplars[idx];
+            const newText = await Popup.show.input('Edit Exemplar', 'Edit the exemplar text:', current);
+            if (newText === null || newText === undefined) return;
+            if (typeof exemplars[idx] === 'object') {
+                exemplars[idx].text = newText.trim();
+            } else {
+                exemplars[idx] = newText.trim();
+            }
+            await saveMetadata();
+            renderAllSections();
+            toastr.success('Exemplar updated');
+        });
+    });
+    container.querySelectorAll('.gl-exemplar-remove').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const idx = parseInt(btn.dataset.idx, 10);
+            const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+            const exemplars = chatMetadata?.['gravity_exemplars'] || [];
+            if (idx < 0 || idx >= exemplars.length) return;
+            exemplars.splice(idx, 1);
+            await saveMetadata();
+            renderAllSections();
+            toastr.info('Exemplar removed');
         });
     });
 }
@@ -715,6 +749,29 @@ function renderDivination(state) {
     }
 
     return parts.length ? parts.join('') : '<div class="gl-empty">No divination data</div>';
+}
+
+function renderExemplars() {
+    const { chatMetadata } = SillyTavern.getContext();
+    const exemplars = chatMetadata?.['gravity_exemplars'] || [];
+    if (exemplars.length === 0) {
+        return '<div class="gl-empty">No exemplars saved. Click Good to paste prose you liked.</div>';
+    }
+    const parts = [];
+    for (let i = 0; i < exemplars.length; i++) {
+        const ex = exemplars[i];
+        const text = typeof ex === 'object' ? ex.text : ex;
+        const truncated = text.length > 200 ? text.substring(0, 200) + '…' : text;
+        parts.push(`<div class="gl-exemplar-card" data-idx="${i}">
+            <div class="gl-exemplar-text">${esc(truncated)}</div>
+            <div class="gl-exemplar-actions">
+                <button class="gl-exemplar-btn gl-exemplar-edit" data-idx="${i}" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                <button class="gl-exemplar-btn gl-exemplar-remove" data-idx="${i}" title="Remove"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>`);
+    }
+    parts.push(`<div class="gl-d-row" style="opacity:.5;font-size:10px;">Last ${Math.min(5, exemplars.length)} injected as style targets each turn.</div>`);
+    return parts.join('');
 }
 
 // ─── Toolbar Handlers ───────────────────────────────────────────────────────────
