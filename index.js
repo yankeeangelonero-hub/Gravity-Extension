@@ -325,6 +325,11 @@ function handleSetupButton() {
     }
 }
 
+function handleAdvanceButton() {
+    const pcName = _currentState?.pc?.name || '{{user}}';
+    insertChatMessage(`*${pcName} waits, watching.*`);
+}
+
 function handleRegisterButton() {
     insertChatMessage('OOC: promote ');
 }
@@ -509,6 +514,7 @@ async function handleImportData(data) {
         onTimeskip: handleTimeskipButton,
         onChapterClose: handleChapterCloseButton,
         onRegister: handleRegisterButton,
+        onAdvance: handleAdvanceButton,
         onRevertTurn: handleRevertTurn,
     });
 
