@@ -82,6 +82,10 @@ function formatStateView(state) {
     } else {
         lines.push('  pc — (not initialized)');
     }
+    const divSys = state.divination?.active_system;
+    if (divSys) {
+        lines.push(`  divination — system: ${divSys}${state.divination?.last_draw ? `, last draw: ${state.divination.last_draw}` : ''}`);
+    }
 
     // ── Current State Detail ───────────────────────────────────────────
     lines.push('');
@@ -285,10 +289,9 @@ FACTIONS — create and manage factions
   > CREATE faction:shinra name="Shinra Corp" objective="Control the reactors" resources="Military" stance_toward_pc="Hostile" -- Major faction
   > SET faction:shinra field=stance_toward_pc value="Neutral" -- Stance shifted after negotiation
 
-DIVINATION — record draws and readings
+DIVINATION — record current draw only (no history accumulation)
   > SET divination field=active_system value="arcana" -- Set active system
-  > SET divination field=last_draw value="XIV — Temperance" -- Record draw
-  > APPEND divination field=readings value="XIV Temperance — balance sought between opposing forces" -- Log reading
+  > SET divination field=last_draw value="XIV — Temperance" -- Record draw (overwrites previous)
 
 STORY SUMMARY — append-only story beats (include after major events)
   > APPEND summary field=text value="Ch1: Ada and Autumn meet in the safehouse. Trust tentative." -- Chapter 1 summary
