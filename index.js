@@ -130,7 +130,24 @@ function injectPrompt() {
 
         // Permanent nudge — always present at depth 0, every turn
         setExtensionPrompt(`${MODULE_NAME}_nudge`,
-            '[SYSTEM: Your response is INCOMPLETE without a ---LEDGER--- block at the end. After your prose, append ---LEDGER--- with one command per line, then ---END LEDGER---. This is mandatory. If nothing changed: ---LEDGER---\n(empty)\n---END LEDGER---]',
+            `[SYSTEM: Your response is INCOMPLETE without a ---LEDGER--- block at the end. This is mandatory.
+
+After prose, append:
+---LEDGER---
+> [Day N — HH:MM] OPERATION entity:id key=value -- reason
+---END LEDGER---
+
+WHAT TO TRACK every turn — check each, emit if changed:
+- Character DOING/WANT/COST updates (SET)
+- Constraint pressure or integrity shifts (SET current_pressure / MOVE integrity)
+- Collision distance changes (SET distance)
+- READS updates when a character's interpretation shifts (READ)
+- Noticed details gained or fired (APPEND / REMOVE)
+- Key moments worth recording (APPEND key_moments)
+- World state changes (SET world_state)
+- PC demonstrated traits, reputation, timeline (APPEND / MAP_SET)
+- Story summary after major events (APPEND summary)
+If nothing changed: (empty)]`,
             PROMPT_IN_CHAT, 0);
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
