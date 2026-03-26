@@ -134,7 +134,7 @@ function injectPrompt() {
             if (factions.length > 0) {
                 const factionNames = factions.map(f => `${f.name || f.id} (${f.objective || '?'})`).join(', ');
                 setExtensionPrompt(`${MODULE_NAME}_faction`,
-                    `[FACTION HEARTBEAT — Turn ${_turnCounter}. Active factions: ${factionNames}.\nFactions execute operations independently of the player. Faction leaders command subordinates — a boss offscreen issues orders that arrive through minions, patrols, broadcasts, supply changes. If no faction has visibly acted in recent turns, one MUST advance NOW. The world does not revolve around the PC. Show the evidence arriving.]`,
+                    `[FACTION HEARTBEAT — Turn ${_turnCounter}. Active factions: ${factionNames}.\nFactions execute operations independently. Leaders command subordinates — show the chain of command. You may CUT to a faction scene (a brief beat from their angle) before cutting back to the main scene. If no faction has visibly acted in recent turns, one MUST advance NOW. Show the evidence arriving — through a subordinate, a broadcast, a checkpoint, a consequence.]`,
                     PROMPT_IN_CHAT, 0);
             } else {
                 setExtensionPrompt(`${MODULE_NAME}_faction`, '', PROMPT_NONE, 0);
@@ -473,15 +473,23 @@ function handleAdvanceButton() {
     // Inject world-advance directive
     _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
 
-This is the world's turn. Read Gravity_State_View and pick at least ONE:
-- An NPC in the scene acts on their own WANT or DOING — starts a conversation, reacts to something, makes a decision
-- A faction leader issues an order through subordinates — the consequence arrives as evidence (a patrol, a checkpoint, a messenger, a rumor)
-- A pressure point shows its first crack
-- A collision tightens because an NPC or faction moved, not because the PC did
-- A dormant character's WANT pulls them back into the story
-${divDirective}
-The PC is present but backgrounded — still ${doing}. Show what the world does around them.
+This is the world's turn. You may write MULTIPLE BEATS and CUT between character angles:
 
+STRUCTURE: Write 2-4 short beats, each from a different angle. Use scene cuts:
+- Beat 1: What ${pcName} is doing (brief, maintaining vector)
+- Beat 2: An NPC in the scene acts on their own WANT — starts a conversation, reacts, decides
+- Beat 3: Cut to a different location — a faction leader issues an order, a subordinate executes, a patrol moves
+- Beat 4: Cut back — the consequence arrives where the PC is
+
+Use --- or a location/time header to cut between angles. Each beat can be 50-150 words. Not every beat needs the PC.
+
+PICK from Gravity_State_View:
+- NPCs act on their WANT or DOING
+- Faction leaders command subordinates — show the order AND the execution
+- A pressure point cracks
+- A collision tightens because the world moved
+- A dormant character's WANT pulls them back
+${divDirective}
 Full turn: deduction + prose + ledger block.]`;
 
     insertChatMessage(`*${pcName} continues ${doing}.*`);
@@ -529,11 +537,13 @@ async function handleTimeskipButton() {
 
 2. THE BUTTERFLY EFFECT: Advance the agendas of ALL off-screen factions, tracked NPCs, and active collisions. The world moves without the player. For each tracked character: advance DOING, check constraints, update stance. For each collision: compress distance. For world: advance factions, world state, pressure points.
 
-3. FORMAT: Your response must strictly follow this structure:
-   Paragraph 1: THE SUMMARY — The passage of time. What the player did during the skip (routines, projects, rest). Success or failure of their goals. New [Day N] timestamp.
-   Paragraph 2: THE WORLD STATE — How factions, NPCs, and background forces changed. What moved while the player wasn't looking.
-   Paragraph 3: THE HOOK — A real-time physical transition or interruption that ends the skip. Something demands response NOW.
-   Paragraph 4: Hand agency back to the player.
+3. FORMAT — MULTI-BEAT, MULTI-ANGLE: Write 3-6 beats, cutting between locations and characters. Use --- or location/time headers between beats:
+   Beat: THE PC — What they did during "${duration}". Routines, projects, rest. Show the rhythm, not a summary.
+   Beat: CUT TO [faction HQ / patrol route / offscreen NPC] — What a faction did. Show the order being given or executed. Name the subordinates.
+   Beat: CUT TO [tracked character] — What a dormant character did with their WANT. Their own scene, their own momentum.
+   Beat: CUT TO [collision surface] — Two forces moved closer. Show the near-miss or the evidence accumulating.
+   Beat: CUT BACK TO PC — The hook. Something demands response NOW. A knock, a rumor, a consequence arriving.
+   Final: Hand agency back to the player. New [Day N — HH:MM] timestamp.
 
 4. LEDGER: Emit a full ---LEDGER--- block recording ALL state changes from the skip:
    - SET/MOVE on characters (doing, want, constraint pressure)
