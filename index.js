@@ -419,7 +419,23 @@ function handleSetupButton() {
 
 function handleAdvanceButton() {
     const pcName = _currentState?.pc?.name || '{{user}}';
-    insertChatMessage(`*${pcName} waits, watching.*`);
+    const doing = _currentState?.pc?.doing || 'what they were doing';
+
+    // Inject world-advance directive
+    _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
+
+This is the world's turn. Read Gravity_State_View and pick at least ONE:
+- An NPC in the scene acts on their own WANT or DOING — starts a conversation, reacts to something, makes a decision
+- A character arrives or departs for their own reasons
+- A faction's operation advances visibly (news, patrol, delivery, rumor)
+- A pressure point shows its first crack
+- A collision tightens because an NPC did something, not because the PC did
+
+The PC is present but backgrounded — still ${doing}. Show what the world does around them.
+
+Full turn: deduction + prose + ledger block.]`;
+
+    insertChatMessage(`*${pcName} continues ${doing}.*`);
 }
 
 function handleGoodTurnButton() {
