@@ -11,7 +11,7 @@ import { init as initLedger, reset as resetLedger, append, getAllTransactions, e
 import { initSnapshots, computeCurrentState, createSnapshot } from './snapshot-mgr.js';
 import { validateBatch, formatErrors } from './consistency.js';
 import { computeState } from './state-compute.js';
-import { formatStateView, formatReadme, formatCharacterEntry } from './state-view.js';
+import { formatStateView, formatReadme } from './state-view.js';
 import { extractLedgerBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
 import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
@@ -325,6 +325,10 @@ function handleSetupButton() {
     }
 }
 
+function handleRegisterButton() {
+    insertChatMessage('OOC: promote ');
+}
+
 async function handleTimeskipButton() {
     const { Popup } = SillyTavern.getContext();
     const duration = await Popup.show.input('Timeskip', 'How much time passes? (e.g., "3 days", "a week", "until morning")');
@@ -504,6 +508,7 @@ async function handleImportData(data) {
         onSetup: handleSetupButton,
         onTimeskip: handleTimeskipButton,
         onChapterClose: handleChapterCloseButton,
+        onRegister: handleRegisterButton,
         onRevertTurn: handleRevertTurn,
     });
 

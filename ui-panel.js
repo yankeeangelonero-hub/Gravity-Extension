@@ -20,15 +20,17 @@ let _onNew = null;
 let _onSetup = null;
 let _onTimeskip = null;
 let _onChapterClose = null;
+let _onRegister = null;
 let _onRevertTurn = null;
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRevertTurn }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onRevertTurn }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
     _onSetup = onSetup;
     _onTimeskip = onTimeskip;
     _onChapterClose = onChapterClose;
+    _onRegister = onRegister;
     _onRevertTurn = onRevertTurn;
 }
 
@@ -102,6 +104,7 @@ function createPanel() {
             <button class="gl-cmd-btn" data-cmd="setup" title="Setup Wizard (or cancel)"><i class="fa-solid fa-wand-magic-sparkles"></i> Setup</button>
             <button class="gl-cmd-btn" data-cmd="timeskip" title="Timeskip"><i class="fa-solid fa-forward"></i> Skip</button>
             <button class="gl-cmd-btn" data-cmd="chapter_close" title="Close chapter"><i class="fa-solid fa-flag-checkered"></i> Close Ch.</button>
+            <button class="gl-cmd-btn" data-cmd="register" title="Register/promote NPC"><i class="fa-solid fa-user-plus"></i> Register</button>
         </div>
         <div class="gl-setup-indicator gl-hidden" id="gl-setup-indicator">
             <span id="gl-setup-label"></span>
@@ -131,6 +134,7 @@ function createPanel() {
             case 'setup': if (_onSetup) _onSetup(); break;
             case 'timeskip': if (_onTimeskip) _onTimeskip(); break;
             case 'chapter_close': if (_onChapterClose) _onChapterClose(); break;
+            case 'register': if (_onRegister) _onRegister(); break;
         }
     });
 

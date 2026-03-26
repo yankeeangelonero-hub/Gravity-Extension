@@ -75,6 +75,9 @@ async function handleEval() {
     lines.push(`Constraints: ${Object.keys(state.constraints).length}`);
     lines.push(`Collisions: ${Object.keys(state.collisions).length}`);
     lines.push(`Chapters: ${Object.keys(state.chapters).length}`);
+    lines.push(`Factions: ${Object.keys(state.factions || {}).length}`);
+    lines.push(`Story summary entries: ${(state.story_summary || []).length}`);
+    lines.push(`Divination: ${state.divination?.active_system || 'not set'}`);
     lines.push('');
     lines.push('RECENT TRANSACTIONS (last 30):');
     for (const tx of allTxns.slice(-30)) {
