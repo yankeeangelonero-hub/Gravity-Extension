@@ -53,8 +53,8 @@ Operations:
   MAP_DEL — delete map key: field=X key=Y
   DESTROY — remove entity permanently
 
-Entity types: char, constraint, collision, chapter, world, pc
-(world and pc are singletons — no :id needed)
+Entity types: char, constraint, collision, chapter, faction, world, pc, divination, summary
+(world, pc, divination, summary are singletons — no :id needed)
 
 State machines (MOVE between adjacent only):
   Character tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
@@ -71,13 +71,16 @@ Volume guide:
 
 ═══ FIRST TURN ═══
 
-On your first response, establish:
+If the setup wizard is active, follow its phase prompts instead of these defaults.
+
+Otherwise, on your first response, establish:
 1. Opening scene
 2. At least one character (CREATE char)
 3. World constants (MAP_SET world field=constants key=tone/voice/role)
 4. PC name (SET pc field=name value="Name")
-5. Chapter (CREATE chapter)
-6. World state (SET world field=world_state)
+5. At least 2 factions with political profiles (CREATE faction with power, momentum, leverage, vulnerability, relations)
+6. Chapter (CREATE chapter)
+7. World state (SET world field=world_state)
 
 Record ALL in the ledger block.
 

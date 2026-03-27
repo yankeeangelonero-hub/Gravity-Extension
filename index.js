@@ -113,20 +113,31 @@ function clearMatchedCorrections(committedTxns) {
 
 // ─── Prompt Injection ──────────────────────────────────────────────────────────
 
-function injectPrompt() {
+/**
+ * Inject prompts based on turn mode.
+ * @param {'regular'|'advance'|'integration'} [mode='regular']
+ *   regular     — player prose turn (slim state, core readme)
+ *   advance     — world moves turn (full state, core readme, skip heartbeat/dormant)
+ *   integration — chapter close/timeskip/setup (full state, full readme)
+ */
+function injectPrompt(mode = 'regular') {
     const context = SillyTavern.getContext();
     const { setExtensionPrompt } = context;
     if (!setExtensionPrompt) return;
 
+    const isRegular = mode === 'regular';
+    const isAdvance = mode === 'advance';
+    const isIntegration = mode === 'integration';
+
     try {
-        // State view
+        // State view — slim on regular turns, full on advance/integration
         if (_currentState) {
-            const stateView = formatStateView(_currentState);
+            const stateView = formatStateView(_currentState, isRegular ? 'slim' : 'full');
             setExtensionPrompt(`${MODULE_NAME}_state`, stateView, PROMPT_IN_CHAT, 0);
         }
 
-        // Format readme
-        const readme = formatReadme();
+        // Format readme — core on regular/advance, full on integration
+        const readme = formatReadme(isIntegration ? 'full' : 'core');
         setExtensionPrompt(`${MODULE_NAME}_readme`, readme, PROMPT_IN_CHAT, 0);
 
         // Setup wizard phase prompt (overrides corrections when active)
@@ -160,9 +171,9 @@ function injectPrompt() {
             setExtensionPrompt(`${MODULE_NAME}_inject`, '', PROMPT_NONE, 0);
         }
 
-        // Style exemplars — inject last 5 good paragraphs flagged by the player
+        // Style exemplars — inject last 5 good paragraphs (skip on integration turns — no prose)
         const { chatMetadata } = SillyTavern.getContext();
-        const exemplars = chatMetadata?.['gravity_exemplars'] || [];
+        const exemplars = (!isIntegration && chatMetadata?.['gravity_exemplars']) || [];
         if (exemplars.length > 0) {
             const recent = exemplars.slice(-5);
             const exLines = recent.map((ex, i) => `  ${i + 1}. "${ex.text}"`).join('\n');
@@ -173,8 +184,8 @@ function injectPrompt() {
             setExtensionPrompt(`${MODULE_NAME}_exemplars`, '', PROMPT_NONE, 0);
         }
 
-        // Faction heartbeat — every 10 turns, check if factions have been active
-        if (_turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
+        // Faction heartbeat — every 10 turns on regular turns only (advance/integration handle factions directly)
+        if (isRegular && _turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
             const factions = Object.values(_currentState.factions || {});
             if (factions.length > 0) {
                 const factionDetails = factions.map(f => {
@@ -193,9 +204,9 @@ function injectPrompt() {
             setExtensionPrompt(`${MODULE_NAME}_faction`, '', PROMPT_NONE, 0);
         }
 
-        // Dormant character check — every 15 turns, flag characters with no recent activity
+        // Dormant character check — every 15 turns on regular turns only
         const DORMANT_THRESHOLD = 20; // transactions since last activity
-        if (_turnCounter > 0 && _turnCounter % 15 === 0 && _currentState) {
+        if (isRegular && _turnCounter > 0 && _turnCounter % 15 === 0 && _currentState) {
             const allTx = getAllTransactions();
             const totalTx = allTx.length;
             const dormant = [];
@@ -300,9 +311,10 @@ Do NOT let this collision continue to simmer. Do NOT write around it. The issue 
             setExtensionPrompt(`${MODULE_NAME}_stale`, '', PROMPT_NONE, 0);
         }
 
-        // Permanent nudge — always present at depth 0, every turn
-        setExtensionPrompt(`${MODULE_NAME}_nudge`,
-            `[SYSTEM: Your response is INCOMPLETE without a ---LEDGER--- block at the end. This is mandatory.
+        // Nudge — full on regular turns, slim on advance/integration (those prompts already instruct on ledger)
+        if (isRegular) {
+            setExtensionPrompt(`${MODULE_NAME}_nudge`,
+                `[SYSTEM: Your response is INCOMPLETE without a ---LEDGER--- block at the end. This is mandatory.
 
 After prose, append:
 ---LEDGER---
@@ -322,7 +334,12 @@ WHAT TO TRACK — emit in PRIORITY ORDER (cap: 20 lines, excess dropped):
 10. Intimate history after intimate scenes (MAP_SET intimate_history)
 11. Housekeeping REMOVEs — ALWAYS LAST, 2–3 per turn max, never bulk dumps
 If nothing changed: (empty)]`,
-            PROMPT_IN_CHAT, 0);
+                PROMPT_IN_CHAT, 0);
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_nudge`,
+                `[SYSTEM: Include a ---LEDGER--- block at the end. Cap: 20 lines${_uncappedTurn ? ' (UNCAPPED this turn)' : ''}.]`,
+                PROMPT_IN_CHAT, 0);
+        }
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
     }
@@ -571,7 +588,7 @@ function handleSetupButton() {
     } else {
         startSetup();
         showSetupPhase(getPhaseLabel());
-        injectPrompt();
+        injectPrompt('integration');
         insertChatMessage('OOC: Let\'s set up a new game.');
     }
 }
@@ -689,12 +706,22 @@ Scan the pressure_points array in the state view. If any exist, pick the one tha
 produce the COOLEST moment right now — not the most dramatic or intense, but the most
 interesting, unexpected, or stylish intersection with the current scene.
 
-You have FULL LICENSE to execute it: move NPCs into position, introduce new NPCs,
-have faction subordinates arrive with orders, trigger environmental events, create
-situations that demand response. Show the chain of causation — which faction's action
+You have FULL LICENSE to make it happen: move NPCs into position, introduce new NPCs,
+spawn threats, have faction subordinates arrive with orders, trigger events, create new
+characters, use environmental disasters. Whatever it takes to force this pressure into
+the player's immediate reality. Show the chain of causation — which faction's action
 created this pressure, how it reaches the PC, what it forces.
 
-After firing a pressure point, REMOVE it from world.pressure_points. It detonated. It's done.
+A pressure point DOES NOT detonate on its own. It feeds the collision engine:
+- If an existing collision is relevant: COMPRESS its distance (SET distance closer),
+  add to its forces, or shift its cost. The faction politics make a personal confrontation
+  worse, faster, or differently shaped.
+- If no existing collision fits: CREATE a new collision from the pressure point.
+  Give it forces, status=SIMMERING or ACTIVE, a distance, and a cost.
+  The pressure has crystallized into a proper confrontation.
+
+After activating a pressure point, REMOVE it from world.pressure_points. It has been
+converted into collision fuel — it is no longer a raw seam, it is now tracked momentum.
 
 If no pressure points exist or none fit, PICK from Gravity_State_View instead:
 - NPCs act on their WANT or DOING
@@ -705,7 +732,7 @@ Record the draw: SET divination field=last_draw value="[card name]"
 Full turn: deduction + prose + ledger block.]`;
     }
 
-    injectPrompt();
+    injectPrompt('advance');
     insertChatMessage(`*${pcName} continues ${doing}.*`);
 }
 
@@ -775,7 +802,7 @@ async function handleTimeskipButton() {
 
 Do NOT close the chapter. The story continues.]`;
 
-    injectPrompt();
+    injectPrompt('integration');
     insertChatMessage(`OOC: Timeskip — ${duration}`);
 }
 
@@ -818,12 +845,15 @@ D. FACTION POLITICS — simulate the macro layer:
    - A rising faction attracts rivals AND supplicants
    - Check pc.reputation — the PC's standing colors every faction's calculus
 
-   PRESSURE POINT GENERATION — seeds for the next chapter:
+   PRESSURE POINT GENERATION — collision fuel for the next chapter:
    From the faction simulation, generate 2-4 NEW pressure points that:
    - Emerge from faction conflicts (political, territorial, resource tensions)
    - Are specific and concrete enough to trigger scenes
    - Name the factions involved
    - Would be COOL to encounter — not just tense, but interesting
+   Pressure points are raw seams — during advance turns, they will be converted
+   into collision fuel (compressing existing collision distances, shifting forces,
+   or spawning new collisions). Write them as seeds, not conclusions.
    REMOVE spent/resolved pressure points from previous chapter.
    APPEND new ones to world.pressure_points.
 
@@ -857,12 +887,13 @@ C. EMIT LEDGER BLOCK:
    - MOVE chapter: OPEN->CLOSING->CLOSED for old chapter
    - CREATE new chapter (number, title, status=OPEN, arc, central_tension, target_collisions)
    - All timeskip advances (SET/MOVE on characters, collisions, world)
+   - Faction updates (SET power/momentum/last_move, MAP_SET relations on each faction)
    - APPEND summary with chapter summary
    - APPEND pc timeline entries for skip period
 
 D. WRITE the opening of the new chapter — the player lands in the result, not a summary. Full deduction + prose + ledger block.]`;
 
-    injectPrompt();
+    injectPrompt('integration');
     insertChatMessage('OOC: Close this chapter.');
 }
 
@@ -955,7 +986,7 @@ async function handleImportData(data) {
     // Setup wizard phase change callback
     setPhaseCallback((phase) => {
         showSetupPhase(phase > 0 ? getPhaseLabel() : null);
-        injectPrompt();
+        injectPrompt(phase > 0 ? 'integration' : 'regular');
         updatePanel(_currentState, _turnCounter);
         if (phase === 0 && _lastPhase > 0) {
             toastr.success('Setup complete!');

@@ -21,13 +21,13 @@ import { getPhonebook } from './state-compute.js';
  * @param {import('./state-compute.js').ComputedState} state
  * @returns {string}
  */
-function formatStateView(state) {
+function formatStateView(state, mode = 'full') {
     const lines = [];
+    const slim = mode === 'slim';
     lines.push('═══ GRAVITY STATE VIEW ═══');
     lines.push('');
 
     // ── Entity Registry (what to write to) ─────────────────────────────
-    // Every entity ID the LLM can target in ledger transactions.
     lines.push('ENTITY REGISTRY — use these IDs in ledger transactions');
 
     // Characters
@@ -52,14 +52,13 @@ function formatStateView(state) {
         }
     }
 
-    // Collisions
+    // Collisions — slim: just IDs, full: adds detail section below
     const allCollisions = Object.values(state.collisions).filter(c => c.status !== 'RESOLVED');
     if (allCollisions.length) {
         lines.push('');
         lines.push('Collisions:');
         for (const col of allCollisions) {
-            const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(' → ') : String(col.forces || '');
-            lines.push(`  ⊕ ${col.name || col.id} [${col.status}] ${forces} | dist:${col.distance || '?'} → id: ${col.id}`);
+            lines.push(`  ${col.name || col.id} [${col.status}]${slim ? '' : ` dist:${col.distance || '?'}`} → id: ${col.id}`);
         }
     }
 
@@ -76,7 +75,7 @@ function formatStateView(state) {
     // Singletons
     lines.push('');
     lines.push('Singletons (no id needed):');
-    lines.push('  world — factions, constants, pressure_points, world_state');
+    lines.push('  world — constants, pressure_points, world_state, knowledge_asymmetry');
     if (state.pc.name) {
         lines.push(`  pc — "${state.pc.name}"`);
     } else {
@@ -87,11 +86,35 @@ function formatStateView(state) {
         lines.push(`  divination — system: ${divSys}${state.divination?.last_draw ? `, last draw: ${state.divination.last_draw}` : ''}`);
     }
 
+    // Factions — slim: name + stance only, full: all political fields
+    const factionEntities = Object.values(state.factions || {});
+    const legacyFactions = Array.isArray(state.world.factions) ? state.world.factions : [];
+    if (factionEntities.length || legacyFactions.length) {
+        lines.push('');
+        lines.push('Factions:');
+        for (const f of factionEntities) {
+            if (slim) {
+                lines.push(`  ${f.name || f.id} | Stance: ${f.stance_toward_pc || '?'} → id: ${f.id}`);
+            } else {
+                // shown in detail section below
+                lines.push(`  ${f.name || f.id} → id: ${f.id}`);
+            }
+        }
+        for (const f of legacyFactions) {
+            if (typeof f === 'object' && f.name) {
+                const alreadyListed = factionEntities.some(fe => fe.name === f.name);
+                if (!alreadyListed) lines.push(`  ${f.name}: ${f.objective || ''} | Stance: ${f.stance_toward_pc || '?'}`);
+            } else if (typeof f === 'string') {
+                lines.push(`  ${f}`);
+            }
+        }
+    }
+
     // ── Current State Detail ───────────────────────────────────────────
     lines.push('');
     lines.push('─── CURRENT STATE ───');
 
-    // Chapter
+    // Chapter — always shown
     const openChapter = Object.values(state.chapters).find(ch => ch.status === 'OPEN');
     if (openChapter) {
         lines.push('');
@@ -100,22 +123,7 @@ function formatStateView(state) {
         if (openChapter.central_tension) lines.push(`  Tension: ${openChapter.central_tension}`);
     }
 
-    // Collisions detail
-    const liveCollisions = Object.values(state.collisions).filter(
-        c => c.status !== 'RESOLVED' && c.status !== 'SEEDED'
-    );
-    if (liveCollisions.length) {
-        lines.push('');
-        lines.push('COLLISIONS');
-        for (const col of liveCollisions) {
-            const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(' → ') : String(col.forces || '');
-            lines.push(`  ⊕ ${col.name || col.id} | ${forces} | dist:${col.distance || '?'} | ${col.status}`);
-            if (col.cost) lines.push(`    Cost: ${col.cost}`);
-            if (col.target_constraint) lines.push(`    Targets: ${col.target_constraint}`);
-        }
-    }
-
-    // Constants
+    // Constants — always shown (voice/tone are critical for prose)
     const c = state.world.constants || {};
     if (Object.keys(c).length) {
         lines.push('');
@@ -133,86 +141,93 @@ function formatStateView(state) {
         if (c.objective) lines.push(`  Objective: ${c.objective}`);
     }
 
-    // World state
+    // World state — always shown
     if (state.world.world_state) {
         lines.push('');
         lines.push('WORLD STATE');
         lines.push(`  ${state.world.world_state}`);
     }
 
-    // Factions (from state.factions entities + legacy state.world.factions)
-    const factionEntities = Object.values(state.factions || {});
-    const legacyFactions = Array.isArray(state.world.factions) ? state.world.factions : [];
-    if (factionEntities.length || legacyFactions.length) {
-        lines.push('');
-        lines.push('FACTIONS');
-        for (const f of factionEntities) {
-            let line = `  ${f.name || f.id}: ${f.objective || ''}`;
-            line += ` | Resources: ${f.resources || '?'}`;
-            line += ` | Stance: ${f.stance_toward_pc || '?'}`;
-            if (f.power) line += ` | Power: ${f.power}`;
-            if (f.momentum) line += ` | Momentum: ${f.momentum}`;
-            line += ` → id: ${f.id}`;
-            lines.push(line);
-            if (f.relations && typeof f.relations === 'object') {
-                for (const [targetId, relation] of Object.entries(f.relations)) {
-                    lines.push(`    ↔ ${targetId}: ${relation}`);
+    // ── Below here: full mode only ───────────────────────────────────────
+
+    if (!slim) {
+        // Collisions detail
+        const liveCollisions = Object.values(state.collisions).filter(
+            c => c.status !== 'RESOLVED' && c.status !== 'SEEDED'
+        );
+        if (liveCollisions.length) {
+            lines.push('');
+            lines.push('COLLISIONS');
+            for (const col of liveCollisions) {
+                const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(' → ') : String(col.forces || '');
+                lines.push(`  ⊕ ${col.name || col.id} | ${forces} | dist:${col.distance || '?'} | ${col.status}`);
+                if (col.cost) lines.push(`    Cost: ${col.cost}`);
+                if (col.target_constraint) lines.push(`    Targets: ${col.target_constraint}`);
+            }
+        }
+
+        // Factions detail
+        if (factionEntities.length) {
+            lines.push('');
+            lines.push('FACTIONS');
+            for (const f of factionEntities) {
+                let line = `  ${f.name || f.id}: ${f.objective || ''}`;
+                line += ` | Resources: ${f.resources || '?'}`;
+                line += ` | Stance: ${f.stance_toward_pc || '?'}`;
+                if (f.power) line += ` | Power: ${f.power}`;
+                if (f.momentum) line += ` | Momentum: ${f.momentum}`;
+                lines.push(line);
+                if (f.relations && typeof f.relations === 'object') {
+                    for (const [targetId, relation] of Object.entries(f.relations)) {
+                        lines.push(`    ↔ ${targetId}: ${relation}`);
+                    }
+                }
+                if (f.last_move) lines.push(`    Last move: ${f.last_move}`);
+                if (f.leverage) lines.push(`    Leverage: ${f.leverage}`);
+                if (f.vulnerability) lines.push(`    Vulnerability: ${f.vulnerability}`);
+            }
+        }
+
+        // Pressure points
+        const pressurePoints = Array.isArray(state.world.pressure_points) ? state.world.pressure_points : (state.world.pressure_points ? [String(state.world.pressure_points)] : []);
+        if (pressurePoints.length) {
+            lines.push('');
+            lines.push('PRESSURE POINTS');
+            for (const pp of pressurePoints) {
+                lines.push(`  - ${pp}`);
+            }
+        }
+
+        // PC — full
+        if (state.pc.name) {
+            lines.push('');
+            lines.push(`PC: ${state.pc.name}`);
+            const traits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
+            if (traits.length) {
+                lines.push(`  Traits: ${traits.join(', ')}`);
+            }
+            const rep = (state.pc.reputation && typeof state.pc.reputation === 'object' && !Array.isArray(state.pc.reputation)) ? state.pc.reputation : {};
+            if (Object.keys(rep).length) {
+                lines.push(`  Reputation:`);
+                for (const [who, r] of Object.entries(rep)) {
+                    lines.push(`    ${who}: ${r}`);
                 }
             }
-            if (f.last_move) lines.push(`    Last move: ${f.last_move}`);
-            if (f.leverage) lines.push(`    Leverage: ${f.leverage}`);
-            if (f.vulnerability) lines.push(`    Vulnerability: ${f.vulnerability}`);
-        }
-        for (const f of legacyFactions) {
-            if (typeof f === 'object' && f.name) {
-                const alreadyListed = factionEntities.some(fe => fe.name === f.name);
-                if (!alreadyListed) lines.push(`  ${f.name}: ${f.objective || ''} | Stance: ${f.stance_toward_pc || '?'}`);
-            } else if (typeof f === 'string') {
-                lines.push(`  ${f}`);
-            }
         }
     }
 
-    // Pressure points
-    const pressurePoints = Array.isArray(state.world.pressure_points) ? state.world.pressure_points : (state.world.pressure_points ? [String(state.world.pressure_points)] : []);
-    if (pressurePoints.length) {
-        lines.push('');
-        lines.push('PRESSURE POINTS');
-        for (const pp of pressurePoints) {
-            lines.push(`  - ${pp}`);
-        }
-    }
-
-    // PC
-    if (state.pc.name) {
-        lines.push('');
-        lines.push(`PC: ${state.pc.name}`);
-        const traits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
-        if (traits.length) {
-            lines.push(`  Traits: ${traits.join(', ')}`);
-        }
-        const rep = (state.pc.reputation && typeof state.pc.reputation === 'object' && !Array.isArray(state.pc.reputation)) ? state.pc.reputation : {};
-        if (Object.keys(rep).length) {
-            lines.push(`  Reputation:`);
-            for (const [who, r] of Object.entries(rep)) {
-                lines.push(`    ${who}: ${r}`);
-            }
-        }
-    }
-
-    // Story Summary
+    // Story Summary — slim: last 2 entries, full: all
     const summary = Array.isArray(state.story_summary) ? state.story_summary : [];
     if (summary.length) {
+        const entries = slim ? summary.slice(-2) : summary;
         lines.push('');
-        lines.push('STORY SO FAR');
-        for (const s of summary) {
+        lines.push(slim ? 'RECENT STORY' : 'STORY SO FAR');
+        for (const s of entries) {
             const text = typeof s === 'object' ? s.text : s;
             const time = typeof s === 'object' ? (s.t || '') : '';
             lines.push(`  ${time ? time + ' ' : ''}${text}`);
         }
     }
-    lines.push('');
-    lines.push('NOTE: APPEND summary after every significant scene — not just chapter closes. Summaries are the primary continuity mechanism. Each entry should capture what happened, who was involved, what changed emotionally or materially, and any sensory or textural detail that makes the moment specific. 2-4 sentences per entry. These summaries replace chat history as context — if it\'s not here, it\'s forgotten.');
 
     lines.push('');
     lines.push('═══ END STATE VIEW ═══');
@@ -223,7 +238,52 @@ function formatStateView(state) {
  * Format the ledger readme — command reference, format spec, writing guide, and examples.
  * @returns {string}
  */
-function formatReadme() {
+function formatReadme(mode = 'full') {
+    if (mode === 'core') return formatReadmeCore();
+    return formatReadmeFull();
+}
+
+/**
+ * Core readme — minimal syntax reference with one example per operation.
+ * Used on regular and advance turns to save ~2000 tokens.
+ */
+function formatReadmeCore() {
+    return `═══ GRAVITY LEDGER — QUICK REFERENCE ═══
+
+---LEDGER--- block after EVERY response. One command per line.
+SYNTAX: > [Day N — HH:MM] OPERATION entity:id key=value key="multi word" -- reason
+Entity types: char, constraint, collision, chapter, faction, world, pc, divination, summary
+Singletons (no :id): world, pc, divination, summary. IDs: kebab-case, stable.
+
+OPERATIONS:
+  CREATE  > CREATE char:elena name="Elena" tier=KNOWN -- New entity
+  MOVE    > MOVE constraint:c1 field=integrity STABLE->STRESSED -- State transition (adjacent only)
+  SET     > SET char:elena field=doing value="Watching from the bar" -- Overwrite field
+  APPEND  > APPEND char:elena field=key_moments value="[Day 1] Noticed the scar" -- Add to array
+  REMOVE  > REMOVE char:elena field=noticed_details value="Old detail" -- Remove from array
+  READ    > READ char:elena target=cloud "Doesn't trust him" -- Character read (shorthand MAP_SET)
+  MAP_SET > MAP_SET pc field=reputation key=elena value="Cautious ally" -- Set map key
+  MAP_DEL > MAP_DEL char:elena field=reads key=old-npc -- Delete map key
+  DESTROY > DESTROY char:minor-npc -- Remove entity
+
+STATE MACHINES (adjacent only, no skipping):
+  Tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
+  Integrity:  STABLE → STRESSED → CRITICAL → BREACHED | Relief: CRITICAL → STRESSED → STABLE
+  Collision:  SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED (or CRASHED)
+  Chapter:    PLANNED → OPEN → CLOSING → CLOSED
+
+PRIORITY (cap 20, excess dropped): 1.MOVE 2.distance 3.DOING/WANT 4.world_state 5.factions 6.summary 7.moments 8.READS 9.PC 10.intimate 11.REMOVEs(2-3 max)
+Volume: quiet 1-2, normal 2-4, action 4-6, heavy 6-12, nothing: (empty)
+Hygiene: REMOVE fired pressure points and noticed details. 2-3 per turn max, never bulk.
+
+═══ END QUICK REFERENCE ═══`;
+}
+
+/**
+ * Full readme — complete reference with all examples and field documentation.
+ * Used on integration turns (chapter close, timeskip, setup) where heavy ledger work is needed.
+ */
+function formatReadmeFull() {
     return `═══ GRAVITY LEDGER — COMMAND FORMAT ═══
 
 LEDGER BLOCK — append after EVERY response, one command per line:
@@ -268,17 +328,13 @@ MOVE — state machine transition (no skipping levels)
 
 SET — overwrite a field
   > SET char:tifa field=doing value="Investigating the reactor" -- New action
-  > SET char:tifa field=want value="Keep Cloud safe" -- Goal clarified
   > SET collision:trust-vs-duty field=distance value=6 -- Closer after confrontation
   > SET world field=world_state value="Martial law declared" -- Major world change
-  > SET pc field=name value="Autumn" -- Init PC
 
 APPEND — add to an array field
-  > APPEND char:tifa field=key_moments value="[Day 1 — 22:00] Confronted Cloud about memories at the well. Her hands stayed flat on the stone — controlled — but her voice broke register on 'you promised.' Composure recovered in two breaths. Cloud didn't notice. Autumn did." -- Pivotal scene
-  > APPEND char:tifa field=noticed_details value="Cloud flinched when she said Sephiroth — micro-expression, jaw tightened" -- Chekhov detail
-  > APPEND world field=pressure_points value="Shinra patrols increasing in slums — checkpoints tightening" -- Rising tension
-  > APPEND pc field=demonstrated_traits value="Mirror technique — uses Tifa's own caregiving style to bypass her defenses. Effective without being aggressive." -- Observed trait pattern
-  > APPEND pc field=timeline value="[Day 2 — 06:18] Stood between Barret's gun-arm and Tifa. Soft voice, not aggressive. Offered to leave." -- Major action
+  > APPEND char:tifa field=key_moments value="[Day 1 — 22:00] Confronted Cloud about memories at the well." -- Pivotal scene
+  > APPEND world field=pressure_points value="Shinra patrols increasing in slums" -- Rising tension
+  > APPEND pc field=timeline value="[Day 2 — 06:18] Stood between Barret's gun-arm and Tifa." -- Major action
 
 REMOVE — remove from an array field
   > REMOVE char:tifa field=noticed_details value="Scratches on bracer" -- Detail resolved
@@ -287,24 +343,14 @@ READ — set a character's read on someone (shorthand for MAP_SET on reads)
   > READ char:tifa target=cloud "Something wrong with his memories" -- Updated after evasion
 
 MAP_SET — set a key in a map field
-  > MAP_SET pc field=reputation key=tifa value="Investor. Unbearable. Has a room now. Not leaving." -- Reputation narrative
-  > MAP_SET pc field=reputation key=shinra value="Unknown. No file. Civilian near Reactor 1 blast — potential suspect if identified." -- Faction reputation
+  > MAP_SET pc field=reputation key=tifa value="Investor. Unbearable. Has a room now." -- Reputation narrative
   > MAP_SET world field=constants key=tone value="Noir thriller" -- Set tone
+
 INTIMATE HISTORY — per-character map tracking sexual encounters for realistic behavioral growth.
-  Update keys via MAP_SET after intimate scenes. Characters reference this for familiarity, learned preferences, and evolving dynamics.
-  Standard keys:
-    encounters  — count + timestamps. Familiarity is behavioral: 1st encounter ≠ 10th.
-    dynamic     — who initiates, power balance, emotional register. Evolves across encounters.
-    preferences — what they respond to, what works. Learned over time, referenced in future scenes.
-    boundaries  — hard limits, sensitivities, triggers. Respected = trust built. Tested = constraint pressured.
-    evolution   — how the pattern changed across encounters. Tie shifts to constraint state.
-    aftermath   — behavior patterns around intimacy, not during. Often more revealing.
+  Update keys via MAP_SET after intimate scenes. Standard keys:
+    encounters, dynamic, preferences, boundaries, evolution, aftermath
   > MAP_SET char:tifa field=intimate_history key=encounters value="3 — [Day 2], [Day 4], [Day 6]" -- Updated count
-  > MAP_SET char:tifa field=intimate_history key=dynamic value="She initiates. He follows her pace. Tenderness increasing — first time she kept her eyes open was Day 6." -- Pattern shift
-  > MAP_SET char:tifa field=intimate_history key=preferences value="Responds to verbal reassurance. Hair-touching is trust signal. Slow pace — rushes when anxious, settles when safe." -- Learned
-  > MAP_SET char:tifa field=intimate_history key=boundaries value="Won't undress fully with lights on. Scars on ribs off-limits — flinched Day 3, he didn't push." -- Hard limits
-  > MAP_SET char:tifa field=intimate_history key=evolution value="Day 2: transactional, constraint held throughout. Day 4: slower, she let him set pace. Day 6: first time she laughed during. C1 briefly absent." -- Growth arc
-  > MAP_SET char:tifa field=intimate_history key=aftermath value="Always leaves first. Returns with water. Doesn't talk about it until morning, and only obliquely." -- Post-pattern
+  > MAP_SET char:tifa field=intimate_history key=dynamic value="She initiates. He follows her pace." -- Pattern shift
 
 MAP_DEL — remove a key from a map field
   > MAP_DEL char:tifa field=reads key=barret -- No longer relevant
@@ -313,29 +359,23 @@ DESTROY — remove an entity permanently
   > DESTROY char:minor-npc -- Left the story
 
 FACTIONS — create and manage factions with political simulation
-  > CREATE faction:shinra name="Shinra Corp" objective="Control the reactors" resources="Military" stance_toward_pc="Hostile" power="stable" momentum="Expanding into Sector 7" -- Major faction
-  > SET faction:shinra field=stance_toward_pc value="Neutral" -- Stance shifted after negotiation
+  > CREATE faction:shinra name="Shinra Corp" objective="Control the reactors" resources="Military" stance_toward_pc="Hostile" power="stable" momentum="Expanding into Sector 7" leverage="Military force" vulnerability="Public opinion" -- Full political profile
   > SET faction:shinra field=power value="declining" -- Lost reactor control
-  > SET faction:shinra field=momentum value="Consolidating remaining assets" -- Current action
-  > SET faction:shinra field=last_move value="Deployed Turks to monitor Avalanche safe houses" -- Visible action
-  > SET faction:shinra field=leverage value="Military force and infrastructure control" -- Power source
-  > SET faction:shinra field=vulnerability value="Public opinion turning after plate drop" -- Exploitable weakness
   > MAP_SET faction:shinra field=relations key=avalanche value="Hostile — active operations against" -- Inter-faction relation
-  > MAP_SET faction:shinra field=relations key=wutai value="Uneasy truce — both watching" -- Diplomatic state
 
   Faction fields: name, objective, resources, stance_toward_pc, power (rising/stable/declining/collapsed),
   momentum (current action), last_move (last visible action), leverage, vulnerability,
   relations (map: faction_id → stance string). Optional: doctrine, leadership, territory, alliances.
+  Pressure points generated from faction conflicts are collision fuel — during advance turns,
+  they compress existing collision distances or spawn new collisions.
 
 DIVINATION — record current draw only (no history accumulation)
-  > SET divination field=active_system value="arcana" -- Set active system
   > SET divination field=last_draw value="XIV — Temperance" -- Record draw (overwrites previous)
 
 STORY SUMMARY — append after every significant scene, not just chapter closes
   Summaries are the primary continuity mechanism — they replace chat history as context.
   Each entry: 2-4 sentences capturing what happened, who was involved, what changed, and specific sensory/textural detail.
-  > APPEND summary field=text value="Ch1 'Wrong Place': Tifa pulled Autumn from Reactor 1 rubble. Both entered a burning building for a trapped survivor — Autumn engineered the stairwell collapse to create an exit. Back at Seventh Heaven she cleaned his wound first, before her own. Stew, couch, silence. The asymmetry established: she knows everything about what just happened to his life. He knows nothing." -- Chapter 1 summary
-  > APPEND summary field=text value="The white balm footnote. Autumn's ingredient list included 'accelerates tissue repair, no scarring' — handwritten, specific, professional-grade. Tifa touched the cut above her eyebrow. Cloud saw. The gap between what Autumn claims to be and what he demonstrably knows widened." -- Key event
+  > APPEND summary field=text value="Ch1 'Wrong Place': Tifa pulled Autumn from Reactor 1 rubble. The asymmetry established: she knows everything about what just happened to his life. He knows nothing." -- Chapter summary
 
 STATE MACHINES (MOVE between adjacent states only, no skipping):
   Character tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
@@ -345,51 +385,25 @@ STATE MACHINES (MOVE between adjacent states only, no skipping):
   Chapter status:       PLANNED → OPEN → CLOSING → CLOSED
 
 HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):
-  - Pressure points: REMOVE when resolved or fired. These are live wires, not history.
+  - Pressure points: REMOVE when activated (converted into collision fuel) or no longer relevant. These are seeds, not history.
   - Noticed details: REMOVE when fired (used in scene) or no longer relevant.
   - Before APPEND: check if a similar entry already exists. Update or skip, don't duplicate.
-  - The extension warns when arrays exceed capacity. Prune 2–3 entries per turn until under cap. Do NOT batch-remove everything at once.
 
 VOLUME PER TURN (HARD CAP: 20 lines — excess lines are DROPPED):
-  Quiet dialogue: 1–2 lines
-  Normal scene: 2–4 lines
-  Action/confrontation: 4–6 lines
-  Heavy turn (setup, chapter close, promotion): 6–12 lines
-  Nothing changed: (empty)
-  NEVER dump bulk REMOVE operations. Prune 2–3 stale entries per turn, not all at once.
-  Housekeeping is background work — spread it across turns.
+  Quiet dialogue: 1–2 | Normal: 2–4 | Action: 4–6 | Heavy (setup, chapter close): 6–12
+  NEVER dump bulk REMOVE operations. Prune 2–3 stale entries per turn.
 
 PRIORITY ORDER — when near the cap, emit in this order:
-  1. State machine transitions (MOVE constraint integrity, collision status, chapter status)
-  2. Collision distance changes (SET distance)
-  3. Character DOING/WANT changes (SET)
-  4. World state changes (SET world_state)
-  5. Faction updates (SET power/momentum/last_move, MAP_SET relations)
-  6. Story summary (APPEND summary) — every significant scene
-  7. Key moments / noticed details (APPEND)
-  8. READS updates (READ)
-  9. PC traits / timeline (APPEND / MAP_SET)
-  10. Housekeeping REMOVEs — always last, 2–3 max
-
-FULL EXAMPLE — action scene:
----LEDGER---
-> [Day 2 — 03:00] MOVE constraint:c2-cover field=integrity STRESSED->CRITICAL -- Guard recognized him
-> [Day 2 — 03:00] APPEND char:cloud field=key_moments value="Guard recognized him from Nibelheim" -- Pivotal
-> [Day 2 — 03:00] SET char:cloud field=doing value="Fighting to escape checkpoint" -- Forced into action
-> [Day 2 — 03:00] SET collision:identity-crisis field=distance value=3 -- Near collision
-> [Day 2 — 03:00] SET world field=world_state value="Checkpoint breach — alarms in Sector 7" -- World reacts
----END LEDGER---
+  1. State machine transitions  2. Collision distance  3. DOING/WANT  4. World state
+  5. Faction updates  6. Summary  7. Moments/details  8. READS  9. PC  10. Intimate history
+  11. REMOVEs — always last, 2–3 max
 
 OOC COMMANDS (player types in chat):
-  OOC: snapshot       — Save checkpoint
-  OOC: rollback       — List snapshots
-  OOC: rollback to #N — Restore to snapshot N
-  OOC: eval           — Full system audit
-  OOC: history [id]   — Entity change history
-  OOC: archive        — Consolidation checkpoint
+  OOC: snapshot | rollback | rollback to #N | eval | history [id] | archive
 
 ═══ END LEDGER README ═══`;
 }
+
 
 export {
     formatStateView,
