@@ -230,7 +230,7 @@ function injectPrompt(mode = 'regular') {
             setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
         }
 
-        // Collision arrival — fires when any collision reaches distance ≤ 1 and hasn't been flagged yet
+        // Collision arrival — fires on next turn (regular or advance) when distance hits 0
         if (_currentState) {
             const arrivals = [];
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
@@ -238,7 +238,7 @@ function injectPrompt(mode = 'regular') {
                 const dist = parseFloat(col.distance);
                 if (isNaN(dist)) continue;
                 const status = (col.status || '').trim().toUpperCase();
-                if (dist <= 1 && status !== 'RESOLVED') {
+                if (dist <= 0 && status !== 'RESOLVED') {
                     const cardNum = Math.floor(Math.random() * 22);
                     const cardReading = ARCANA_TABLE[cardNum];
                     const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
@@ -253,15 +253,42 @@ function injectPrompt(mode = 'regular') {
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
                 if ((col.status || '').trim().toUpperCase() !== 'RESOLVING') continue;
                 if (_firedCollisionArrivals.has(id + '_stale')) continue;
-                // Check how many transactions since it entered RESOLVING
                 const statusHist = (_currentState._history || {})[`collision:${id}:status`] || [];
                 const lastMove = statusHist[statusHist.length - 1];
                 if (lastMove && lastMove.tx) {
                     const txSince = totalTxCount - lastMove.tx;
-                    if (txSince >= 15) { // ~3 turns worth of transactions
+                    if (txSince >= 15) {
                         staleResolving.push({ id, col, txSince });
                         _firedCollisionArrivals.add(id + '_stale');
                     }
+                }
+            }
+
+            // Distance-increase warning — distances are countdowns, they should not increase
+            const distWarnings = [];
+            for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+                const status = (col.status || '').trim().toUpperCase();
+                if (status === 'RESOLVED' || status === 'CRASHED') continue;
+                const distHist = (_currentState._history || {})[`collision:${id}:distance`] || [];
+                if (distHist.length > 0) {
+                    const last = distHist[distHist.length - 1];
+                    const fromDist = parseFloat(last.from);
+                    const toDist = parseFloat(last.to);
+                    if (!isNaN(fromDist) && !isNaN(toDist) && toDist > fromDist) {
+                        distWarnings.push(`"${col.name || id}" distance went ${last.from} → ${last.to} — collision distances are countdowns, they MUST NOT increase. SET it back to ${last.from} or lower.`);
+                    }
+                }
+            }
+
+            // Incoherent collision check — RESOLVING but distance > 0 means the confrontation
+            // can't actually be happening. Either it was avoided (CRASHED/RESOLVED) or it's not
+            // RESOLVING yet (revert to ACTIVE).
+            for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+                const status = (col.status || '').trim().toUpperCase();
+                if (status !== 'RESOLVING') continue;
+                const dist = parseFloat(col.distance);
+                if (!isNaN(dist) && dist > 0) {
+                    distWarnings.push(`"${col.name || id}" is RESOLVING but distance is ${dist} — a collision cannot resolve at range. If the confrontation was avoided, MOVE to CRASHED. If it's still approaching, MOVE back to ACTIVE. If it resolved offscreen, MOVE to RESOLVED.`);
                 }
             }
 
@@ -274,22 +301,20 @@ ${a.col.target_constraint ? `Target constraint: ${a.col.target_constraint}` : ''
 
 THE ARCANA DREW: #${a.cardNum} — ${a.cardReading}
 
-This collision has reached distance ${a.col.distance}. It detonates NOW.
+This collision has reached distance 0. It detonates NOW.
 
 You have FULL LICENSE to make this happen. Move NPCs into the scene. Spawn threats. Have someone arrive with information. Trigger events. Create new characters. Use environmental disasters. Whatever it takes to force this issue into the player's immediate reality.
 
 The tarot card shapes the CIRCUMSTANCE of how this collision arrives — not the outcome. Write the situation, not the resolution. The player must respond to it.
 
-THIS COLLISION IS NOW SPENT. After this scene, MOVE its status to RESOLVED. There is no going back — it detonated.
+THIS COLLISION IS NOW SPENT. After this scene, MOVE its status to RESOLVED.
 
 WHAT HAPPENS NEXT depends on what the confrontation produces:
-• CLEAN — the tension dissolves. Forces coexist or one yields. No scar. MOVE to RESOLVED.
-• COSTLY — it resolves, but someone paid. Trust spent, secrets exposed, resources lost. MOVE to RESOLVED. Record the cost in character state.
-• EVOLUTION — the confrontation reveals a deeper or different tension. MOVE to RESOLVED, then CREATE a new collision from what actually surfaced. The old collision is done — the new one tracks what it mutated into.
+• CLEAN — tension dissolves. MOVE to RESOLVED.
+• COSTLY — someone paid. MOVE to RESOLVED. Record the cost.
+• EVOLUTION — reveals a different tension. MOVE to RESOLVED, CREATE a new collision from what surfaced.
 
-In ALL cases this collision is RESOLVED after the player responds. If the underlying tension persists in a new shape, CREATE a fresh collision to track it. No collision survives detonation.
-
-Do NOT let this collision continue to simmer. Do NOT write around it. The issue is HERE.`
+No collision survives detonation.`
                 ).join('\n\n');
 
                 setExtensionPrompt(`${MODULE_NAME}_arrival`, blocks, PROMPT_IN_CHAT, 0);
@@ -300,15 +325,24 @@ Do NOT let this collision continue to simmer. Do NOT write around it. The issue 
 
             if (staleResolving.length > 0) {
                 const staleBlock = staleResolving.map(s =>
-                    `[STALE COLLISION — "${s.col.name || s.id}" has been RESOLVING for ${s.txSince}+ transactions. This collision already detonated — MOVE it to RESOLVED now. If the tension persists in a new form, CREATE a new collision to track it. No collision survives past detonation.]`
+                    `[STALE COLLISION — "${s.col.name || s.id}" has been RESOLVING for ${s.txSince}+ transactions. MOVE it to RESOLVED now. If the tension persists in a new form, CREATE a new collision to track it.]`
                 ).join('\n');
                 setExtensionPrompt(`${MODULE_NAME}_stale`, staleBlock, PROMPT_IN_CHAT, 0);
             } else {
                 setExtensionPrompt(`${MODULE_NAME}_stale`, '', PROMPT_NONE, 0);
             }
+
+            if (distWarnings.length > 0) {
+                setExtensionPrompt(`${MODULE_NAME}_dist_warn`,
+                    `[COLLISION DISTANCE ERROR:\n${distWarnings.map(w => '  • ' + w).join('\n')}]`,
+                    PROMPT_IN_CHAT, 0);
+            } else {
+                setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
+            }
         } else {
             setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
             setExtensionPrompt(`${MODULE_NAME}_stale`, '', PROMPT_NONE, 0);
+            setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
         }
 
         // Nudge — full on regular turns, slim on advance/integration (those prompts already instruct on ledger)
@@ -597,7 +631,7 @@ function handleAdvanceButton() {
     const pcName = _currentState?.pc?.name || '{{user}}';
     const doing = _currentState?.pc?.doing || 'what they were doing';
 
-    // Check for ripe collisions (distance ≤ 1, ACTIVE or SIMMERING, not yet fired)
+    // Check for ripe collisions (distance ≤ 0, not yet fired)
     const ripeCollisions = [];
     // Check for in-progress collisions (already detonated but not yet RESOLVED)
     const inProgressCollisions = [];
@@ -606,16 +640,16 @@ function handleAdvanceButton() {
             const dist = parseFloat(col.distance);
             const status = (col.status || '').trim().toUpperCase();
 
-            // Fresh arrival — hasn't fired yet
-            if (!isNaN(dist) && dist <= 1 && status !== 'RESOLVED' && !_firedCollisionArrivals.has(id)) {
+            // Fresh arrival — distance 0, hasn't fired yet
+            if (!isNaN(dist) && dist <= 0 && status !== 'RESOLVED' && !_firedCollisionArrivals.has(id)) {
                 const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
                 ripeCollisions.push({ id, col, forces });
                 _firedCollisionArrivals.add(id);
             }
-            // Already detonated — dist ≤ 1 and fired but still ACTIVE, or RESOLVING
+            // Already detonated — fired but still ACTIVE, or RESOLVING
             else if (
                 (status === 'RESOLVING') ||
-                (!isNaN(dist) && dist <= 1 && status === 'ACTIVE' && _firedCollisionArrivals.has(id))
+                (!isNaN(dist) && dist <= 0 && status === 'ACTIVE' && _firedCollisionArrivals.has(id))
             ) {
                 const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
                 inProgressCollisions.push({ id, col, forces });
