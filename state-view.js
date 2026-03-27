@@ -351,11 +351,22 @@ MAP_SET — set a key in a map field
   > MAP_SET pc field=reputation key=tifa value="Investor. Unbearable. Has a room now." -- Reputation narrative
   > MAP_SET world field=constants key=tone value="Noir thriller" -- Set tone
 
-INTIMATE HISTORY — per-character map tracking sexual encounters for realistic behavioral growth.
-  Update keys via MAP_SET after intimate scenes. Standard keys:
-    encounters, dynamic, preferences, boundaries, evolution, aftermath
-  > MAP_SET char:tifa field=intimate_history key=encounters value="3 — [Day 2], [Day 4], [Day 6]" -- Updated count
-  > MAP_SET char:tifa field=intimate_history key=dynamic value="She initiates. He follows her pace." -- Pattern shift
+INTIMATE HISTORY — per-character map tracking sexual development over time.
+  Update keys via MAP_SET after intimate scenes. These are CUMULATIVE — each update builds on previous entries.
+  Standard keys:
+    encounters     — count + dates. Brief note on each (what happened, what was different).
+    dynamic        — who initiates, who leads, power balance, emotional tone during. How has this shifted?
+    preferences    — what this character has DISCOVERED they like. Updated as they learn — not assumed upfront.
+                     Include what worked, what surprised them, what they asked for again.
+    boundaries     — what they've hit, what made them stop or freeze, what they're not ready for yet.
+                     Boundaries can shift (both directions) — note when and why.
+    evolution      — how their sexual relationship has CHANGED over time. Early awkwardness → comfort?
+                     Growing trust → new vulnerability? Routine → staleness? Track the arc.
+    aftermath      — how they behave AFTER intimacy. Do they pull closer or pull away? Talk or go silent?
+                     Sleep or leave? This reveals more than the act itself.
+  > MAP_SET char:tifa field=intimate_history key=encounters value="3 — [Day 2] first, tentative, stopped early; [Day 4] slower, more confident, she initiated; [Day 6] first time she didn't pull the sheet up after" -- Cumulative
+  > MAP_SET char:tifa field=intimate_history key=preferences value="Discovered she likes his hands on her waist — holds them there. Doesn't like being pinned — freezes, he learned to read it." -- Learned through experience
+  > MAP_SET char:tifa field=intimate_history key=dynamic value="She initiates now. Took 3 encounters to stop letting him lead everything. Still won't ask for what she wants out loud — shows with her hands instead." -- Pattern shift
 
 INTIMACY STANCE — per-character field describing their current sexual/intimate posture toward the PC.
   This is NOT a permission level. It is a living description of where this character is RIGHT NOW:
