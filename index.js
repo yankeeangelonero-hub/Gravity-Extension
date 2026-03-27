@@ -313,6 +313,7 @@ WHAT TO TRACK every turn — check each, emit if changed:
 - World state changes (SET world_state)
 - PC demonstrated traits, reputation, timeline (APPEND / MAP_SET)
 - Story summary after EVERY significant scene — 2-4 sentences with texture, not just plot points (APPEND summary)
+- Intimate history after intimate scenes — update encounters, dynamic, preferences, boundaries, evolution, aftermath (MAP_SET intimate_history)
 - Pressure point cleanup — REMOVE fired/stale entries, don't just accumulate
 If nothing changed: (empty)]`,
             PROMPT_IN_CHAT, 0);

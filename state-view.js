@@ -276,8 +276,21 @@ MAP_SET — set a key in a map field
   > MAP_SET pc field=reputation key=tifa value="Investor. Unbearable. Has a room now. Not leaving." -- Reputation narrative
   > MAP_SET pc field=reputation key=shinra value="Unknown. No file. Civilian near Reactor 1 blast — potential suspect if identified." -- Faction reputation
   > MAP_SET world field=constants key=tone value="Noir thriller" -- Set tone
-  > MAP_SET char:tifa field=intimate_history key=ENCOUNTERS value="1" -- Post-intimacy tracking
-  > MAP_SET char:tifa field=intimate_history key=DYNAMIC value="She led. He held still." -- Intimacy pattern
+INTIMATE HISTORY — per-character map tracking sexual encounters for realistic behavioral growth.
+  Update keys via MAP_SET after intimate scenes. Characters reference this for familiarity, learned preferences, and evolving dynamics.
+  Standard keys:
+    encounters  — count + timestamps. Familiarity is behavioral: 1st encounter ≠ 10th.
+    dynamic     — who initiates, power balance, emotional register. Evolves across encounters.
+    preferences — what they respond to, what works. Learned over time, referenced in future scenes.
+    boundaries  — hard limits, sensitivities, triggers. Respected = trust built. Tested = constraint pressured.
+    evolution   — how the pattern changed across encounters. Tie shifts to constraint state.
+    aftermath   — behavior patterns around intimacy, not during. Often more revealing.
+  > MAP_SET char:tifa field=intimate_history key=encounters value="3 — [Day 2], [Day 4], [Day 6]" -- Updated count
+  > MAP_SET char:tifa field=intimate_history key=dynamic value="She initiates. He follows her pace. Tenderness increasing — first time she kept her eyes open was Day 6." -- Pattern shift
+  > MAP_SET char:tifa field=intimate_history key=preferences value="Responds to verbal reassurance. Hair-touching is trust signal. Slow pace — rushes when anxious, settles when safe." -- Learned
+  > MAP_SET char:tifa field=intimate_history key=boundaries value="Won't undress fully with lights on. Scars on ribs off-limits — flinched Day 3, he didn't push." -- Hard limits
+  > MAP_SET char:tifa field=intimate_history key=evolution value="Day 2: transactional, constraint held throughout. Day 4: slower, she let him set pace. Day 6: first time she laughed during. C1 briefly absent." -- Growth arc
+  > MAP_SET char:tifa field=intimate_history key=aftermath value="Always leaves first. Returns with water. Doesn't talk about it until morning, and only obliquely." -- Post-pattern
 
 MAP_DEL — remove a key from a map field
   > MAP_DEL char:tifa field=reads key=barret -- No longer relevant
