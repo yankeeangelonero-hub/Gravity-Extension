@@ -352,6 +352,24 @@ No collision survives detonation.`
             setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
         }
 
+        // Intimacy stance enforcement — surface active stances so the LLM checks before writing
+        if (_currentState) {
+            const stanceLines = [];
+            for (const [id, char] of Object.entries(_currentState.characters || {})) {
+                if (!char.intimacy_stance) continue;
+                stanceLines.push(`  ${char.name || id}: ${char.intimacy_stance}`);
+            }
+            if (stanceLines.length > 0) {
+                setExtensionPrompt(`${MODULE_NAME}_intimacy`,
+                    `[INTIMACY STANCE CHECK — respect these before writing intimate content:\n${stanceLines.join('\n')}\nThe character's stance is the boundary. The player's desire does not override it. If the scene escalates past what the stance allows, the character resists, freezes, or redirects — write THAT. Update the stance via SET only when a constraint shift or significant narrative event earns it.]`,
+                    PROMPT_IN_CHAT, 0);
+            } else {
+                setExtensionPrompt(`${MODULE_NAME}_intimacy`, '', PROMPT_NONE, 0);
+            }
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_intimacy`, '', PROMPT_NONE, 0);
+        }
+
         // Nudge — full on regular turns, slim on advance/integration (those prompts already instruct on ledger)
         if (isRegular) {
             setExtensionPrompt(`${MODULE_NAME}_nudge`,
@@ -372,8 +390,9 @@ WHAT TO TRACK — emit in PRIORITY ORDER (cap: 20 lines, excess dropped):
 7. Key moments / noticed details (APPEND)
 8. READS updates when interpretation shifts (READ)
 9. PC traits, timeline, reputation (APPEND / MAP_SET)
-10. Intimate history after intimate scenes (MAP_SET intimate_history)
-11. Housekeeping REMOVEs — ALWAYS LAST, 2–3 per turn max, never bulk dumps
+10. Intimacy stance shifts after constraint/narrative changes (SET intimacy_stance — with reason)
+11. Intimate history after intimate scenes (MAP_SET intimate_history)
+12. Housekeeping REMOVEs — ALWAYS LAST, 2–3 per turn max, never bulk dumps
 If nothing changed: (empty)]`,
                 PROMPT_IN_CHAT, 0);
         } else {

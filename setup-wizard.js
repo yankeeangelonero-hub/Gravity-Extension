@@ -178,10 +178,18 @@ Build their constraint system (3-4 constraints). For each:
 - Threshold (what breaks it)
 - Replacement type (sophistication / displacement / depth_shift / regression)
 
+Set their initial intimacy stance — a natural-language description of where this character starts
+with the PC physically/sexually. This is NOT a permission level. It describes:
+- What they're comfortable with right now and why
+- What they'd resist and why
+- What would need to change for the stance to shift
+Base it on the character's personality, constraints, and relationship to the PC at story start.
+
 Present to the player for confirmation. After confirmation, emit ledger commands:
 
 ---LEDGER---
 > CREATE char:name name="[Full Name]" tier=PRINCIPAL want="[motivation]" doing="[action]" cost="[risk]" -- Principal
+> SET char:name field=intimacy_stance value="[initial stance based on character and relationship]" -- Starting boundary
 > CREATE constraint:c1-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=regression shedding_order=1 -- Constraint 1
 > CREATE constraint:c2-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=displacement shedding_order=2 -- Constraint 2
 > CREATE constraint:c3-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=depth_shift shedding_order=3 -- Constraint 3

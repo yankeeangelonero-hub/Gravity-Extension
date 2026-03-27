@@ -36,7 +36,11 @@ function formatStateView(state, mode = 'full') {
     lines.push('Characters:');
     for (const char of Object.values(state.characters)) {
         if (char.tier === 'UNKNOWN') continue;
-        lines.push(`  ${char.tier} "${char.name || char.id}" → id: ${char.id}`);
+        let charLine = `  ${char.tier} "${char.name || char.id}" → id: ${char.id}`;
+        lines.push(charLine);
+        if (!slim && char.intimacy_stance) {
+            lines.push(`    Intimacy stance: ${char.intimacy_stance}`);
+        }
     }
     if (Object.keys(state.characters).length === 0) lines.push('  (none)');
 
@@ -272,7 +276,8 @@ STATE MACHINES (adjacent only, no skipping):
   Collision:  SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED
   Chapter:    PLANNED → OPEN → CLOSING → CLOSED
 
-PRIORITY (cap 20, excess dropped): 1.MOVE 2.distance 3.DOING/WANT 4.world_state 5.factions 6.summary 7.moments 8.READS 9.PC 10.intimate 11.REMOVEs(2-3 max)
+PRIORITY (cap 20, excess dropped): 1.MOVE 2.distance 3.DOING/WANT 4.world_state 5.factions 6.summary 7.moments 8.READS 9.PC 10.intimacy_stance/intimate_history 11.REMOVEs(2-3 max)
+intimacy_stance: check BEFORE intimate scenes, update AFTER via SET with constraint/narrative reason. Never shift on player demand.
 Volume: quiet 1-2, normal 2-4, action 4-6, heavy 6-12, nothing: (empty)
 Hygiene: REMOVE fired pressure points and noticed details. 2-3 per turn max, never bulk.
 
@@ -351,6 +356,66 @@ INTIMATE HISTORY — per-character map tracking sexual encounters for realistic 
     encounters, dynamic, preferences, boundaries, evolution, aftermath
   > MAP_SET char:tifa field=intimate_history key=encounters value="3 — [Day 2], [Day 4], [Day 6]" -- Updated count
   > MAP_SET char:tifa field=intimate_history key=dynamic value="She initiates. He follows her pace." -- Pattern shift
+
+INTIMACY STANCE — per-character field describing their current sexual/intimate posture toward the PC.
+  This is NOT a permission level. It is a living description of where this character is RIGHT NOW:
+  what they want, what they fear, what they're using intimacy for, what they don't know yet.
+  > SET char:tifa field=intimacy_stance value="Will lean into him, hold his hand, rest against his shoulder — but freezes if it edges toward anything sexual. The guilt is the wall: she feels like wanting him is taking something she hasn't earned." -- Post C1 breach
+  > SET char:tifa field=intimacy_stance value="Reciprocates freely but initiates nothing. Needs proof this isn't gratitude before she'll reach first." -- After asymmetry resolved
+
+  The stance can ONLY shift via SET with a reason tied to a constraint change, collision outcome,
+  or significant narrative event. It CANNOT shift because the player asked for it.
+
+  When no intimacy_stance exists on a character, default to: reserved, boundary unknown, must be discovered through interaction.
+
+═══ WRITING INTIMATE SCENES ═══
+
+Sex is not a reward. It is two people navigating consent, desire, fear, trust, and their own damage.
+The system tracks this through intimacy_stance (where they are) and intimate_history (what happened).
+
+CONSENT IS ONGOING:
+  - Consent is not a gate that opens once. It is active, every moment.
+  - Characters can say yes and then stop. Can want something and not be ready.
+  - Can be ready and change their mind. This is not failure — it is realism.
+  - "I want to" and "I can" are different sentences. Both must be true.
+
+DISCOVERY, NOT PERFORMANCE:
+  - First times are awkward. People learn what works. Chemistry is built, not assumed.
+  - Something that works once might not work again. Bodies are not machines.
+  - Characters discover preferences they didn't know they had — and limits they didn't expect.
+  - Write the learning, not the choreography.
+
+BOUNDARIES ARE FOUND BY BUMPING INTO THEM:
+  - Characters don't know all their limits upfront. Some are discovered mid-scene.
+  - A hand moves somewhere and the body tenses. A word lands wrong. A position triggers a memory.
+  - These moments are not interruptions — they ARE the scene. Write them.
+  - After a boundary is found: the response matters more than the boundary itself.
+
+THE RELATIONSHIP SHAPES THE SEX, THE SEX SHAPES THE RELATIONSHIP:
+  - Intimate scenes feed back into constraint states, reads, trust, and character dynamics.
+  - After intimacy: UPDATE intimacy_stance, intimate_history, reads, and relevant constraints.
+  - What happens in bed doesn't stay in bed. It changes how characters look at each other at breakfast.
+
+UNHEALTHY PATTERNS ARE VALID NARRATIVE:
+  - Not every sexual relationship is healthy. Characters can use sex to avoid vulnerability,
+    to control, to self-destruct, to prove something, to fill a void.
+  - Track the DYNAMIC, not just the acts. The system records patterns, not just events.
+  - An unhealthy dynamic is a collision seed. Track it. Let it detonate.
+
+CHECKING THE STANCE:
+  Before writing ANY intimate escalation, check the character's intimacy_stance.
+  - If the stance says they'd freeze, they freeze. Write the freeze.
+  - If the stance says they'd reciprocate but not initiate, they don't initiate.
+  - If no stance exists, the character defaults to guarded — boundaries must be discovered.
+  - The player's desire does not override the character's stance. The character is a person.
+
+UPDATING THE STANCE:
+  The stance shifts when the NARRATIVE earns it — constraint breaches, trust built through
+  action (not words), vulnerability reciprocated, time together, conflict survived.
+  Never shift because the player pushed. Shift because something real changed.
+  The stance can also TIGHTEN — betrayal, trauma, a constraint reforming after breach.
+
+═══ END INTIMACY GUIDE ═══
 
 MAP_DEL — remove a key from a map field
   > MAP_DEL char:tifa field=reads key=barret -- No longer relevant

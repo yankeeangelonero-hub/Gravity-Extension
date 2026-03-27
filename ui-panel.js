@@ -530,6 +530,17 @@ function renderCharDossier(char, state) {
         }
     }
 
+    // Intimacy stance
+    if (char.intimacy_stance) {
+        parts.push(`<div class="gl-d-section"><b>Intimacy Stance:</b></div>`);
+        parts.push(`<div class="gl-d-row gl-intimacy-stance">${esc(char.intimacy_stance)}</div>`);
+        const stanceHist = getFieldHistory(state, 'char', char.id, 'intimacy_stance');
+        if (stanceHist.length > 1) {
+            parts.push(`<div class="gl-history-toggle">Stance history (${stanceHist.length})</div>`);
+            parts.push(`<div class="gl-history-list" style="display:none">${stanceHist.map(historyLine).join('<br>')}</div>`);
+        }
+    }
+
     // Intimate history
     const intimate = toObj(char.intimate_history);
     if (Object.keys(intimate).length) {
