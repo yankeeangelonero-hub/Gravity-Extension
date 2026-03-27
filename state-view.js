@@ -325,7 +325,7 @@ HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):
   - Before APPEND: check if a similar entry already exists. Update or skip, don't duplicate.
   - The extension warns when arrays exceed capacity. Prune 2–3 entries per turn until under cap. Do NOT batch-remove everything at once.
 
-VOLUME PER TURN (HARD CAP: 15 lines — excess lines are DROPPED):
+VOLUME PER TURN (HARD CAP: 20 lines — excess lines are DROPPED):
   Quiet dialogue: 1–2 lines
   Normal scene: 2–4 lines
   Action/confrontation: 4–6 lines
@@ -333,6 +333,17 @@ VOLUME PER TURN (HARD CAP: 15 lines — excess lines are DROPPED):
   Nothing changed: (empty)
   NEVER dump bulk REMOVE operations. Prune 2–3 stale entries per turn, not all at once.
   Housekeeping is background work — spread it across turns.
+
+PRIORITY ORDER — when near the cap, emit in this order:
+  1. State machine transitions (MOVE constraint integrity, collision status, chapter status)
+  2. Collision distance changes (SET distance)
+  3. Character DOING/WANT changes (SET)
+  4. World state changes (SET world_state)
+  5. Story summary (APPEND summary) — every significant scene
+  6. Key moments / noticed details (APPEND)
+  7. READS updates (READ)
+  8. PC traits / timeline (APPEND / MAP_SET)
+  9. Housekeeping REMOVEs — always last, 2–3 max
 
 FULL EXAMPLE — action scene:
 ---LEDGER---

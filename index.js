@@ -303,19 +303,17 @@ After prose, append:
 > [Day N — HH:MM] OPERATION entity:id key=value -- reason
 ---END LEDGER---
 
-WHAT TO TRACK every turn — check each, emit if changed:
-- Character DOING/WANT/COST updates (SET)
-- Constraint pressure or integrity shifts (SET current_pressure / MOVE integrity)
-- Collision distance changes (SET distance)
-- READS updates when a character's interpretation shifts (READ)
-- Noticed details gained or fired (APPEND / REMOVE)
-- Key moments worth recording — include sensory detail and emotional texture (APPEND key_moments)
-- World state changes (SET world_state)
-- PC demonstrated traits, reputation, timeline (APPEND / MAP_SET)
-- Story summary after EVERY significant scene — 2-4 sentences with texture, not just plot points (APPEND summary)
-- Intimate history after intimate scenes — update encounters, dynamic, preferences, boundaries, evolution, aftermath (MAP_SET intimate_history)
-- Pressure point cleanup — REMOVE 2–3 fired/stale entries per turn, not bulk dumps
-HARD CAP: 15 lines max. Excess lines are dropped. Never batch-remove — spread cleanup across turns.
+WHAT TO TRACK — emit in PRIORITY ORDER (cap: 20 lines, excess dropped):
+1. State transitions (MOVE constraint integrity, collision status, chapter status)
+2. Collision distance changes (SET distance)
+3. Character DOING/WANT updates (SET)
+4. World state changes (SET world_state)
+5. Story summary (APPEND summary) — every significant scene, 2-4 sentences with texture
+6. Key moments / noticed details (APPEND)
+7. READS updates when interpretation shifts (READ)
+8. PC traits, timeline, reputation (APPEND / MAP_SET)
+9. Intimate history after intimate scenes (MAP_SET intimate_history)
+10. Housekeeping REMOVEs — ALWAYS LAST, 2–3 per turn max, never bulk dumps
 If nothing changed: (empty)]`,
             PROMPT_IN_CHAT, 0);
     } catch (err) {
@@ -442,7 +440,7 @@ async function onMessageReceived(messageId) {
     }
 
     // Hard cap: drop transactions beyond 15 to prevent bulk-remove dumps
-    const TX_CAP = 15;
+    const TX_CAP = 20;
     let txOverflow = 0;
     if (extraction.transactions.length > TX_CAP) {
         txOverflow = extraction.transactions.length - TX_CAP;
@@ -512,7 +510,7 @@ async function onMessageReceived(messageId) {
     }
     if (txOverflow > 0) {
         _pendingReinforcement = (_pendingReinforcement || '') +
-            `\n[LEDGER: OVERFLOW — ${txOverflow} lines dropped (cap is ${TX_CAP}). Keep ledger blocks under ${TX_CAP} lines. Spread REMOVE operations across turns (2–3 per turn). Focus on what CHANGED this scene.]`;
+            `\n[LEDGER: OVERFLOW — ${txOverflow} lines dropped (cap is ${TX_CAP}). Emit in priority order: state transitions > distance > DOING/WANT > world > summary > details. REMOVEs are LOWEST priority — 2–3 per turn max.]`;
     }
     if (allErrors.length > 0 && validTxns.length > 0) {
         _pendingReinforcement = (_pendingReinforcement || '') +
