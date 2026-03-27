@@ -319,18 +319,20 @@ STATE MACHINES (MOVE between adjacent states only, no skipping):
   Collision status:     SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED (or CRASHED from ACTIVE/RESOLVING)
   Chapter status:       PLANNED → OPEN → CLOSING → CLOSED
 
-HYGIENE — keep arrays clean:
+HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):
   - Pressure points: REMOVE when resolved or fired. These are live wires, not history.
   - Noticed details: REMOVE when fired (used in scene) or no longer relevant.
   - Before APPEND: check if a similar entry already exists. Update or skip, don't duplicate.
-  - The extension warns when arrays exceed capacity. Heed the warning — consolidate.
+  - The extension warns when arrays exceed capacity. Prune 2–3 entries per turn until under cap. Do NOT batch-remove everything at once.
 
-VOLUME PER TURN:
+VOLUME PER TURN (HARD CAP: 15 lines — excess lines are DROPPED):
   Quiet dialogue: 1–2 lines
   Normal scene: 2–4 lines
   Action/confrontation: 4–6 lines
   Heavy turn (setup, chapter close, promotion): 6–12 lines
   Nothing changed: (empty)
+  NEVER dump bulk REMOVE operations. Prune 2–3 stale entries per turn, not all at once.
+  Housekeeping is background work — spread it across turns.
 
 FULL EXAMPLE — action scene:
 ---LEDGER---

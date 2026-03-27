@@ -314,7 +314,8 @@ WHAT TO TRACK every turn — check each, emit if changed:
 - PC demonstrated traits, reputation, timeline (APPEND / MAP_SET)
 - Story summary after EVERY significant scene — 2-4 sentences with texture, not just plot points (APPEND summary)
 - Intimate history after intimate scenes — update encounters, dynamic, preferences, boundaries, evolution, aftermath (MAP_SET intimate_history)
-- Pressure point cleanup — REMOVE fired/stale entries, don't just accumulate
+- Pressure point cleanup — REMOVE 2–3 fired/stale entries per turn, not bulk dumps
+HARD CAP: 15 lines max. Excess lines are dropped. Never batch-remove — spread cleanup across turns.
 If nothing changed: (empty)]`,
             PROMPT_IN_CHAT, 0);
     } catch (err) {
@@ -351,7 +352,7 @@ function checkArraySizes(state) {
         }
     }
     if (warnings.length === 0) return null;
-    return `[LEDGER HYGIENE WARNING — arrays over capacity:\n${warnings.map(w => '  • ' + w).join('\n')}\nUse REMOVE to prune stale entries. Pressure points that fired or resolved are history, not live wires.]`;
+    return `[LEDGER HYGIENE WARNING — arrays over capacity:\n${warnings.map(w => '  • ' + w).join('\n')}\nPrune 2–3 stale entries per turn using REMOVE. Do NOT batch-remove everything at once — spread cleanup across multiple turns. Pressure points that fired or resolved are history, not live wires.]`;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -440,6 +441,15 @@ async function onMessageReceived(messageId) {
         return;
     }
 
+    // Hard cap: drop transactions beyond 15 to prevent bulk-remove dumps
+    const TX_CAP = 15;
+    let txOverflow = 0;
+    if (extraction.transactions.length > TX_CAP) {
+        txOverflow = extraction.transactions.length - TX_CAP;
+        extraction.transactions.length = TX_CAP;
+        console.warn(`${LOG_PREFIX} Ledger block exceeded cap (${TX_CAP + txOverflow} lines). Dropped ${txOverflow} excess transactions.`);
+    }
+
     // Validate each transaction individually
     const validTxns = [];
     const validationErrors = [];
@@ -499,6 +509,10 @@ async function onMessageReceived(messageId) {
     _pendingReinforcement = getReinforcement(extraction, _turnCounter);
     if (sizeWarnings) {
         _pendingReinforcement = (_pendingReinforcement || '') + '\n' + sizeWarnings;
+    }
+    if (txOverflow > 0) {
+        _pendingReinforcement = (_pendingReinforcement || '') +
+            `\n[LEDGER: OVERFLOW — ${txOverflow} lines dropped (cap is ${TX_CAP}). Keep ledger blocks under ${TX_CAP} lines. Spread REMOVE operations across turns (2–3 per turn). Focus on what CHANGED this scene.]`;
     }
     if (allErrors.length > 0 && validTxns.length > 0) {
         _pendingReinforcement = (_pendingReinforcement || '') +
