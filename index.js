@@ -218,10 +218,10 @@ function injectPrompt() {
             const arrivals = [];
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
                 if (_firedCollisionArrivals.has(id)) continue;
-                const dist = parseInt(col.distance, 10);
+                const dist = parseFloat(col.distance);
                 if (isNaN(dist)) continue;
-                const status = (col.status || '').toUpperCase();
-                if (dist <= 1 && (status === 'ACTIVE' || status === 'SIMMERING')) {
+                const status = (col.status || '').trim().toUpperCase();
+                if (dist <= 1 && status !== 'RESOLVED') {
                     const cardNum = Math.floor(Math.random() * 22);
                     const cardReading = ARCANA_TABLE[cardNum];
                     const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
@@ -234,7 +234,7 @@ function injectPrompt() {
             const staleResolving = [];
             const totalTxCount = getAllTransactions().length;
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
-                if ((col.status || '').toUpperCase() !== 'RESOLVING') continue;
+                if ((col.status || '').trim().toUpperCase() !== 'RESOLVING') continue;
                 if (_firedCollisionArrivals.has(id + '_stale')) continue;
                 // Check how many transactions since it entered RESOLVING
                 const statusHist = (_currentState._history || {})[`collision:${id}:status`] || [];
@@ -564,11 +564,11 @@ function handleAdvanceButton() {
     const inProgressCollisions = [];
     if (_currentState) {
         for (const [id, col] of Object.entries(_currentState.collisions || {})) {
-            const dist = parseInt(col.distance, 10);
-            const status = (col.status || '').toUpperCase();
+            const dist = parseFloat(col.distance);
+            const status = (col.status || '').trim().toUpperCase();
 
             // Fresh arrival — hasn't fired yet
-            if (!isNaN(dist) && dist <= 1 && (status === 'ACTIVE' || status === 'SIMMERING') && !_firedCollisionArrivals.has(id)) {
+            if (!isNaN(dist) && dist <= 1 && status !== 'RESOLVED' && !_firedCollisionArrivals.has(id)) {
                 const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
                 ripeCollisions.push({ id, col, forces });
                 _firedCollisionArrivals.add(id);
