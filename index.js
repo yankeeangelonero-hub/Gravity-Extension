@@ -38,6 +38,7 @@ const MAX_CORRECTION_ATTEMPTS = 3;
 let _pendingCorrections = [];
 let _pendingReinforcement = null;
 let _pendingOOCInjection = null;
+let _uncappedTurn = false;
 
 // ─── Collision Arrival Tracking ───────────────────────────────────────────────
 
@@ -439,14 +440,16 @@ async function onMessageReceived(messageId) {
         return;
     }
 
-    // Hard cap: drop transactions beyond 15 to prevent bulk-remove dumps
+    // Hard cap: drop transactions beyond 20 to prevent bulk-remove dumps
+    // Disabled for eval and chapter-close turns which legitimately need large blocks
     const TX_CAP = 20;
     let txOverflow = 0;
-    if (extraction.transactions.length > TX_CAP) {
+    if (!_uncappedTurn && extraction.transactions.length > TX_CAP) {
         txOverflow = extraction.transactions.length - TX_CAP;
         extraction.transactions.length = TX_CAP;
         console.warn(`${LOG_PREFIX} Ledger block exceeded cap (${TX_CAP + txOverflow} lines). Dropped ${txOverflow} excess transactions.`);
     }
+    _uncappedTurn = false;
 
     // Validate each transaction individually
     const validTxns = [];
@@ -535,6 +538,7 @@ async function onUserMessage(messageId) {
 
     const result = await processOOC(message.mes);
     if (result.handled && result.injection) {
+        _uncappedTurn = /ooc:\s*eval\b/i.test(message.mes);
         _pendingReinforcement = result.injection;
         _currentState = computeCurrentState();
         injectPrompt();
@@ -760,6 +764,7 @@ Do NOT close the chapter. The story continues.]`;
 }
 
 async function handleChapterCloseButton() {
+    _uncappedTurn = true;
     _pendingOOCInjection = `[SYSTEM OVERRIDE: The user has requested a chapter close. Pause narrative and execute the full chapter transition protocol across multiple responses.
 
 ═══ RESPONSE 1 — EVALUATION (this turn) ═══
