@@ -39,6 +39,7 @@ let _pendingCorrections = [];
 let _pendingReinforcement = null;
 let _pendingOOCInjection = null;
 let _uncappedTurn = false;
+let _currentInjectMode = 'regular';
 
 // ─── Collision Arrival Tracking ───────────────────────────────────────────────
 
@@ -120,14 +121,20 @@ function clearMatchedCorrections(committedTxns) {
  *   advance     — world moves turn (full state, core readme, skip heartbeat/dormant)
  *   integration — chapter close/timeskip/setup (full state, full readme)
  */
-function injectPrompt(mode = 'regular') {
+function injectPrompt(mode) {
+    // If no mode specified, reuse the current mode (prevents GENERATION_STARTED from downgrading)
+    if (mode) {
+        _currentInjectMode = mode;
+    }
+    const activeMode = _currentInjectMode;
+
     const context = SillyTavern.getContext();
     const { setExtensionPrompt } = context;
     if (!setExtensionPrompt) return;
 
-    const isRegular = mode === 'regular';
-    const isAdvance = mode === 'advance';
-    const isIntegration = mode === 'integration';
+    const isRegular = activeMode === 'regular';
+    const isAdvance = activeMode === 'advance';
+    const isIntegration = activeMode === 'integration';
 
     try {
         // State view — slim on regular turns, full on advance/integration
@@ -465,6 +472,8 @@ async function onChatChanged() {
 
 async function onMessageReceived(messageId) {
     if (!_initialized) await initialize();
+    // Reset inject mode — the special turn (advance/integration) is over
+    _currentInjectMode = 'regular';
 
     const context = SillyTavern.getContext();
     const message = context.chat?.[messageId];
