@@ -156,11 +156,11 @@ function injectPrompt(mode) {
         }
 
         // OOC command injection (from buttons)
+        // Only update when there's a new injection — don't clear on re-inject
+        // (GENERATION_STARTED re-calls injectPrompt, which would wipe the OOC prompt)
         if (_pendingOOCInjection) {
             setExtensionPrompt(`${MODULE_NAME}_ooc`, _pendingOOCInjection, PROMPT_IN_CHAT, 0);
             _pendingOOCInjection = null;
-        } else {
-            setExtensionPrompt(`${MODULE_NAME}_ooc`, '', PROMPT_NONE, 0);
         }
 
         // Corrections + reinforcement
@@ -472,10 +472,13 @@ async function onChatChanged() {
 
 async function onMessageReceived(messageId) {
     if (!_initialized) await initialize();
-    // Reset inject mode — the special turn (advance/integration) is over
+    // Reset inject mode and clear OOC injection — the special turn is over
     _currentInjectMode = 'regular';
-
     const context = SillyTavern.getContext();
+    if (context.setExtensionPrompt) {
+        context.setExtensionPrompt(`${MODULE_NAME}_ooc`, '', PROMPT_NONE, 0);
+    }
+
     const message = context.chat?.[messageId];
     if (!message?.mes) return;
 
