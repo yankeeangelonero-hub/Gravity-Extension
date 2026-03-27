@@ -53,7 +53,7 @@ function formatStateView(state, mode = 'full') {
     }
 
     // Collisions — slim: just IDs, full: adds detail section below
-    const allCollisions = Object.values(state.collisions).filter(c => c.status !== 'RESOLVED');
+    const allCollisions = Object.values(state.collisions).filter(c => c.status !== 'RESOLVED' && c.status !== 'CRASHED');
     if (allCollisions.length) {
         lines.push('');
         lines.push('Collisions:');
@@ -153,7 +153,7 @@ function formatStateView(state, mode = 'full') {
     if (!slim) {
         // Collisions detail
         const liveCollisions = Object.values(state.collisions).filter(
-            c => c.status !== 'RESOLVED' && c.status !== 'SEEDED'
+            c => c.status !== 'RESOLVED' && c.status !== 'CRASHED' && c.status !== 'SEEDED'
         );
         if (liveCollisions.length) {
             lines.push('');
@@ -269,7 +269,7 @@ OPERATIONS:
 STATE MACHINES (adjacent only, no skipping):
   Tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
   Integrity:  STABLE → STRESSED → CRITICAL → BREACHED | Relief: CRITICAL → STRESSED → STABLE
-  Collision:  SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED (or CRASHED)
+  Collision:  SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED
   Chapter:    PLANNED → OPEN → CLOSING → CLOSED
 
 PRIORITY (cap 20, excess dropped): 1.MOVE 2.distance 3.DOING/WANT 4.world_state 5.factions 6.summary 7.moments 8.READS 9.PC 10.intimate 11.REMOVEs(2-3 max)
@@ -381,7 +381,7 @@ STATE MACHINES (MOVE between adjacent states only, no skipping):
   Character tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
   Constraint integrity: STABLE → STRESSED → CRITICAL → BREACHED (terminal)
     Relief reverse:     CRITICAL → STRESSED → STABLE
-  Collision status:     SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED (or CRASHED from ACTIVE/RESOLVING)
+  Collision status:     SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED
   Chapter status:       PLANNED → OPEN → CLOSING → CLOSED
 
 HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):

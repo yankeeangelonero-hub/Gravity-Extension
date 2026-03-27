@@ -288,7 +288,7 @@ function injectPrompt(mode = 'regular') {
                 if (status !== 'RESOLVING') continue;
                 const dist = parseFloat(col.distance);
                 if (!isNaN(dist) && dist > 0) {
-                    distWarnings.push(`"${col.name || id}" is RESOLVING but distance is ${dist} — a collision cannot resolve at range. If the confrontation was avoided, MOVE to CRASHED. If it's still approaching, MOVE back to ACTIVE. If it resolved offscreen, MOVE to RESOLVED.`);
+                    distWarnings.push(`"${col.name || id}" is RESOLVING but distance is ${dist} — a collision cannot resolve at range. If the confrontation was avoided or is no longer possible, MOVE to RESOLVED. If it's still approaching, MOVE back to ACTIVE.`);
                 }
             }
 
