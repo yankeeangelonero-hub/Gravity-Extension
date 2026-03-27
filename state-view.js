@@ -147,7 +147,21 @@ function formatStateView(state) {
         lines.push('');
         lines.push('FACTIONS');
         for (const f of factionEntities) {
-            lines.push(`  ${f.name || f.id}: ${f.objective || ''} | Resources: ${f.resources || '?'} | Stance: ${f.stance_toward_pc || '?'} → id: ${f.id}`);
+            let line = `  ${f.name || f.id}: ${f.objective || ''}`;
+            line += ` | Resources: ${f.resources || '?'}`;
+            line += ` | Stance: ${f.stance_toward_pc || '?'}`;
+            if (f.power) line += ` | Power: ${f.power}`;
+            if (f.momentum) line += ` | Momentum: ${f.momentum}`;
+            line += ` → id: ${f.id}`;
+            lines.push(line);
+            if (f.relations && typeof f.relations === 'object') {
+                for (const [targetId, relation] of Object.entries(f.relations)) {
+                    lines.push(`    ↔ ${targetId}: ${relation}`);
+                }
+            }
+            if (f.last_move) lines.push(`    Last move: ${f.last_move}`);
+            if (f.leverage) lines.push(`    Leverage: ${f.leverage}`);
+            if (f.vulnerability) lines.push(`    Vulnerability: ${f.vulnerability}`);
         }
         for (const f of legacyFactions) {
             if (typeof f === 'object' && f.name) {
@@ -298,9 +312,20 @@ MAP_DEL — remove a key from a map field
 DESTROY — remove an entity permanently
   > DESTROY char:minor-npc -- Left the story
 
-FACTIONS — create and manage factions
-  > CREATE faction:shinra name="Shinra Corp" objective="Control the reactors" resources="Military" stance_toward_pc="Hostile" -- Major faction
+FACTIONS — create and manage factions with political simulation
+  > CREATE faction:shinra name="Shinra Corp" objective="Control the reactors" resources="Military" stance_toward_pc="Hostile" power="stable" momentum="Expanding into Sector 7" -- Major faction
   > SET faction:shinra field=stance_toward_pc value="Neutral" -- Stance shifted after negotiation
+  > SET faction:shinra field=power value="declining" -- Lost reactor control
+  > SET faction:shinra field=momentum value="Consolidating remaining assets" -- Current action
+  > SET faction:shinra field=last_move value="Deployed Turks to monitor Avalanche safe houses" -- Visible action
+  > SET faction:shinra field=leverage value="Military force and infrastructure control" -- Power source
+  > SET faction:shinra field=vulnerability value="Public opinion turning after plate drop" -- Exploitable weakness
+  > MAP_SET faction:shinra field=relations key=avalanche value="Hostile — active operations against" -- Inter-faction relation
+  > MAP_SET faction:shinra field=relations key=wutai value="Uneasy truce — both watching" -- Diplomatic state
+
+  Faction fields: name, objective, resources, stance_toward_pc, power (rising/stable/declining/collapsed),
+  momentum (current action), last_move (last visible action), leverage, vulnerability,
+  relations (map: faction_id → stance string). Optional: doctrine, leadership, territory, alliances.
 
 DIVINATION — record current draw only (no history accumulation)
   > SET divination field=active_system value="arcana" -- Set active system
@@ -339,11 +364,12 @@ PRIORITY ORDER — when near the cap, emit in this order:
   2. Collision distance changes (SET distance)
   3. Character DOING/WANT changes (SET)
   4. World state changes (SET world_state)
-  5. Story summary (APPEND summary) — every significant scene
-  6. Key moments / noticed details (APPEND)
-  7. READS updates (READ)
-  8. PC traits / timeline (APPEND / MAP_SET)
-  9. Housekeeping REMOVEs — always last, 2–3 max
+  5. Faction updates (SET power/momentum/last_move, MAP_SET relations)
+  6. Story summary (APPEND summary) — every significant scene
+  7. Key moments / noticed details (APPEND)
+  8. READS updates (READ)
+  9. PC traits / timeline (APPEND / MAP_SET)
+  10. Housekeeping REMOVEs — always last, 2–3 max
 
 FULL EXAMPLE — action scene:
 ---LEDGER---

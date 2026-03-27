@@ -177,9 +177,14 @@ function injectPrompt() {
         if (_turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
             const factions = Object.values(_currentState.factions || {});
             if (factions.length > 0) {
-                const factionNames = factions.map(f => `${f.name || f.id} (${f.objective || '?'})`).join(', ');
+                const factionDetails = factions.map(f => {
+                    let detail = `${f.name || f.id} (${f.objective || '?'})`;
+                    if (f.power) detail += ` [${f.power}]`;
+                    if (f.momentum) detail += ` — doing: ${f.momentum}`;
+                    return detail;
+                }).join('\n  ');
                 setExtensionPrompt(`${MODULE_NAME}_faction`,
-                    `[FACTION HEARTBEAT — Turn ${_turnCounter}. Active factions: ${factionNames}.\nFactions execute operations independently. Leaders command subordinates — show the chain of command. You may CUT to a faction scene (a brief beat from their angle) before cutting back to the main scene. If no faction has visibly acted in recent turns, one MUST advance NOW. Show the evidence arriving — through a subordinate, a broadcast, a checkpoint, a consequence.]`,
+                    `[FACTION HEARTBEAT — Turn ${_turnCounter}.\n  ${factionDetails}\nFactions execute operations independently based on their MOMENTUM. Leaders command subordinates — show the chain of command. Rising factions expand; declining factions get desperate. Check faction RELATIONS for alliance/rivalry dynamics. You may CUT to a faction scene before cutting back. If no faction has visibly acted in recent turns, one MUST advance NOW — pick the faction whose MOMENTUM most threatens the current scene.]`,
                     PROMPT_IN_CHAT, 0);
             } else {
                 setExtensionPrompt(`${MODULE_NAME}_faction`, '', PROMPT_NONE, 0);
@@ -205,7 +210,7 @@ function injectPrompt() {
             }
             if (dormant.length > 0) {
                 setExtensionPrompt(`${MODULE_NAME}_dormant`,
-                    `[DORMANT CHARACTERS — gravity still pulls these characters toward collision:\n${dormant.map(d => '  • ' + d).join('\n')}\nGravity is constant — however weak, it pulls toward collision. Their WANT is a force. Their DOING has consequences. Advance them toward the nearest collision — or spawn a new one from their WANT intersecting the current situation. Faction leaders issue orders through subordinates even when offscreen.]`,
+                    `[DORMANT CHARACTERS — gravity still pulls these characters toward collision:\n${dormant.map(d => '  • ' + d).join('\n')}\nGravity is constant — however weak, it pulls toward collision. Their WANT is a force. Their DOING has consequences. Advance them toward the nearest collision — or spawn a new one from their WANT intersecting the current situation.]`,
                     PROMPT_IN_CHAT, 0);
             } else {
                 setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
@@ -309,12 +314,13 @@ WHAT TO TRACK — emit in PRIORITY ORDER (cap: 20 lines, excess dropped):
 2. Collision distance changes (SET distance)
 3. Character DOING/WANT updates (SET)
 4. World state changes (SET world_state)
-5. Story summary (APPEND summary) — every significant scene, 2-4 sentences with texture
-6. Key moments / noticed details (APPEND)
-7. READS updates when interpretation shifts (READ)
-8. PC traits, timeline, reputation (APPEND / MAP_SET)
-9. Intimate history after intimate scenes (MAP_SET intimate_history)
-10. Housekeeping REMOVEs — ALWAYS LAST, 2–3 per turn max, never bulk dumps
+5. Faction updates (SET power/momentum/last_move, MAP_SET relations)
+6. Story summary (APPEND summary) — every significant scene, 2-4 sentences with texture
+7. Key moments / noticed details (APPEND)
+8. READS updates when interpretation shifts (READ)
+9. PC traits, timeline, reputation (APPEND / MAP_SET)
+10. Intimate history after intimate scenes (MAP_SET intimate_history)
+11. Housekeeping REMOVEs — ALWAYS LAST, 2–3 per turn max, never bulk dumps
 If nothing changed: (empty)]`,
             PROMPT_IN_CHAT, 0);
     } catch (err) {
@@ -678,10 +684,20 @@ STRUCTURE: Write 2-4 short beats, each from a different angle. Use scene cuts:
 
 Use --- or a location/time header to cut between angles. Each beat can be 50-150 words. Not every beat needs the PC.
 
-PICK from Gravity_State_View:
+PRESSURE POINT PROTOCOL — the Rule of Cool:
+Scan the pressure_points array in the state view. If any exist, pick the one that would
+produce the COOLEST moment right now — not the most dramatic or intense, but the most
+interesting, unexpected, or stylish intersection with the current scene.
+
+You have FULL LICENSE to execute it: move NPCs into position, introduce new NPCs,
+have faction subordinates arrive with orders, trigger environmental events, create
+situations that demand response. Show the chain of causation — which faction's action
+created this pressure, how it reaches the PC, what it forces.
+
+After firing a pressure point, REMOVE it from world.pressure_points. It detonated. It's done.
+
+If no pressure points exist or none fit, PICK from Gravity_State_View instead:
 - NPCs act on their WANT or DOING
-- Faction leaders command subordinates — show the order AND the execution
-- A pressure point cracks
 - A collision tightens because the world moved
 - A dormant character's WANT pulls them back
 
@@ -738,7 +754,7 @@ async function handleTimeskipButton() {
 
 1. THE INTERRUPTION PROTOCOL: Evaluate the requested duration against the logical realities of the world. If the player is fleeing danger, wanted by authorities, or ignoring an active threat, calculate if they would realistically be caught before the skip ends. If yes, ABORT the skip early and drop them immediately into the confrontation.
 
-2. THE BUTTERFLY EFFECT: Advance the agendas of ALL off-screen factions, tracked NPCs, and active collisions. The world moves without the player. For each tracked character: advance DOING, check constraints, update stance. For each collision: compress distance. For world: advance factions, world state, pressure points.
+2. THE BUTTERFLY EFFECT: Advance the agendas of ALL off-screen factions, tracked NPCs, and active collisions. The world moves without the player. For each tracked character: advance DOING, check constraints, update stance. For each collision: compress distance. For world: advance world state, pressure points. For each faction: advance MOMENTUM, update power (rising/stable/declining/collapsed), update relations with other factions, record last_move. Factions with conflicting objectives in the same space create new pressure points.
 
 3. FORMAT — MULTI-BEAT, MULTI-ANGLE: Write 3-6 beats, cutting between locations and characters. Use --- or location/time headers between beats:
    Beat: THE PC — What they did during "${duration}". Routines, projects, rest. Show the rhythm, not a summary.
@@ -788,7 +804,32 @@ C. ARC EVALUATION — honest narrative self-assessment:
    - What worked narratively and what didn't
    - Collisions: which resolved, which didn't, which spawned
 
-D. ASK THE PLAYER — present choices for the next chapter:
+D. FACTION POLITICS — simulate the macro layer:
+   For EACH active faction, evaluate based on this chapter's events:
+   1. POWER SHIFT: Did this faction gain or lose ground? Update power field (rising/stable/declining/collapsed).
+   2. MOMENTUM: What is the faction now actively pursuing? Update momentum field.
+   3. RELATIONS: Did alliances shift? New rivalries? Betrayals? Update relations map via MAP_SET.
+   4. LAST MOVE: What did this faction DO this chapter, even offscreen? Update last_move.
+   5. LEVERAGE & VULNERABILITY: Did these change? Update if so.
+
+   Then SIMULATE inter-faction dynamics:
+   - Factions with hostile relations actively undermine each other
+   - A declining faction gets desperate — desperate factions make reckless moves
+   - A rising faction attracts rivals AND supplicants
+   - Check pc.reputation — the PC's standing colors every faction's calculus
+
+   PRESSURE POINT GENERATION — seeds for the next chapter:
+   From the faction simulation, generate 2-4 NEW pressure points that:
+   - Emerge from faction conflicts (political, territorial, resource tensions)
+   - Are specific and concrete enough to trigger scenes
+   - Name the factions involved
+   - Would be COOL to encounter — not just tense, but interesting
+   REMOVE spent/resolved pressure points from previous chapter.
+   APPEND new ones to world.pressure_points.
+
+   Emit all faction updates as ledger transactions (SET/MAP_SET on each faction entity).
+
+E. ASK THE PLAYER — present choices for the next chapter:
    1. Where do you want to start next? (specific scene/location/moment — sanity check: is this reachable from current state?)
    2. How much time passes before the next chapter opens?
    3. Focus: what should the next chapter be about? (or let me decide)
@@ -806,6 +847,10 @@ B. TIMESKIP to the new starting point:
    - Advance all tracked characters (DOING, constraints, reads, stance)
    - Advance all collisions (compress distances, check for arrivals)
    - Advance world (factions, world state, pressure points)
+   - Advance faction politics: each faction executes its MOMENTUM during the skip.
+     Update relations based on timeskip duration. Factions with conflicting objectives
+     in the same territory create new pressure points. A rising faction may absorb
+     or squeeze a declining one.
    - Check: would any interruption logically occur during the skip?
 
 C. EMIT LEDGER BLOCK:

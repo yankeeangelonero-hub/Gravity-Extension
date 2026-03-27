@@ -592,7 +592,21 @@ function renderWorld(state) {
             parts.push(`<b>${esc(f.name || f.id)}</b>`);
             if (f.objective) parts.push(`<div class="gl-d-detail">Objective: ${esc(f.objective)}</div>`);
             if (f.resources) parts.push(`<div class="gl-d-detail">Resources: ${esc(f.resources)}</div>`);
-            if (f.stance_toward_pc) parts.push(`<div class="gl-d-detail">Stance: ${esc(f.stance_toward_pc)}</div>`);
+            if (f.stance_toward_pc) parts.push(`<div class="gl-d-detail">Stance toward PC: ${esc(f.stance_toward_pc)}</div>`);
+            if (f.power) parts.push(`<div class="gl-d-detail">Power: <b>${esc(f.power)}</b></div>`);
+            if (f.momentum) parts.push(`<div class="gl-d-detail">Momentum: ${esc(f.momentum)}</div>`);
+            if (f.last_move) parts.push(`<div class="gl-d-detail">Last move: ${esc(f.last_move)}</div>`);
+            if (f.leverage) parts.push(`<div class="gl-d-detail">Leverage: ${esc(f.leverage)}</div>`);
+            if (f.vulnerability) parts.push(`<div class="gl-d-detail">Vulnerability: ${esc(f.vulnerability)}</div>`);
+            if (f.relations && typeof f.relations === 'object') {
+                const relEntries = Object.entries(f.relations);
+                if (relEntries.length) {
+                    parts.push(`<div class="gl-d-detail"><b>Relations:</b></div>`);
+                    for (const [targetId, relation] of relEntries) {
+                        parts.push(`<div class="gl-d-detail" style="padding-left:1em">↔ ${esc(targetId)}: ${esc(String(relation))}</div>`);
+                    }
+                }
+            }
             parts.push(`</div>`);
         }
     }

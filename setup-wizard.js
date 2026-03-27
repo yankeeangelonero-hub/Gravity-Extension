@@ -154,10 +154,19 @@ After the player responds, emit ledger commands for world setup:
 > MAP_SET world field=constants key=objective value="[from answer]" -- Phase 2 objective
 > SET world field=world_state value="[macro reality]" -- World state
 > APPEND world field=pressure_points value="[seam where forces collide]" -- Pressure
-> CREATE faction:name objective="[goal]" resources="[resources]" stance_toward_pc="[stance]" -- Faction
+> CREATE faction:name name="[Faction Name]" objective="[goal]" resources="[resources]" stance_toward_pc="[stance]" power="[rising/stable/declining]" momentum="[current action]" leverage="[source of power]" vulnerability="[exploitable weakness]" -- Faction with political profile
+> MAP_SET faction:name field=relations key=[other-faction-id] value="[stance toward them]" -- Inter-faction relation
 > CREATE chapter:ch1-slug number=1 title="[focus]" status=OPEN arc="[central question]" central_tension="[forced choice]" -- Chapter 1
 > CREATE collision:slug name="[name]" forces="force1,force2" status=SEEDED distance=10 -- Initial collision
----END LEDGER---`;
+---END LEDGER---
+
+Create at least 2 factions with opposing or intersecting objectives. For each faction, establish:
+- power: their current position (rising/stable/declining)
+- momentum: what they are actively doing right now
+- leverage: what gives them power over others
+- vulnerability: what could be used against them
+- relations: how they view each other faction (via MAP_SET)
+These political dynamics generate the macro-level pressure that drives the story between chapters.`;
 
 const PHASE_3_PROMPT = `[GRAVITY SETUP — PHASE 3 of 3: Cast & Opening]
 
