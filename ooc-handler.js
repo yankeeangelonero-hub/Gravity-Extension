@@ -170,7 +170,16 @@ ${rulesText}
 
 SET power on all existing characters based on this scale. Use the entity IDs from Gravity_State_View.
 
-IMPORTANT: Do NOT invent dice systems, HP tracks, condition tracks, roll tables, or any mechanical resolution system. Gravity combat is NARRATIVE — the power scale is a reference for YOU to judge outcomes using the Logic and Fairness principles, not a modifier for dice rolls. Wounds are descriptive strings (MAP_SET field=wounds), not HP tiers. There are no dice in this system.]`;
+HARD RULE — READ CAREFULLY:
+You MUST NOT create any mechanical combat system. No dice rolls. No 2d6. No d20. No hit points. No condition tracks. No attack rolls. No damage tables. No turn sequences. No threat thresholds. No hit counters. No modifiers table. NONE OF THAT.
+
+Dice in Gravity exist ONLY for divination (arcana draws, collision arrivals). Combat has NO dice. Combat has NO mechanics.
+
+The power scale is a NARRATIVE REFERENCE for you to judge outcomes through prose. A power-3 character fighting a power-5 character LOSES — you write that loss. You don't roll for it. You judge it through Logic and Fairness, the same way you judge everything else in Gravity.
+
+Wounds are descriptive text via MAP_SET (e.g. "broken ribs"), not HP tiers or condition tracks.
+
+Your ONLY job right now: SET power on existing characters via ledger commands. Do not build a combat engine. Do not create rules tables. Just assign the numbers and confirm.]`;
 }
 
 async function handleCombatRules() {
