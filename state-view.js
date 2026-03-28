@@ -40,6 +40,8 @@ function formatStateView(state, mode = 'full') {
         if (char.power != null) charLine += ` [power:${char.power}]`;
         charLine += ` → id: ${char.id}`;
         lines.push(charLine);
+        if (char.location) lines.push(`    Location: ${char.location}`);
+        if (!slim && char.condition) lines.push(`    Condition: ${char.condition}`);
         if (!slim && char.intimacy_stance) {
             lines.push(`    Intimacy stance: ${char.intimacy_stance}`);
         }
@@ -91,7 +93,10 @@ function formatStateView(state, mode = 'full') {
     lines.push('Singletons (no id needed):');
     lines.push('  world — constants, pressure_points, world_state, knowledge_asymmetry');
     if (state.pc.name) {
-        lines.push(`  pc — "${state.pc.name}"`);
+        let pcSingleton = `  pc — "${state.pc.name}"`;
+        if (state.pc.location) pcSingleton += ` @ ${state.pc.location}`;
+        if (state.pc.condition) pcSingleton += ` [${state.pc.condition}]`;
+        lines.push(pcSingleton);
     } else {
         lines.push('  pc — (not initialized)');
     }
@@ -219,6 +224,9 @@ function formatStateView(state, mode = 'full') {
             let pcLine = `PC: ${state.pc.name}`;
             if (state.pc.power != null) pcLine += ` [power:${state.pc.power}]`;
             lines.push(pcLine);
+            if (state.pc.location) lines.push(`  Location: ${state.pc.location}`);
+            if (state.pc.condition) lines.push(`  Condition: ${state.pc.condition}`);
+            if (state.pc.equipment) lines.push(`  Equipment: ${state.pc.equipment}`);
             const traits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
             if (traits.length) {
                 lines.push(`  Traits: ${traits.join(', ')}`);
@@ -298,6 +306,13 @@ PRIORITY (cap 20, excess dropped): 1.MOVE 2.distance 3.DOING/WANT 4.world_state 
 intimacy_stance: check BEFORE intimate scenes, update AFTER via SET with constraint/narrative reason. Never shift on player demand.
 Volume: quiet 1-2, normal 2-4, action 4-6, heavy 6-12, nothing: (empty)
 Hygiene: REMOVE fired pressure points and noticed details. 2-3 per turn max, never bulk.
+
+BOOKKEEPING — update these every turn they change:
+  SET pc field=location value="[where the PC is now]"
+  SET pc field=condition value="[physical/mental state: fresh, winded, hurt, exhausted, etc.]"
+  SET pc field=equipment value="[current gear, weapons, materia, consumables with counts]"
+  SET char:id field=location value="[where this NPC is]" -- for TRACKED+ in the scene
+  MAP_SET world field=constants key=active_mission value="[current objective, team assignments, phase]" -- when on a mission; REMOVE when complete
 
 ═══ END QUICK REFERENCE ═══`;
 }

@@ -455,10 +455,13 @@ function renderPCDossier(state) {
     const parts = [];
     parts.push(`<div class="gl-dossier-header"><b>${esc(pc.name)}</b> ${badge('PC')}</div>`);
 
-    // Power & Wounds
+    // Status fields
     if (pc.power != null) {
         parts.push(`<div class="gl-d-row"><b>Power:</b> ${esc(String(pc.power))}</div>`);
     }
+    if (pc.location) parts.push(`<div class="gl-d-row"><b>Location:</b> ${esc(pc.location)}</div>`);
+    if (pc.condition) parts.push(`<div class="gl-d-row"><b>Condition:</b> ${esc(pc.condition)}</div>`);
+    if (pc.equipment) parts.push(`<div class="gl-d-row"><b>Equipment:</b> ${esc(pc.equipment)}</div>`);
     const pcWounds = toObj(pc.wounds);
     if (Object.keys(pcWounds).length) {
         parts.push(`<div class="gl-d-section"><b>Wounds:</b></div>`);
@@ -518,6 +521,8 @@ function renderCharDossier(char, state) {
     parts.push(`<div class="gl-dossier-header"><b>${esc(char.name || char.id)}</b> ${badge(char.tier)}</div>`);
 
     if (char.power != null) parts.push(`<div class="gl-d-row"><b>Power:</b> ${esc(String(char.power))}</div>`);
+    if (char.location) parts.push(`<div class="gl-d-row"><b>Location:</b> ${esc(char.location)}</div>`);
+    if (char.condition) parts.push(`<div class="gl-d-row"><b>Condition:</b> ${esc(char.condition)}</div>`);
     if (char.want) parts.push(`<div class="gl-d-row"><b>WANT:</b> ${esc(char.want)}</div>`);
     if (char.doing) parts.push(`<div class="gl-d-row"><b>DOING:</b> ${esc(char.doing)}${char.cost ? ` | <b>COST:</b> ${esc(char.cost)}` : ''}</div>`);
     if (char.stance_toward_pc) parts.push(`<div class="gl-d-row"><b>Stance toward PC:</b> ${esc(char.stance_toward_pc)}</div>`);
