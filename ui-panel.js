@@ -77,6 +77,20 @@ function historyLine(h) {
     return `<span class="gl-history-entry">${esc(h.from || '?')} → ${esc(h.to || '?')} <span class="gl-history-time">${esc(h.t)} ${h.r ? '— ' + esc(h.r) : ''}</span></span>`;
 }
 
+/**
+ * Render a list with only the last N items visible, rest collapsed.
+ * @param {string[]} htmlItems - Pre-rendered HTML strings for each item
+ * @param {number} visibleCount - How many to show from the end
+ * @param {string} label - Label for the "show more" toggle (e.g. "older entries")
+ * @returns {string} HTML
+ */
+function collapsibleList(htmlItems, visibleCount, label = 'older') {
+    if (htmlItems.length <= visibleCount) return htmlItems.join('');
+    const hidden = htmlItems.slice(0, -visibleCount);
+    const visible = htmlItems.slice(-visibleCount);
+    return `<div class="gl-collapse-toggle">${hidden.length} ${label} ▸</div><div class="gl-collapse-body" style="display:none">${hidden.join('')}</div>${visible.join('')}`;
+}
+
 // ─── Panel Scaffold ─────────────────────────────────────────────────────────────
 
 function createPanel() {
@@ -218,6 +232,15 @@ function renderAllSections() {
 
     // History toggles
     container.querySelectorAll('.gl-history-toggle').forEach(toggle => {
+        toggle.addEventListener('click', () => {
+            const target = toggle.nextElementSibling;
+            if (target) target.style.display = target.style.display === 'none' ? 'block' : 'none';
+            toggle.classList.toggle('open');
+        });
+    });
+
+    // Collapsible list toggles
+    container.querySelectorAll('.gl-collapse-toggle').forEach(toggle => {
         toggle.addEventListener('click', () => {
             const target = toggle.nextElementSibling;
             if (target) target.style.display = target.style.display === 'none' ? 'block' : 'none';
@@ -447,10 +470,9 @@ function renderPCDossier(state) {
     // Demonstrated traits — detailed narrative entries
     const traits = toArr(pc.demonstrated_traits);
     if (traits.length) {
-        parts.push(`<div class="gl-d-section"><b>Demonstrated Traits:</b></div>`);
-        for (const t of traits) {
-            parts.push(`<div class="gl-trait-block">- ${esc(t)}</div>`);
-        }
+        parts.push(`<div class="gl-d-section"><b>Demonstrated Traits (${traits.length}):</b></div>`);
+        const traitItems = traits.map(t => `<div class="gl-trait-block">- ${esc(t)}</div>`);
+        parts.push(collapsibleList(traitItems, 5, 'older traits'));
     }
 
     // Reputation — per-entity narrative blocks
@@ -482,10 +504,9 @@ function renderPCDossier(state) {
     // Timeline — timestamped detailed entries
     const timeline = toArr(pc.timeline);
     if (timeline.length) {
-        parts.push(`<div class="gl-d-section"><b>Timeline:</b></div>`);
-        for (const t of timeline) {
-            parts.push(`<div class="gl-moment">${esc(t)}</div>`);
-        }
+        parts.push(`<div class="gl-d-section"><b>Timeline (${timeline.length}):</b></div>`);
+        const timeItems = timeline.map(t => `<div class="gl-moment">${esc(t)}</div>`);
+        parts.push(collapsibleList(timeItems, 5, 'older entries'));
     }
 
     return parts.join('');
@@ -585,10 +606,9 @@ function renderCharDossier(char, state) {
     // Key moments — timestamped
     const moments = toArr(char.key_moments);
     if (moments.length) {
-        parts.push(`<div class="gl-d-section"><b>Key Moments:</b></div>`);
-        for (const m of moments) {
-            parts.push(`<div class="gl-d-row gl-moment">${esc(m)}</div>`);
-        }
+        parts.push(`<div class="gl-d-section"><b>Key Moments (${moments.length}):</b></div>`);
+        const momentItems = moments.map(m => `<div class="gl-d-row gl-moment">${esc(m)}</div>`);
+        parts.push(collapsibleList(momentItems, 3, 'older moments'));
     }
 
     return parts.join('');
@@ -758,12 +778,13 @@ function renderArc(state) {
     // Story summary
     const summary = toArr(state.story_summary);
     if (summary.length) {
-        parts.push(`<div class="gl-d-section"><b>Story Summary:</b></div>`);
-        for (const s of summary) {
+        parts.push(`<div class="gl-d-section"><b>Story Summary (${summary.length}):</b></div>`);
+        const sumItems = summary.map(s => {
             const text = typeof s === 'object' ? s.text : s;
             const time = typeof s === 'object' ? (s.t || s.chapter || '') : '';
-            parts.push(`<div class="gl-d-row">${time ? `<span class="gl-history-time">[${esc(time)}]</span> ` : ''}${esc(text)}</div>`);
-        }
+            return `<div class="gl-d-row">${time ? `<span class="gl-history-time">[${esc(time)}]</span> ` : ''}${esc(text)}</div>`;
+        });
+        parts.push(collapsibleList(sumItems, 5, 'older entries'));
     }
 
     return parts.length ? parts.join('') : '<div class="gl-empty">No chapters or story data</div>';
@@ -792,10 +813,11 @@ function renderDivination(state) {
     const readings = toArr(div.readings);
     if (readings.length) {
         parts.push(`<div class="gl-d-section"><b>Reading History (${readings.length}):</b></div>`);
-        for (const r of readings.slice().reverse()) {
+        const readItems = readings.slice().reverse().map(r => {
             const rd = typeof r === 'object' ? r : { value: r };
-            parts.push(`<div class="gl-d-row">${esc(rd.value || '?')} — ${esc(rd.reading || '')} <span class="gl-history-time">${esc(rd.t || rd.timestamp || '')}</span></div>`);
-        }
+            return `<div class="gl-d-row">${esc(rd.value || '?')} — ${esc(rd.reading || '')} <span class="gl-history-time">${esc(rd.t || rd.timestamp || '')}</span></div>`;
+        });
+        parts.push(collapsibleList(readItems, 3, 'older readings'));
     }
 
     return parts.length ? parts.join('') : '<div class="gl-empty">No divination data</div>';

@@ -144,6 +144,12 @@
 #gravity-ledger-panel .gl-exemplar-btn:hover { background:rgba(255,255,255,.1); color:#fff; }
 #gravity-ledger-panel .gl-exemplar-remove:hover { color:#f66; border-color:#f66; }
 
+/* Collapsible lists */
+#gravity-ledger-panel .gl-collapse-toggle { font-size:10px; color:#88f; cursor:pointer; padding:2px 0; opacity:.7; margin-bottom:2px; }
+#gravity-ledger-panel .gl-collapse-toggle:hover { opacity:1; }
+#gravity-ledger-panel .gl-collapse-toggle.open { }
+#gravity-ledger-panel .gl-collapse-body { border-left:2px solid rgba(136,136,255,.2); padding-left:6px; margin-bottom:4px; }
+
 /* ── Setup Popup ──────────────────────────────────────── */
 
 .gl-setup-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.6); z-index:10000; display:flex; align-items:center; justify-content:center; }
