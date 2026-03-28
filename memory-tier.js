@@ -35,50 +35,8 @@ const TIER_CONFIG = {
 };
 
 // ─── Condensation ───────────────────────────────────────────────────────────
-
-/**
- * Condense a batch of entries into a single summary entry.
- * This is a simple text-based compression — no LLM needed.
- * Extracts timestamps and key content, concatenates into one paragraph.
- * @param {Array} batch - entries being rotated to cold
- * @param {string} label - field label for tagging
- * @returns {Object|string} condensed entry
- */
-function condenseBatch(batch, label) {
-    if (!batch || batch.length === 0) return null;
-
-    // Extract text from each entry
-    const texts = batch.map(entry => {
-        if (typeof entry === 'object') return entry.text || entry.t || JSON.stringify(entry);
-        return String(entry);
-    });
-
-    // Find time range
-    const timestamps = batch
-        .map(e => typeof e === 'object' ? (e.t || '') : '')
-        .filter(t => t.includes('Day'));
-    const timeRange = timestamps.length >= 2
-        ? `${timestamps[0]} to ${timestamps[timestamps.length - 1]}`
-        : timestamps[0] || '';
-
-    // Truncate each entry to ~80 chars and join
-    const compressed = texts
-        .map(t => t.length > 80 ? t.substring(0, 77) + '...' : t)
-        .join(' | ');
-
-    // Cap total at ~500 chars
-    const finalText = compressed.length > 500
-        ? compressed.substring(0, 497) + '...'
-        : compressed;
-
-    const condensedText = `[CONDENSED: ${label}${timeRange ? ` ${timeRange}` : ''}, ${batch.length} entries] ${finalText}`;
-
-    // Return in the same format as the source entries
-    if (typeof batch[0] === 'object') {
-        return { text: condensedText, t: timeRange, _ts: new Date().toISOString(), _condensed: true };
-    }
-    return condensedText;
-}
+// No auto-condensation. The main LLM writes consolidated summaries as part
+// of its normal response when prompted by buildConsolidationPrompt().
 
 // ─── Cold Storage ───────────────────────────────────────────────────────────
 
@@ -127,21 +85,11 @@ function checkAndRotate(state) {
                 : 'summaries';
             cold[coldKey].push(...batch);
 
-            // Extension-side consolidation: compress batch into one summary entry
-            // that stays in hot as a bridge — memories never just vanish
-            const condensed = condenseBatch(batch, cfg.label);
-            if (condensed) {
-                // Insert the consolidated entry at the beginning of the array
-                // (oldest position in hot = these are deep history)
-                arr.splice(start, 0, condensed);
-            }
-
             pendingBatches.push({
                 key,
                 label: cfg.label,
                 entries: batch,
                 count: batch.length,
-                condensed,
             });
         }
 
@@ -168,19 +116,25 @@ function checkAndRotate(state) {
  * @returns {string}
  */
 function buildConsolidationPrompt(pendingBatches) {
-    const parts = ['[MEMORY CONSOLIDATION — Older entries have been archived. Summarize each batch into ONE consolidated entry (3-5 sentences, preserving key details and emotional texture).\n'];
+    const parts = [`[MEMORY CONSOLIDATION — The following entries have been archived to cold storage.
+Your job: write ONE consolidated summary per batch (3-5 sentences) that preserves:
+- Key events and turning points
+- Emotional texture and character dynamics
+- Specific details that make moments recoverable (not generic)
+Tag each: "[CONSOLIDATED: label]"
+APPEND to summary in your ledger block. These replace the archived entries in the LLM's memory.\n`];
 
     for (const batch of pendingBatches) {
         const entries = batch.entries.map(e => {
             if (typeof e === 'object') return e.text || e.t || JSON.stringify(e);
             return String(e);
         });
-        parts.push(`BATCH: ${batch.label} (${batch.count} entries)`);
+        parts.push(`ARCHIVED BATCH: ${batch.label} (${batch.count} entries)`);
         parts.push(entries.map(e => `  - ${e}`).join('\n'));
-        parts.push(`→ APPEND summary field with a 3-5 sentence consolidated summary of the above. Tag it: "[CONSOLIDATED: ${batch.label}]"\n`);
+        parts.push(`→ APPEND summary value="[CONSOLIDATED: ${batch.label}] your 3-5 sentence summary here"\n`);
     }
 
-    parts.push('Write the consolidated summaries in your ledger block. The original detailed entries are archived and will not be injected again.]');
+    parts.push('Do this ALONGSIDE your normal prose and ledger updates — it does not replace them.]');
     return parts.join('\n');
 }
 
