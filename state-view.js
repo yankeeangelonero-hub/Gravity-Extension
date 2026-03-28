@@ -598,16 +598,22 @@ FACTIONS — create and manage factions with political simulation
 DIVINATION — record current draw only (no history accumulation)
   > SET divination field=last_draw value="XIV — Temperance" -- Record draw (overwrites previous)
 
-TIMELINE — the single chronological record. Strict temporal order. APPEND after every significant beat.
-  This IS the story's memory. When chat history truncates, this is all that survives.
-  Write entries that let you reconstruct the scene's weight without the original prose.
+TIMELINE — the single chronological record. This IS the story's complete memory.
+  With only 3-5 messages of chat context, the LLM reconstructs EVERYTHING from these entries.
+  Each entry must be rich enough to write the next scene from, not just remember the last one.
 
-  Format: "[Day N — HH:MM] 2-4 sentences. What happened, who was involved, what changed
-  emotionally or materially, and one specific physical/sensory detail that makes the
-  moment recoverable. Not a log line — a compressed scene."
+  Every entry MUST include:
+  1. Timestamp: [Day N — HH:MM]
+  2. What happened: the physical event, who acted, who was present
+  3. How it felt: emotional register, body language, what the silence carried
+  4. What it changed: relationship shift, constraint pressure, collision movement, power dynamic
+  5. What it left open: unresolved tension, unanswered question, the thing that follows the character out of the scene
+  6. One concrete sensory detail: the specific image, sound, texture, or gesture that makes this moment THIS moment and not any other
 
-  > APPEND summary value="[Day 1 — 21:10] Tifa pulled Autumn from Reactor 1 rubble. Head wound, minor. He heard knocking in a burning apartment and ran inside — she followed without hesitating. The first debt: she treated his wound before her own, using the cloth she'd been pressing against her ribs."
-  > APPEND summary value="[Day 3 — 14:00] First potion batch. Six bottles, luminous blue, professional grade. Tifa watched from the doorway in the voice at the bottom of her register and said 'I'm glad you're here.' He said 'Yeap?' and cleaned the counter. The not-reacting is the reaction."
+  3-5 sentences per entry. Not a log. Not a summary. A compressed scene you can write FROM.
+
+  > APPEND summary value="[Day 1 — 21:10] Tifa pulled Autumn from Reactor 1 rubble — head wound, minor, hands steady. He heard survivor knocking in a burning apartment and ran inside without calculating; she followed. First debt established: she treated his wound before her own, using the cloth she'd been pressing against her ribs. He noticed. She noticed him noticing. Neither said anything. The asymmetry starts here — she knows what just happened to his world, he doesn't know she was part of it."
+  > APPEND summary value="[Day 7 — 19:28] Storage room. Blue potion light. Autumn kissed Tifa slowly — 'I want to make good the claim, the my girl part.' Not the brief table kiss. Her hands gripped his back. A small pre-verbal sound into his mouth. She leaned in — the lean she didn't give at the table. His fingers found her hair near the pink band. When it ended at three inches she said 'okay' in a voice reduced to one syllable. Forehead to sternum. The claim made good. C2 still CRITICAL — the guilt underneath the wanting didn't dissolve, it got quieter."
 
   Do NOT use pc.timeline — this is the only timeline. One log, one place.
 
