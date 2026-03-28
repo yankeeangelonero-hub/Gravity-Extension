@@ -36,10 +36,16 @@ function formatStateView(state, mode = 'full') {
     lines.push('Characters:');
     for (const char of Object.values(state.characters)) {
         if (char.tier === 'UNKNOWN') continue;
-        let charLine = `  ${char.tier} "${char.name || char.id}" → id: ${char.id}`;
+        let charLine = `  ${char.tier} "${char.name || char.id}"`;
+        if (char.power != null) charLine += ` [power:${char.power}]`;
+        charLine += ` → id: ${char.id}`;
         lines.push(charLine);
         if (!slim && char.intimacy_stance) {
             lines.push(`    Intimacy stance: ${char.intimacy_stance}`);
+        }
+        if (!slim && char.wounds && typeof char.wounds === 'object' && Object.keys(char.wounds).length) {
+            const woundList = Object.entries(char.wounds).map(([k, v]) => `${k}: ${v}`).join(', ');
+            lines.push(`    Wounds: ${woundList}`);
         }
     }
     if (Object.keys(state.characters).length === 0) lines.push('  (none)');
@@ -62,7 +68,11 @@ function formatStateView(state, mode = 'full') {
         lines.push('');
         lines.push('Collisions:');
         for (const col of allCollisions) {
-            lines.push(`  ${col.name || col.id} [${col.status}]${slim ? '' : ` dist:${col.distance || '?'}`} → id: ${col.id}`);
+            let colLine = `  ${col.name || col.id} [${col.status}]`;
+            if (!slim) colLine += ` dist:${col.distance || '?'}`;
+            if (col.mode === 'combat') colLine += ' ⚔';
+            colLine += ` → id: ${col.id}`;
+            lines.push(colLine);
         }
     }
 
@@ -165,6 +175,7 @@ function formatStateView(state, mode = 'full') {
             for (const col of liveCollisions) {
                 const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(' → ') : String(col.forces || '');
                 lines.push(`  ⊕ ${col.name || col.id} | ${forces} | dist:${col.distance || '?'} | ${col.status}`);
+                if (col.mode === 'combat') lines.push(`    Mode: COMBAT${col.upper_hand ? ` | Upper hand: ${col.upper_hand}` : ''}`);
                 if (col.cost) lines.push(`    Cost: ${col.cost}`);
                 if (col.target_constraint) lines.push(`    Targets: ${col.target_constraint}`);
             }
@@ -205,7 +216,9 @@ function formatStateView(state, mode = 'full') {
         // PC — full
         if (state.pc.name) {
             lines.push('');
-            lines.push(`PC: ${state.pc.name}`);
+            let pcLine = `PC: ${state.pc.name}`;
+            if (state.pc.power != null) pcLine += ` [power:${state.pc.power}]`;
+            lines.push(pcLine);
             const traits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
             if (traits.length) {
                 lines.push(`  Traits: ${traits.join(', ')}`);
@@ -216,6 +229,11 @@ function formatStateView(state, mode = 'full') {
                 for (const [who, r] of Object.entries(rep)) {
                     lines.push(`    ${who}: ${r}`);
                 }
+            }
+            const pcWounds = (state.pc.wounds && typeof state.pc.wounds === 'object') ? state.pc.wounds : {};
+            if (Object.keys(pcWounds).length) {
+                const woundList = Object.entries(pcWounds).map(([k, v]) => `${k}: ${v}`).join(', ');
+                lines.push(`  Wounds: ${woundList}`);
             }
         }
     }

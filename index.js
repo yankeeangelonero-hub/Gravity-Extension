@@ -15,7 +15,7 @@ import { formatStateView, formatReadme } from './state-view.js';
 import { extractLedgerBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
 import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
-import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback } from './setup-wizard.js';
+import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
 
 const MODULE_NAME = 'gravity-ledger';
 const LOG_PREFIX = '[GravityLedger]';
@@ -645,17 +645,29 @@ function insertChatMessage(text) {
     }
 }
 
-function handleSetupButton() {
+async function handleSetupButton() {
     if (isSetupActive()) {
         cancelSetup();
         showSetupPhase(null);
         toastr.info('Setup cancelled.');
-    } else {
-        startSetup();
-        showSetupPhase(getPhaseLabel());
-        injectPrompt('integration');
-        insertChatMessage('OOC: Let\'s set up a new game.');
+        return;
     }
+
+    const answers = await showSetupPopup();
+    if (!answers) return; // User cancelled
+
+    // Store combat rules if provided
+    if (answers.combat_rules) {
+        const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+        chatMetadata['gravity_combat_rules'] = answers.combat_rules;
+        await saveMetadata();
+    }
+
+    startSetup();
+    showSetupPhase(getPhaseLabel());
+    _pendingOOCInjection = buildSetupPrompt(answers);
+    injectPrompt('integration');
+    insertChatMessage('OOC: Begin game setup.');
 }
 
 function handleAdvanceButton() {
@@ -798,7 +810,77 @@ Full turn: deduction + prose + ledger block.]`;
     }
 
     injectPrompt('advance');
-    insertChatMessage(`*${pcName} continues ${doing}.*`);
+    insertChatMessage(`*${pcName} continues what they were doing.*`);
+}
+
+function handleCombatButton() {
+    const pcName = _currentState?.pc?.name || '{{user}}';
+    const pcPower = _currentState?.pc?.power;
+
+    // Find active combat collisions
+    const combatCollisions = Object.values(_currentState?.collisions || {}).filter(
+        c => c.mode === 'combat' && c.status !== 'RESOLVED' && c.status !== 'CRASHED'
+    );
+
+    // Build power gap assessment if combat collision exists
+    let powerAssessment = '';
+    if (combatCollisions.length > 0 && pcPower != null) {
+        for (const col of combatCollisions) {
+            const forces = Array.isArray(col.forces) ? col.forces : [];
+            for (const force of forces) {
+                const forceId = typeof force === 'string' ? force : force.id || force.name;
+                if (!forceId || forceId === 'pc' || forceId === pcName) continue;
+                const enemy = _currentState?.characters?.[forceId];
+                if (enemy?.power != null) {
+                    const gap = pcPower - enemy.power;
+                    const gapDesc = gap === 0 ? 'equal'
+                        : gap === -1 ? 'disadvantaged but winnable'
+                        : gap <= -2 ? 'CANNOT win directly — must use established advantages'
+                        : gap === 1 ? 'advantaged'
+                        : 'dominant';
+                    powerAssessment += `\nPC power:${pcPower} vs ${enemy.name || forceId} power:${enemy.power} | Gap:${gap} (${gapDesc})`;
+                }
+            }
+        }
+    }
+
+    // Get combat rules from chatMetadata
+    const { chatMetadata } = SillyTavern.getContext();
+    const combatRules = chatMetadata?.['gravity_combat_rules'] || '';
+
+    // Get PC wounds
+    const pcWounds = _currentState?.pc?.wounds;
+    let woundLine = '';
+    if (pcWounds && typeof pcWounds === 'object' && Object.keys(pcWounds).length) {
+        woundLine = `\nPC wounds: ${Object.entries(pcWounds).map(([k, v]) => `${k}: ${v}`).join(', ')}`;
+    }
+
+    // Build the injection
+    const isSetup = combatCollisions.length === 0;
+
+    _pendingOOCInjection = `[GRAVITY COMBAT — ${pcName} ${isSetup ? 'initiates combat' : 'fights'}.
+
+══ COMBAT ══${powerAssessment || (pcPower != null ? `\nPC power: ${pcPower}` : '')}${woundLine}
+${combatRules ? `\nCOMBAT RULES (this story):\n${combatRules}\n` : ''}
+COMBAT PROTOCOL (extends your Logic + Fairness principles):
+- In your Contest section: assess the PC's action against demonstrated_traits and established preparations from Gravity_State_View. Unearned capability fails or costs.
+- Power gap of 2+: direct combat cannot win. Only advantages established in the ledger (reads, key_moments, world state) can close the gap logically.
+- The enemy fights to their described capability (in cost field). They adapt to repeated tactics. They exploit trait gaps and existing wounds.
+- Every action costs something. No free hits.
+- Distance is elastic (same as narrative collisions). Decrement when the fight's momentum genuinely shifts.
+- At distance 0: arcana fires, decisive moment arrives.
+- Wounds are descriptive via MAP_SET on characters. Track what matters to the story.
+- Combat outcomes ripple into collisions, factions, world state.
+${isSetup ? `
+SETUP TURN: No combat collision exists yet. This turn is SETUP:
+1. CREATE a collision with mode=combat. Establish forces, distance, and threat (in cost field).
+2. SET power on any new enemy characters based on the combat rules above.
+3. Describe the threat and the opening situation.
+4. Do NOT resolve a combat exchange yet — setup is the beat.` : ''}
+Full turn: deduction + prose + ledger block.]`;
+
+    injectPrompt('advance');
+    insertChatMessage(`*${pcName} ${isSetup ? 'prepares to fight.' : 'engages in combat.'}*`);
 }
 
 async function handleGoodTurnButton() {
@@ -1046,6 +1128,7 @@ async function handleImportData(data) {
         onAdvance: handleAdvanceButton,
         onRevertTurn: handleRevertTurn,
         onGoodTurn: handleGoodTurnButton,
+        onCombat: handleCombatButton,
     });
 
     // Setup wizard phase change callback
@@ -1086,12 +1169,14 @@ function createInputButtons() {
     bar.id = 'gl-input-bar';
     bar.innerHTML = `
         <button class="gl-input-btn" id="gl-input-advance" title="Advance — world takes a turn"><i class="fa-solid fa-play"></i> Advance</button>
+        <button class="gl-input-btn" id="gl-input-combat" title="Initiate combat"><i class="fa-solid fa-burst"></i> Combat</button>
         <button class="gl-input-btn" id="gl-input-skip" title="Timeskip"><i class="fa-solid fa-forward"></i> Skip</button>
         <button class="gl-input-btn" id="gl-input-good" title="Flag good prose — paste exemplar"><i class="fa-solid fa-thumbs-up"></i> Good</button>
     `;
     sendForm.insertBefore(bar, sendForm.firstChild);
 
     document.getElementById('gl-input-advance').addEventListener('click', handleAdvanceButton);
+    document.getElementById('gl-input-combat').addEventListener('click', handleCombatButton);
     document.getElementById('gl-input-skip').addEventListener('click', handleTimeskipButton);
     document.getElementById('gl-input-good').addEventListener('click', handleGoodTurnButton);
 }

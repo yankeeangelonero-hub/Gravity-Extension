@@ -7,9 +7,16 @@ import {
     getAllTransactions,
     getTransactionsForEntity,
     getTransactionsInRange,
+    append,
 } from './ledger-store.js';
 
 const OOC_PATTERNS = [
+    { pattern: /ooc:\s*combat\s+setup\s+([\s\S]+)/i, handler: handleCombatSetup },
+    { pattern: /ooc:\s*combat\s+rules\b/i, handler: handleCombatRules },
+    { pattern: /ooc:\s*power\s+(\S+)\s+(\d+)/i, handler: handlePower },
+    { pattern: /ooc:\s*wound\s+(\S+)\s+(\S+)\s+"([^"]+)"/i, handler: handleWound },
+    { pattern: /ooc:\s*wound\s+(\S+)\s+(\S+)\s+(.+)/i, handler: handleWound },
+    { pattern: /ooc:\s*heal\s+(\S+)\s+(\S+)/i, handler: handleHeal },
     { pattern: /ooc:\s*snapshot\b/i, handler: handleSnapshot },
     { pattern: /ooc:\s*rollback\s+to\s+#?(\d+)/i, handler: handleRollbackConfirm },
     { pattern: /ooc:\s*rollback\b/i, handler: handleRollback },
@@ -149,6 +156,95 @@ async function handleConsolidate() {
     const snap = await createSnapshot(state, 'Consolidation checkpoint');
     return `[LEDGER: Consolidated. Snapshot #${snap.id} at tx ${snap.lastTxId}.]`;
 }
+
+// ─── Combat OOC Commands ─────────────────────────────────────────────────────
+
+async function handleCombatSetup(match) {
+    const rulesText = match[1].trim();
+    const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+    chatMetadata['gravity_combat_rules'] = rulesText;
+    await saveMetadata();
+    return `[LEDGER: Combat rules stored.\n\n${rulesText}\n\nThese rules will be injected during combat turns. The LLM should use them to SET power on new characters and scale encounters appropriately.]`;
+}
+
+async function handleCombatRules() {
+    const { chatMetadata } = SillyTavern.getContext();
+    const rules = chatMetadata['gravity_combat_rules'];
+    if (!rules) return `[LEDGER: No combat rules defined. Use "OOC: combat setup <rules>" to set them.]`;
+    return `[LEDGER: Current combat rules:\n\n${rules}]`;
+}
+
+async function handlePower(match) {
+    const entityRef = match[1].trim();  // e.g. "char:dragon" or "pc"
+    const value = parseInt(match[2], 10);
+
+    const isPc = entityRef === 'pc';
+    const entityType = isPc ? 'pc' : entityRef.split(':')[0];
+    const entityId = isPc ? '' : entityRef.split(':')[1];
+
+    if (!isPc && (!entityType || !entityId)) {
+        return `[LEDGER: Invalid entity "${entityRef}". Use format: char:id or pc]`;
+    }
+
+    const tx = {
+        op: 'S',
+        e: entityType,
+        id: entityId,
+        d: { f: 'power', v: value },
+        r: 'OOC power command',
+    };
+    await append([tx]);
+    return `[LEDGER: Power set — ${entityRef} power = ${value}]`;
+}
+
+async function handleWound(match) {
+    const entityRef = match[1].trim();  // e.g. "char:jack" or "pc"
+    const key = match[2].trim();        // e.g. "arm" or "left_leg"
+    const value = match[3].trim();      // e.g. "deep gash"
+
+    const isPc = entityRef === 'pc';
+    const entityType = isPc ? 'pc' : entityRef.split(':')[0];
+    const entityId = isPc ? '' : entityRef.split(':')[1];
+
+    if (!isPc && (!entityType || !entityId)) {
+        return `[LEDGER: Invalid entity "${entityRef}". Use format: char:id or pc]`;
+    }
+
+    const tx = {
+        op: 'MS',
+        e: entityType,
+        id: entityId,
+        d: { f: 'wounds', k: key, v: value },
+        r: 'OOC wound command',
+    };
+    await append([tx]);
+    return `[LEDGER: Wound added — ${entityRef} wounds.${key} = "${value}"]`;
+}
+
+async function handleHeal(match) {
+    const entityRef = match[1].trim();
+    const key = match[2].trim();
+
+    const isPc = entityRef === 'pc';
+    const entityType = isPc ? 'pc' : entityRef.split(':')[0];
+    const entityId = isPc ? '' : entityRef.split(':')[1];
+
+    if (!isPc && (!entityType || !entityId)) {
+        return `[LEDGER: Invalid entity "${entityRef}". Use format: char:id or pc]`;
+    }
+
+    const tx = {
+        op: 'MR',
+        e: entityType,
+        id: entityId,
+        d: { f: 'wounds', k: key },
+        r: 'OOC heal command',
+    };
+    await append([tx]);
+    return `[LEDGER: Wound healed — ${entityRef} wounds.${key} removed]`;
+}
+
+// ─── Utility ─────────────────────────────────────────────────────────────────
 
 function summarizeTxData(tx) {
     if (!tx.d) return '';

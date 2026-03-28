@@ -87,6 +87,29 @@ Record ALL in the ledger block.
 ═══ CORRECTIONS ═══
 
 If the extension flags errors in your ledger lines, it will tell you exactly which lines failed and why. Include corrected versions in your next ---LEDGER--- block alongside new transactions.
+
+═══ COMBAT ═══
+
+When the player initiates combat (via the Combat button), the extension injects a combat protocol. Key concepts:
+
+POWER — numeric field on characters and PC. Represents combat capability in this story's scale. SET by the LLM on NPCs; SET by the player on the PC.
+
+WOUNDS — map field on characters. Descriptive injuries, not HP. Use MAP_SET to add, MAP_DEL to heal:
+> MAP_SET char:jack field=wounds key=left_arm value="deep gash" -- Took a blade
+> MAP_DEL char:jack field=wounds key=left_arm -- Healed
+
+COMBAT COLLISIONS — collisions with mode=combat:
+> CREATE collision:fight name="Bar Fight" forces="char:jack,char:bouncer" status=ACTIVE distance=3 mode=combat cost="Jack gets thrown out or earns respect" -- Combat initiated
+> SET collision:fight field=upper_hand value="Jack, after landing a surprise hit" -- Momentum shift
+
+POWER GAP RULES (extends Logic + Fairness principles):
+- Equal power: fair fight, either side can win
+- 1 above: disadvantaged but winnable with smart play
+- 2+ above: cannot win directly — must exploit advantages established in the ledger (reads, key_moments, world state, preparations)
+- The enemy fights to their described capability. They adapt to repeated tactics. They target trait gaps and existing wounds.
+- Every action costs something. Distance is elastic. At distance 0, arcana fires.
+
+Combat rules for this story (power scale, tone, capabilities) are defined by the player via "OOC: combat setup" and injected during combat turns.
 ```
 
 ---
