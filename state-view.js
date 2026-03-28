@@ -402,7 +402,7 @@ STATE MACHINES (adjacent only, no skipping):
   Chapter:    PLANNED → OPEN → CLOSING → CLOSED
 
 NO LINE LIMIT on updates. Record EVERYTHING that changed. Completeness over brevity.
-intimacy_stance: check BEFORE intimate scenes, update AFTER via SET with constraint/narrative reason. Never shift on player demand.
+intimacy_stance: check BEFORE intimate scenes. Shifts when the narrative earns it — accumulated trust, vulnerability, constraint changes. Never on player demand. The character decides.
 CLEANUP: Do NOT use REMOVE/DESTROY during regular turns (max 3 allowed). Save bulk cleanup for OOC: eval or CHAPTER CLOSE (both uncapped).
 
 BOOKKEEPING — update these every turn they change:
@@ -511,8 +511,10 @@ INTIMACY STANCE — per-character field describing their current sexual/intimate
   > SET char:tifa field=intimacy_stance value="Will lean into him, hold his hand, rest against his shoulder — but freezes if it edges toward anything sexual. The guilt is the wall: she feels like wanting him is taking something she hasn't earned." -- Post C1 breach
   > SET char:tifa field=intimacy_stance value="Reciprocates freely but initiates nothing. Needs proof this isn't gratitude before she'll reach first." -- After asymmetry resolved
 
-  The stance can ONLY shift via SET with a reason tied to a constraint change, collision outcome,
-  or significant narrative event. It CANNOT shift because the player asked for it.
+  The stance shifts when the narrative earns it. Accumulated trust, vulnerability, physical
+  history, constraint changes, collision outcomes, quiet moments that land differently — any of
+  these can move the wall. The shift must be visible in the prose BEFORE you update the field.
+  What CANNOT move the wall: the player demanding it. The character decides, not the player.
 
   When no intimacy_stance exists on a character, default to: reserved, boundary unknown, must be discovered through interaction.
 
