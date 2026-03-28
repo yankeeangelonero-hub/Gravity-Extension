@@ -80,7 +80,7 @@ const ARCANA_TABLE = [
 function drawDivination() {
     const system = (_currentState?.divination?.active_system || 'arcana').toLowerCase();
 
-    const COOL_RULE = 'Rule of Cool: find the most interesting, unexpected, or stylish intersection of this draw with the current scene. Not the safest reading — the coolest one.';
+    const COOL_RULE = 'NARRATIVE FORCING: The draw must visibly alter the scene — not just color the mood. Something HAPPENS because of this draw. A person appears, a plan fails, a door opens, a body drops, a truth surfaces. The draw is not a metaphor — it is an event. Find the coolest, most unexpected intersection with the current scene and MAKE IT HAPPEN in the prose.';
 
     if (system === 'iching' || system === 'i_ching' || system === 'i ching') {
         const num = Math.floor(Math.random() * 64) + 1; // 1-64
