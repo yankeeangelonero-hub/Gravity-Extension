@@ -116,49 +116,57 @@ function checkAndRotate(state) {
  * @returns {string}
  */
 function buildConsolidationPrompt(pendingBatches) {
-    const parts = [`[MEMORY CONSOLIDATION — The following entries have been archived to cold storage.
-Your job: write ONE consolidated summary per batch (3-5 sentences) that preserves:
-- Key events and turning points
-- Emotional texture and character dynamics
-- Specific details that make moments recoverable (not generic)
-Tag each: "[CONSOLIDATED: label]"
-APPEND to summary in your ledger block. These replace the archived entries in the LLM's memory.\n`];
+    const parts = [`[ARC SUMMARY NEEDED — The following timeline entries have been archived.
+Your job: write ONE arc summary per batch that REPLACES these entries in the LLM's memory.
+This is NOT a log. It's a compressed narrative arc — the story of what happened across these beats.
+
+Each arc summary MUST include (8-12 sentences):
+1. The arc's shape: what started, what built, what broke or resolved
+2. Relationship movements: who got closer, who pulled away, what trust was earned or spent
+3. Constraint events: which constraints were tested, what held, what cracked
+4. Collision history: what tensions drove this arc, what detonated, what spawned
+5. The emotional trajectory: how the characters FELT across this arc, not just what they did
+6. 2-3 specific moments that carry the arc's weight — physical details, exact words, gestures
+7. What this arc left behind: unresolved threads, changed dynamics, new shapes
+
+Tag: "[ARC: timerange]"
+This arc summary is the ONLY record of these events the LLM will see. Make it count.\n`];
 
     for (const batch of pendingBatches) {
         const entries = batch.entries.map(e => {
             if (typeof e === 'object') return e.text || e.t || JSON.stringify(e);
             return String(e);
         });
-        parts.push(`ARCHIVED BATCH: ${batch.label} (${batch.count} entries)`);
+        parts.push(`ARCHIVED ENTRIES: ${batch.label} (${batch.count} entries)`);
         parts.push(entries.map(e => `  - ${e}`).join('\n'));
-        parts.push(`→ APPEND summary value="[CONSOLIDATED: ${batch.label}] your 3-5 sentence summary here"\n`);
+        parts.push(`→ APPEND summary value="[ARC: timerange] your 8-12 sentence arc summary here"\n`);
     }
 
-    parts.push('Do this ALONGSIDE your normal prose and ledger updates — it does not replace them.]');
+    parts.push('Write the arc summary ALONGSIDE your normal prose and ledger updates.]');
     return parts.join('\n');
 }
 
 /**
  * Get the hot (visible) portion of a tiered array.
- * Returns: { hot: Array, consolidated: Array }
+ * Returns: { hot: Array, arcs: Array }
  * @param {string} key - tier config key
  * @param {Object} state - current state
- * @returns {{ hot: Array, consolidated: Array }}
+ * @returns {{ hot: Array, arcs: Array }}
  */
 function getHotView(key, state) {
     const cfg = TIER_CONFIG[key];
-    if (!cfg) return { hot: [], consolidated: [] };
+    if (!cfg) return { hot: [], arcs: [] };
 
     const arr = cfg.getArray(state);
     const hot = arr.slice(-cfg.hotCap);
 
-    // Find consolidated entries (tagged with [CONSOLIDATED:])
+    // Find arc summary entries (tagged with [ARC:] or legacy [CONSOLIDATED:])
     const consolidated = hot.filter(e => {
         const text = typeof e === 'object' ? (e.text || '') : String(e);
-        return text.includes('[CONSOLIDATED:');
+        return text.includes('[ARC:') || text.includes('[CONSOLIDATED:');
     });
 
-    return { hot, consolidated };
+    return { hot, arcs };
 }
 
 /**

@@ -328,7 +328,7 @@ function formatStateView(state, mode = 'full') {
         const regular = [];
         for (const s of timeline) {
             const text = typeof s === 'object' ? (s.text || '') : String(s);
-            if (text.includes('[CONSOLIDATED:')) {
+            if (text.includes('[ARC:')) {
                 consolidated.push(s);
             } else {
                 regular.push(s);
