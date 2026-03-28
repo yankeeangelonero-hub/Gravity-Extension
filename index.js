@@ -1048,18 +1048,15 @@ C. ARC EVALUATION — honest narrative self-assessment:
    - Collisions: which resolved, which didn't, which spawned
 
 D. FACTION POLITICS — simulate the macro layer:
-   For EACH active faction, evaluate based on this chapter's events:
-   1. POWER SHIFT: Did this faction gain or lose ground? Update power field (rising/stable/declining/collapsed).
-   2. MOMENTUM: What is the faction now actively pursuing? Update momentum field.
-   3. RELATIONS: Did alliances shift? New rivalries? Betrayals? Update relations map via MAP_SET.
-   4. LAST MOVE: What did this faction DO this chapter, even offscreen? Update last_move.
-   5. LEVERAGE & VULNERABILITY: Did these change? Update if so.
+   For EACH active faction, REWRITE its profile paragraph based on this chapter's events:
+   > SET faction:id field=profile value="[full updated paragraph: objective, power, resources, momentum (include what they did this chapter), leverage, vulnerability, stance toward PC]"
+   Update relations map via MAP_SET for any shifts.
 
    Then SIMULATE inter-faction dynamics:
    - Factions with hostile relations actively undermine each other
    - A declining faction gets desperate — desperate factions make reckless moves
    - A rising faction attracts rivals AND supplicants
-   - Check pc.reputation — the PC's standing colors every faction's calculus
+   - How do factions view the PC now? Update via READ on faction entities.
 
    PRESSURE POINT GENERATION — collision fuel for the next chapter:
    From the faction simulation, generate 2-4 NEW pressure points that:
@@ -1098,22 +1095,20 @@ A. SANITY CHECK the player's requested starting point:
    - If not: explain why and propose the closest realistic alternative.
 
 B. TIMESKIP to the new starting point:
-   - Advance all tracked characters (DOING, constraints, reads, stance)
-   - Advance all collisions (compress distances, check for arrivals)
-   - Advance world (factions, world state, pressure points)
-   - Advance faction politics: each faction executes its MOMENTUM during the skip.
-     Update relations based on timeskip duration. Factions with conflicting objectives
-     in the same territory create new pressure points. A rising faction may absorb
-     or squeeze a declining one.
+   - Advance all tracked characters (SET doing, location, condition, reads)
+   - Advance all constraints (MOVE integrity if pressure accumulated)
+   - Advance all collisions (compress distances, SET details if shape changed)
+   - Rewrite faction profiles (SET profile — each faction acts during the skip)
+   - Advance world (SET world_state, APPEND/REMOVE pressure_points)
    - Check: would any interruption logically occur during the skip?
 
 C. EMIT LEDGER BLOCK:
    - MOVE chapter: OPEN->CLOSING->CLOSED for old chapter
-   - CREATE new chapter (number, title, status=OPEN, arc, central_tension, target_collisions)
+   - CREATE new chapter with profile: SET chapter:id field=profile value="[number, title, arc, central tension]"
    - All timeskip advances (SET/MOVE on characters, collisions, world)
-   - Faction updates (SET power/momentum/last_move, MAP_SET relations on each faction)
-   - APPEND summary with chapter summary
-   - APPEND pc timeline entries for skip period
+   - Faction profile rewrites (SET profile on each faction, MAP_SET relations)
+   - APPEND summary with chapter arc summary (rich, 3-5 sentences)
+   - UPDATE pc current_scene for the new opening
 
 D. WRITE the opening of the new chapter — the player lands in the result, not a summary. Full deduction + prose + ledger block.]`;
 

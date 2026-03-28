@@ -17,6 +17,9 @@
 
 const LEDGER_BLOCK_PATTERN = /[-—–]{2,3}\s*LEDGER\s*(?:BLOCK)?\s*[-—–]{2,3}([\s\S]*?)[-—–]{2,3}\s*END\s*LEDGER\s*[-—–]{2,3}/i;
 
+// Deduction block pattern — stripped from chat display (not parsed, just removed)
+const DEDUCTION_BLOCK_PATTERN = /[-—–]{2,3}\s*DEDUCTION\s*[-—–]{2,3}[\s\S]*?[-—–]{2,3}\s*END\s*DEDUCTION\s*[-—–]{2,3}/i;
+
 const LEDGER_BLOCK_FALLBACKS = [
     /```ledger\s*\n?([\s\S]*?)```/i,
     /\[LEDGER\]([\s\S]*?)\[\/LEDGER\]/i,
@@ -261,11 +264,15 @@ function extractLedgerBlock(message) {
     }
 
     if (!match) {
-        return { found: false, transactions: [], errors: [], drifted: false, cleanedMessage: message };
+        // Still strip deduction block even if no ledger block found
+        const cleanedMsg = message.replace(DEDUCTION_BLOCK_PATTERN, '').trim();
+        return { found: false, transactions: [], errors: [], drifted: false, cleanedMessage: cleanedMsg };
     }
 
     const rawContent = match[1].trim();
-    const cleanedMessage = message.replace(match[0], '').trim();
+    // Strip both ledger block and deduction block from displayed message
+    let cleanedMessage = message.replace(match[0], '').trim();
+    cleanedMessage = cleanedMessage.replace(DEDUCTION_BLOCK_PATTERN, '').trim();
 
     // Check for format drift
     if (!drifted && match[0]) {
