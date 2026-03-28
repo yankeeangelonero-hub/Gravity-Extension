@@ -164,7 +164,13 @@ async function handleCombatSetup(match) {
     const { chatMetadata, saveMetadata } = SillyTavern.getContext();
     chatMetadata['gravity_combat_rules'] = rulesText;
     await saveMetadata();
-    return `[LEDGER: Combat rules stored.\n\n${rulesText}\n\nThese rules will be injected during combat turns. The LLM should use them to SET power on new characters and scale encounters appropriately.]`;
+    return `[LEDGER: Combat rules stored.
+
+${rulesText}
+
+SET power on all existing characters based on this scale. Use the entity IDs from Gravity_State_View.
+
+IMPORTANT: Do NOT invent dice systems, HP tracks, condition tracks, roll tables, or any mechanical resolution system. Gravity combat is NARRATIVE — the power scale is a reference for YOU to judge outcomes using the Logic and Fairness principles, not a modifier for dice rolls. Wounds are descriptive strings (MAP_SET field=wounds), not HP tiers. There are no dice in this system.]`;
 }
 
 async function handleCombatRules() {
