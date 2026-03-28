@@ -1045,6 +1045,14 @@ PROSE RULES:
 - Character first — how they have sex IS characterization.
 - The partner is NOT passive — every 2-3 turns, skip choices and let partner act.
 
+BODY DESCRIPTION — verbose, specific, present:
+- Describe the body as it appears RIGHT NOW in the scene. Not a catalog — what the POV character notices, what the light catches, what changes under touch.
+- Breasts: shape, weight, how they move with breathing or motion, how they respond to touch (skin texture, areola color/size, nipple response to temperature/contact/arousal). How they feel in a hand, against a chest, under a mouth. The specific difference between clothed and bare.
+- All body description through the lens of the person experiencing it — what catches their breath, what their hands discover, what surprises them.
+- Skin: temperature shifts, goosebumps, flush patterns (where color rises first), how sweat changes texture.
+- Sound: involuntary sounds mapped to specific stimuli. What makes her gasp vs. what makes her go quiet. The sounds she doesn't know she's making.
+- Anatomical precision. No euphemisms. The vocabulary of bodies, not poetry about them.
+
 PARTNER INTERIORITY: Every 2-3 turns, short italicized first-person block from partner's perspective. 2-4 sentences. Raw internal experience from dossier and constraints.
 
 CHOICE FRAMEWORKS (rotate based on scene phase):
