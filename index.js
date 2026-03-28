@@ -1036,6 +1036,7 @@ Do NOT close the chapter. The story continues.]`;
 
 async function handleChapterCloseButton() {
     _uncappedTurn = true;
+    const chapterDraw = drawDivination();
     _pendingOOCInjection = `[SYSTEM OVERRIDE: The user has requested a chapter close. Pause narrative and execute the full chapter transition protocol across multiple responses.
 
 ═══ RESPONSE 1 — EVALUATION (this turn) ═══
@@ -1096,6 +1097,14 @@ E. ASK THE PLAYER — present choices for the next chapter:
    Answer as much or as little as you want. Silence = I decide.
 
 ═══ RESPONSE 2 — TRANSITION (after player answers) ═══
+
+${chapterDraw.label}: ${chapterDraw.reading}
+This draw shapes the TONE AND DIRECTION of the next chapter — not specific events, but the forces at play. Use it to guide:
+- What kind of chapter this will be (upheaval, introspection, acceleration, reckoning)
+- How faction dynamics shift during the transition
+- What collisions tighten or emerge
+- The emotional register of the opening scene
+Record the draw: SET divination field=last_draw value="[draw result]"
 
 A. SANITY CHECK the player's requested starting point:
    - Is it reachable given current world state, character positions, and timeline?
