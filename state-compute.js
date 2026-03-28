@@ -61,7 +61,6 @@ function createEmptyState() {
         pc: {
             name: '',
             demonstrated_traits: [],
-            knowledge_gaps: [],
             current_scene: '',
         },
         divination: {

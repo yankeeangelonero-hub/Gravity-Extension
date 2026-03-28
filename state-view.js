@@ -118,11 +118,6 @@ function formatStateView(state, mode = 'full') {
         if (Object.keys(slimWounds).length) {
             lines.push(`    Wounds: ${Object.entries(slimWounds).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
         }
-        const gaps = Array.isArray(state.pc.knowledge_gaps) ? state.pc.knowledge_gaps : [];
-        if (gaps.length) {
-            lines.push(`    DOES NOT KNOW:`);
-            for (const g of gaps) lines.push(`      - ${g}`);
-        }
     } else {
         lines.push('  pc — (not initialized)');
     }
@@ -278,11 +273,6 @@ function formatStateView(state, mode = 'full') {
             if (state.pc.location) lines.push(`  Location: ${state.pc.location}`);
             if (state.pc.condition) lines.push(`  Condition: ${state.pc.condition}`);
             if (state.pc.equipment) lines.push(`  Equipment: ${state.pc.equipment}`);
-            const fullGaps = Array.isArray(state.pc.knowledge_gaps) ? state.pc.knowledge_gaps : [];
-            if (fullGaps.length) {
-                lines.push(`  DOES NOT KNOW:`);
-                for (const g of fullGaps) lines.push(`    - ${g}`);
-            }
             // Traits — show last 10 in full mode (older are in cold storage)
             const allTraits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
             const traits = allTraits.slice(-10);
@@ -422,11 +412,8 @@ BOOKKEEPING — update these EVERY turn:
   SET char:id field=location value="[where this NPC is]" -- for TRACKED+ in scene
   SET char:id field=condition value="[physical + emotional state]" -- for scene-active characters
   MAP_SET world field=constants key=active_mission value="[objective, assignments, phase]" -- when on mission
-  APPEND pc field=knowledge_gaps value="[info PC does not know]" -- when new secret introduced
-  REMOVE pc field=knowledge_gaps value="[info]" -- when PC discovers it
-Check pc.knowledge_gaps EVERY turn. The PC CANNOT act on information listed there.
-
 key_moments are PERMANENT. NEVER remove them. They are the character's lived history.
+KNOWLEDGE FIREWALL: Before any NPC acts, confirm what they could plausibly know. The PC is player-controlled — the player decides what they know.
 noticed_details are TEMPORARY. Fire them in scenes, then REMOVE.
 
 ═══ END QUICK REFERENCE ═══`;

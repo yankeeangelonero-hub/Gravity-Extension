@@ -69,31 +69,29 @@ function checkAndRotate(state) {
         if (arr.length <= cfg.hotCap) continue;
 
         const overflow = arr.length - cfg.hotCap;
-        const batchCount = Math.ceil(overflow / cfg.batchSize);
 
-        for (let b = 0; b < batchCount; b++) {
-            const start = b * cfg.batchSize;
-            const end = Math.min(start + cfg.batchSize, overflow);
-            const batch = arr.slice(start, end);
+        // Slice the oldest entries (everything before the hot cap)
+        const batch = arr.slice(0, overflow);
+        if (batch.length === 0) continue;
 
-            if (batch.length === 0) continue;
+        // Copy to cold storage
+        const coldKey = key === 'story_summary' ? 'summaries'
+            : key === 'pc_timeline' ? 'timeline'
+            : key === 'pc_traits' ? 'traits'
+            : 'summaries';
+        cold[coldKey].push(...batch);
 
-            // Move originals to cold storage
-            const coldKey = key === 'story_summary' ? 'summaries'
-                : key === 'pc_timeline' ? 'timeline'
-                : key === 'pc_traits' ? 'traits'
-                : 'summaries';
-            cold[coldKey].push(...batch);
+        // REMOVE from hot — splice the oldest entries out of the source array
+        arr.splice(0, overflow);
 
-            pendingBatches.push({
-                key,
-                label: cfg.label,
-                entries: batch,
-                count: batch.length,
-            });
-        }
+        pendingBatches.push({
+            key,
+            label: cfg.label,
+            entries: batch,
+            count: batch.length,
+        });
 
-        console.log(`${LOG_PREFIX} Rotated ${overflow} entries from ${cfg.label} to cold storage, kept condensed summaries in hot.`);
+        console.log(`${LOG_PREFIX} Rotated ${overflow} entries from ${cfg.label} to cold. Hot now: ${arr.length}`);
     }
 
     // key_moments are PERMANENT — never rotated, never trimmed.
