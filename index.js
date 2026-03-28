@@ -473,6 +473,8 @@ async function initialize(force = false) {
     _turnCounter = 0;
     _pendingCorrections = [];
     _pendingReinforcement = null;
+    _pendingOOCInjection = null;
+    _uncappedTurn = false;
     _firedCollisionArrivals = new Set();
 
     if (!chatId) {

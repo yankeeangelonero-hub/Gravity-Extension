@@ -166,7 +166,7 @@ function getHotView(key, state) {
         return text.includes('[ARC:') || text.includes('[CONSOLIDATED:');
     });
 
-    return { hot, arcs };
+    return { hot, arcs: consolidated };
 }
 
 /**
