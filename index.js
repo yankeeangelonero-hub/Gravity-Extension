@@ -16,6 +16,7 @@ import { extractLedgerBlock, getReinforcement, buildCorrectionInjection } from '
 import { processOOC } from './ooc-handler.js';
 import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
+import { checkAndRotate, buildConsolidationPrompt } from './memory-tier.js';
 
 const MODULE_NAME = 'gravity-ledger';
 const LOG_PREFIX = '[GravityLedger]';
@@ -395,6 +396,7 @@ WHAT TO TRACK — emit in PRIORITY ORDER (budget: 20 lines):
 12. Intimate history after intimate scenes (MAP_SET intimate_history)
 
 HOUSEKEEPING: If your updates use FEWER than 20 lines, use remaining budget for REMOVEs — prune fired pressure points, stale noticed details, resolved entries. If updates already hit 20, skip cleanup — save it for chapter close. During CHAPTER CLOSE: unlimited cleanup, consolidate aggressively.
+STALE CHECK: Are location, condition, equipment, doing still accurate? If not, update them.
 If nothing changed: (empty)]`,
                 PROMPT_IN_CHAT, 0);
         } else {
@@ -593,6 +595,14 @@ async function onMessageReceived(messageId) {
         }
     }
 
+    // Memory tiering — check if hot arrays exceeded caps, rotate to cold
+    const rotation = checkAndRotate(_currentState);
+    if (rotation.needsConsolidation) {
+        const consolidationPrompt = buildConsolidationPrompt(rotation.pendingBatches);
+        _pendingReinforcement = (_pendingReinforcement || '') + '\n' + consolidationPrompt;
+        _uncappedTurn = true; // Allow large ledger block for consolidation
+    }
+
     // Check array sizes and warn if bloated
     const sizeWarnings = checkArraySizes(_currentState);
 
@@ -628,7 +638,7 @@ async function onUserMessage(messageId) {
 
     const result = await processOOC(message.mes);
     if (result.handled && result.injection) {
-        _uncappedTurn = /ooc:\s*eval\b/i.test(message.mes);
+        _uncappedTurn = /ooc:\s*(eval|cleanup)\b/i.test(message.mes);
         _pendingReinforcement = result.injection;
         _currentState = computeCurrentState();
         injectPrompt();

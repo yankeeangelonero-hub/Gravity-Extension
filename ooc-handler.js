@@ -103,8 +103,14 @@ async function handleEval() {
         lines.push(`  ⊕ ${col.name || col.id} [${col.status}] dist:${col.distance || '?'}`);
     }
     lines.push('');
-    lines.push('AUDIT FOR: continuity errors, missing/ghost state, rule violations, stale data.');
-    lines.push('TO FIX: emit AMEND in ---LEDGER--- block.');
+    lines.push('AUDIT AND CLEANUP (uncapped — no line limit this turn):');
+    lines.push('1. CONTINUITY: Check for errors, missing/ghost state, rule violations, stale fields.');
+    lines.push('2. STALE FIELDS: Review ALL location, condition, equipment, doing fields. Update any that are outdated.');
+    lines.push('3. KNOWLEDGE GAPS: Verify pc.knowledge_gaps is accurate — add missing gaps, remove discovered ones.');
+    lines.push('4. PRUNE: REMOVE fired pressure points, stale noticed details, resolved entries, duplicate summaries.');
+    lines.push('5. CONSOLIDATE: If story_summary exceeds 30 entries, consolidate oldest batches into 3-5 sentence overviews.');
+    lines.push('6. FIX: emit AMEND for any continuity errors found.');
+    lines.push('This turn is UNCAPPED — emit as many ledger lines as needed for a thorough cleanup.');
     lines.push('═══ END EVALUATION ═══');
     return lines.join('\n');
 }

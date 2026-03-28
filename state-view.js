@@ -70,8 +70,7 @@ function formatStateView(state, mode = 'full') {
         lines.push('');
         lines.push('Collisions:');
         for (const col of allCollisions) {
-            let colLine = `  ${col.name || col.id} [${col.status}]`;
-            if (!slim) colLine += ` dist:${col.distance || '?'}`;
+            let colLine = `  ${col.name || col.id} [${col.status}] dist:${col.distance || '?'}`;
             if (col.mode === 'combat') colLine += ' ⚔';
             colLine += ` → id: ${col.id}`;
             lines.push(colLine);
@@ -97,6 +96,16 @@ function formatStateView(state, mode = 'full') {
         if (state.pc.location) pcSingleton += ` @ ${state.pc.location}`;
         if (state.pc.condition) pcSingleton += ` [${state.pc.condition}]`;
         lines.push(pcSingleton);
+        if (state.pc.equipment) lines.push(`    Equipment: ${state.pc.equipment}`);
+        const slimWounds = (state.pc.wounds && typeof state.pc.wounds === 'object') ? state.pc.wounds : {};
+        if (Object.keys(slimWounds).length) {
+            lines.push(`    Wounds: ${Object.entries(slimWounds).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
+        }
+        const gaps = Array.isArray(state.pc.knowledge_gaps) ? state.pc.knowledge_gaps : [];
+        if (gaps.length) {
+            lines.push(`    DOES NOT KNOW:`);
+            for (const g of gaps) lines.push(`      - ${g}`);
+        }
     } else {
         lines.push('  pc — (not initialized)');
     }
@@ -227,9 +236,17 @@ function formatStateView(state, mode = 'full') {
             if (state.pc.location) lines.push(`  Location: ${state.pc.location}`);
             if (state.pc.condition) lines.push(`  Condition: ${state.pc.condition}`);
             if (state.pc.equipment) lines.push(`  Equipment: ${state.pc.equipment}`);
-            const traits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
+            const fullGaps = Array.isArray(state.pc.knowledge_gaps) ? state.pc.knowledge_gaps : [];
+            if (fullGaps.length) {
+                lines.push(`  DOES NOT KNOW:`);
+                for (const g of fullGaps) lines.push(`    - ${g}`);
+            }
+            // Traits — show last 10 in full mode (older are in cold storage)
+            const allTraits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
+            const traits = allTraits.slice(-10);
             if (traits.length) {
-                lines.push(`  Traits: ${traits.join(', ')}`);
+                const traitPrefix = allTraits.length > 10 ? `  Traits (${allTraits.length} total, showing last 10): ` : '  Traits: ';
+                lines.push(`${traitPrefix}${traits.join(', ')}`);
             }
             const rep = (state.pc.reputation && typeof state.pc.reputation === 'object' && !Array.isArray(state.pc.reputation)) ? state.pc.reputation : {};
             if (Object.keys(rep).length) {
@@ -246,13 +263,29 @@ function formatStateView(state, mode = 'full') {
         }
     }
 
-    // Story Summary — slim: last 2 entries, full: all
+    // Story Summary — tiered display
+    // Slim: last 3 entries. Full: consolidated + last 10.
     const summary = Array.isArray(state.story_summary) ? state.story_summary : [];
     if (summary.length) {
-        const entries = slim ? summary.slice(-2) : summary;
+        // Separate consolidated entries (tagged [CONSOLIDATED:]) from regular
+        const consolidated = [];
+        const regular = [];
+        for (const s of summary) {
+            const text = typeof s === 'object' ? (s.text || '') : String(s);
+            if (text.includes('[CONSOLIDATED:')) {
+                consolidated.push(s);
+            } else {
+                regular.push(s);
+            }
+        }
+
+        const displayEntries = slim
+            ? regular.slice(-3)
+            : [...consolidated, ...regular.slice(-10)];
+
         lines.push('');
-        lines.push(slim ? 'RECENT STORY' : 'STORY SO FAR');
-        for (const s of entries) {
+        lines.push(slim ? 'RECENT STORY' : `STORY SO FAR (${summary.length} total, showing ${displayEntries.length})`);
+        for (const s of displayEntries) {
             const text = typeof s === 'object' ? s.text : s;
             const time = typeof s === 'object' ? (s.t || '') : '';
             lines.push(`  ${time ? time + ' ' : ''}${text}`);
@@ -313,6 +346,9 @@ BOOKKEEPING — update these every turn they change:
   SET pc field=equipment value="[current gear, weapons, materia, consumables with counts]"
   SET char:id field=location value="[where this NPC is]" -- for TRACKED+ in the scene
   MAP_SET world field=constants key=active_mission value="[current objective, team assignments, phase]" -- when on a mission; REMOVE when complete
+  APPEND pc field=knowledge_gaps value="[info PC does not know]" -- when new secret/hidden info introduced
+  REMOVE pc field=knowledge_gaps value="[info]" -- when PC discovers it
+Check pc.knowledge_gaps EVERY turn. The PC CANNOT act on information listed there.
 
 ═══ END QUICK REFERENCE ═══`;
 }
