@@ -341,11 +341,10 @@ function injectPrompt(mode) {
             }
 
             if (arrivals.length > 0) {
-                const blocks = arrivals.map(a =>
-                    `═══ COLLISION ARRIVAL: "${a.col.name || a.id}" ═══
-Forces: ${a.forces}
-Cost: ${a.col.cost || 'unspecified'}
-${a.col.target_constraint ? `Target constraint: ${a.col.target_constraint}` : ''}
+                const blocks = arrivals.map(a => {
+                    const colDetails = a.col.details || `Forces: ${a.forces}\nCost: ${a.col.cost || 'unspecified'}${a.col.target_constraint ? `\nTarget constraint: ${a.col.target_constraint}` : ''}`;
+                    return `═══ COLLISION ARRIVAL: "${a.col.name || a.id}" ═══
+${colDetails}
 
 ${a.draw.label}: ${a.draw.reading}
 
@@ -362,8 +361,8 @@ WHAT HAPPENS NEXT depends on what the confrontation produces:
 • COSTLY — someone paid. MOVE to RESOLVED. Record the cost.
 • EVOLUTION — reveals a different tension. MOVE to RESOLVED, CREATE a new collision from what surfaced.
 
-No collision survives detonation.`
-                ).join('\n\n');
+No collision survives detonation.`;
+                }).join('\n\n');
 
                 setExtensionPrompt(`${MODULE_NAME}_arrival`, blocks, PROMPT_IN_CHAT, 0);
                 console.log(`${LOG_PREFIX} Collision arrival fired for: ${arrivals.map(a => a.id).join(', ')}`);
@@ -755,12 +754,10 @@ function handleAdvanceButton() {
 
     if (ripeCollisions.length > 0) {
         // Advance = collision detonation. The ripe collision IS the thing that happens.
-        const collisionBlocks = ripeCollisions.map(a =>
-            `COLLISION: "${a.col.name || a.id}"
-Forces: ${a.forces}
-Cost: ${a.col.cost || 'unspecified'}
-${a.col.target_constraint ? `Target constraint: ${a.col.target_constraint}` : ''}`
-        ).join('\n\n');
+        const collisionBlocks = ripeCollisions.map(a => {
+            const colDetails = a.col.details || `Forces: ${a.forces}\nCost: ${a.col.cost || 'unspecified'}${a.col.target_constraint ? `\nTarget constraint: ${a.col.target_constraint}` : ''}`;
+            return `COLLISION: "${a.col.name || a.id}"\n${colDetails}`;
+        }).join('\n\n');
 
         _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} yields the turn. The world moves.
 
@@ -788,10 +785,10 @@ Record the draw: SET divination field=last_draw value="[draw result]"
 Full turn: deduction + prose + ledger block.]`;
     } else if (inProgressCollisions.length > 0) {
         // Collision already detonated but not resolved — player is yielding, push it forward
-        const collisionBlocks = inProgressCollisions.map(a =>
-            `"${a.col.name || a.id}" [${a.col.status}] — Forces: ${a.forces}
-Cost: ${a.col.cost || 'unspecified'}`
-        ).join('\n');
+        const collisionBlocks = inProgressCollisions.map(a => {
+            const colDetails = a.col.details || `Forces: ${a.forces} | Cost: ${a.col.cost || 'unspecified'}`;
+            return `"${a.col.name || a.id}" [${a.col.status}] — ${colDetails}`;
+        }).join('\n');
 
         _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} yields the turn. A collision is in progress.
 

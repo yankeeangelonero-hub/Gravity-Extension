@@ -190,11 +190,18 @@ function formatStateView(state, mode = 'full') {
             lines.push('');
             lines.push('COLLISIONS');
             for (const col of liveCollisions) {
-                const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(' → ') : String(col.forces || '');
-                lines.push(`  ⊕ ${col.name || col.id} | ${forces} | dist:${col.distance || '?'} | ${col.status}`);
-                if (col.mode === 'combat') lines.push(`    Mode: COMBAT${col.upper_hand ? ` | Upper hand: ${col.upper_hand}` : ''}`);
-                if (col.cost) lines.push(`    Cost: ${col.cost}`);
-                if (col.target_constraint) lines.push(`    Targets: ${col.target_constraint}`);
+                lines.push(`  ⊕ ${col.name || col.id} [${col.status}] dist:${col.distance || '?'} → id: ${col.id}`);
+                if (col.details) {
+                    // New: single details paragraph
+                    lines.push(`    ${col.details}`);
+                } else {
+                    // Legacy: separate fields
+                    const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(' → ') : String(col.forces || '');
+                    if (forces) lines.push(`    Forces: ${forces}`);
+                    if (col.mode === 'combat') lines.push(`    Mode: COMBAT${col.upper_hand ? ` | Upper hand: ${col.upper_hand}` : ''}`);
+                    if (col.cost) lines.push(`    Cost: ${col.cost}`);
+                    if (col.target_constraint) lines.push(`    Targets: ${col.target_constraint}`);
+                }
             }
         }
 
@@ -361,7 +368,11 @@ FIELD MERGES — use these combined fields:
     Include: objective, power, resources, momentum, leverage, vulnerability, stance toward PC.
     Rewrite WHOLE paragraph during chapter close or advance. One SET, not seven.
     relations{} stays separate (MAP_SET for inter-faction stances).
-  Do NOT use separate cost, stance_toward_pc, last_move, or pc.reputation fields.
+  collision details: single paragraph. SET collision:id field=details value="[full description]"
+    Include: name, forces, cost/stakes, target constraint, mode (combat/narrative), upper hand.
+    status and distance stay as separate fields (extension reads them mechanically).
+    Rewrite details when the collision's shape changes. One SET.
+  Do NOT use separate cost, stance_toward_pc, last_move, forces, target_constraint, or pc.reputation fields.
 
 STATE MACHINES (adjacent only, no skipping):
   Tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
