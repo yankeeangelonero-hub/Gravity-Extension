@@ -80,13 +80,15 @@ const ARCANA_TABLE = [
 function drawDivination() {
     const system = (_currentState?.divination?.active_system || 'arcana').toLowerCase();
 
+    const COOL_RULE = 'Rule of Cool: find the most interesting, unexpected, or stylish intersection of this draw with the current scene. Not the safest reading — the coolest one.';
+
     if (system === 'iching' || system === 'i_ching' || system === 'i ching') {
         const num = Math.floor(Math.random() * 64) + 1; // 1-64
         return {
             system: 'iching',
             label: 'THE I CHING DREW',
             num,
-            reading: `Hexagram ${num} — interpret per the 易経 King Wen sequence. The hexagram shapes the CIRCUMSTANCE, not the outcome.`,
+            reading: `Hexagram ${num} — interpret per the 易経 King Wen sequence. The hexagram shapes CIRCUMSTANCE, not outcome. ${COOL_RULE}`,
         };
     }
 
@@ -98,7 +100,7 @@ function drawDivination() {
             system: 'classic',
             label: 'THE DICE ROLLED',
             num: total,
-            reading: `${d1} + ${d2} = ${total} — consult the Classic Entropy table for conditions.`,
+            reading: `${d1} + ${d2} = ${total} — consult the Classic Entropy table for conditions. ${COOL_RULE}`,
         };
     }
 
@@ -108,7 +110,7 @@ function drawDivination() {
         system: 'arcana',
         label: 'THE ARCANA DREW',
         num,
-        reading: `#${num} — ${ARCANA_TABLE[num]}`,
+        reading: `#${num} — ${ARCANA_TABLE[num]} ${COOL_RULE}`,
     };
 }
 
