@@ -25,8 +25,9 @@ let _onAdvance = null;
 let _onRevertTurn = null;
 let _onGoodTurn = null;
 let _onCombat = null;
+let _onCombatSetup = null;
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onCombatSetup }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
@@ -38,6 +39,7 @@ function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapte
     _onRevertTurn = onRevertTurn;
     _onGoodTurn = onGoodTurn;
     _onCombat = onCombat;
+    _onCombatSetup = onCombatSetup;
 }
 
 let _currentBookName = '';
@@ -112,6 +114,7 @@ function createPanel() {
             <button class="gl-cmd-btn" data-cmd="chapter_close" title="Close chapter"><i class="fa-solid fa-flag-checkered"></i> Close Ch.</button>
             <button class="gl-cmd-btn" data-cmd="register" title="Register/promote NPC"><i class="fa-solid fa-user-plus"></i> Register</button>
             <button class="gl-cmd-btn" data-cmd="advance" title="Yield initiative — let the world move"><i class="fa-solid fa-play"></i> Advance</button>
+            <button class="gl-cmd-btn" data-cmd="combat_setup" title="Define power scale and combat rules"><i class="fa-solid fa-shield-halved"></i> Combat Setup</button>
             <button class="gl-cmd-btn" data-cmd="combat" title="Initiate combat — fight this"><i class="fa-solid fa-burst"></i> Combat</button>
             <button class="gl-cmd-btn" data-cmd="good_turn" title="Flag good prose — paste exemplar"><i class="fa-solid fa-thumbs-up"></i> Good</button>
         </div>
@@ -145,6 +148,7 @@ function createPanel() {
             case 'chapter_close': if (_onChapterClose) _onChapterClose(); break;
             case 'register': if (_onRegister) _onRegister(); break;
             case 'advance': if (_onAdvance) _onAdvance(); break;
+            case 'combat_setup': if (_onCombatSetup) _onCombatSetup(); break;
             case 'combat': if (_onCombat) _onCombat(); break;
             case 'good_turn': if (_onGoodTurn) _onGoodTurn(); break;
         }

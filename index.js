@@ -813,6 +813,31 @@ Full turn: deduction + prose + ledger block.]`;
     insertChatMessage(`*${pcName} continues what they were doing.*`);
 }
 
+async function handleCombatSetupButton() {
+    const { Popup, chatMetadata, saveMetadata } = SillyTavern.getContext();
+    const text = await Popup.show.input(
+        'Combat Setup',
+        'Define your power scale and combat rules. Example:\n"1=civilian, 3=soldier, 5=dragon. Combat is gritty and lethal."'
+    );
+    if (!text) return;
+
+    chatMetadata['gravity_combat_rules'] = text.trim();
+    await saveMetadata();
+
+    _pendingOOCInjection = `[GRAVITY COMBAT SETUP — The player has defined combat rules for this story.
+
+COMBAT RULES:
+${text.trim()}
+
+YOUR TASK: SET power on all existing characters in Gravity_State_View based on this scale. Emit ledger commands ONLY. Brief confirmation in prose.
+
+HARD RULE: Do NOT create any mechanical combat system. No dice. No rolls. No HP. No condition tracks. No attack tables. No modifiers. No turn sequences. NONE. Dice in Gravity exist ONLY for divination. Combat is resolved through narrative prose using the Logic and Fairness principles. The power scale is a reference for your judgment, not game mechanics. Just SET the power values and confirm.]`;
+
+    injectPrompt('integration');
+    insertChatMessage('OOC: Combat setup.');
+    toastr.success('Combat rules stored.');
+}
+
 function handleCombatButton() {
     const pcName = _currentState?.pc?.name || '{{user}}';
     const pcPower = _currentState?.pc?.power;
@@ -1131,6 +1156,7 @@ async function handleImportData(data) {
         onRevertTurn: handleRevertTurn,
         onGoodTurn: handleGoodTurnButton,
         onCombat: handleCombatButton,
+        onCombatSetup: handleCombatSetupButton,
     });
 
     // Setup wizard phase change callback
