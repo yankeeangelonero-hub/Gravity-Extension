@@ -1371,6 +1371,32 @@ async function handleImportData(data) {
     // Quick-access buttons above chat input
     createInputButtons();
 
+    // Intimacy choice buttons — delegated click handler on chat container
+    const chatContainer = document.getElementById('chat');
+    if (chatContainer) {
+        chatContainer.addEventListener('click', (e) => {
+            const act = e.target.closest('.act[data-value]');
+            if (!act) return;
+            e.preventDefault();
+            const value = act.dataset.value;
+            if (!value) return;
+
+            // Insert the action as user input and trigger send
+            const textarea = document.getElementById('send_textarea');
+            if (textarea) {
+                textarea.value = `*${value}*`;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                textarea.focus();
+
+                // Auto-send after a brief delay to let ST process the input
+                setTimeout(() => {
+                    const sendBtn = document.getElementById('send_but');
+                    if (sendBtn) sendBtn.click();
+                }, 100);
+            }
+        });
+    }
+
     console.log(`${LOG_PREFIX} Extension registered.`);
     initialize().catch(err => console.error(`${LOG_PREFIX} Init error:`, err));
 })();

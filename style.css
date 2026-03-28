@@ -144,6 +144,10 @@
 #gravity-ledger-panel .gl-exemplar-btn:hover { background:rgba(255,255,255,.1); color:#fff; }
 #gravity-ledger-panel .gl-exemplar-remove:hover { color:#f66; border-color:#f66; }
 
+/* Intimacy action choices */
+.act[data-value] { display:inline-block; background:rgba(180,100,200,.12); border:1px solid rgba(180,100,200,.3); border-radius:4px; padding:4px 10px; margin:3px 2px; cursor:pointer; color:#d4a0e8; font-size:13px; transition:background .15s, border-color .15s; }
+.act[data-value]:hover { background:rgba(180,100,200,.25); border-color:rgba(180,100,200,.5); color:#e8c0f8; }
+
 /* Divination select */
 #gravity-ledger-panel .gl-div-select { background:#1e1e1e; border:1px solid #444; border-radius:3px; color:#ddd; font-size:11px; padding:2px 6px; margin-left:4px; font-family:inherit; }
 #gravity-ledger-panel .gl-div-select:focus { border-color:#88f; outline:none; }
