@@ -427,7 +427,7 @@ WHAT TO TRACK — NO LINE LIMIT on updates. Record EVERYTHING that changed:
 - Location/condition/equipment (SET)
 - World state changes (SET world_state)
 - Faction profile (SET profile — rewrite paragraph when faction acts)
-- Story summary (APPEND summary — every significant scene, 2-4 sentences with texture)
+- Timeline (APPEND summary — every significant beat, 2-4 sentences with timestamp, emotional weight, and one concrete detail that makes the moment recoverable)
 - Key moments (APPEND — permanent, never remove)
 - READS updates incl. stance toward PC (READ char:id target=pc)
 - PC traits, timeline (APPEND)

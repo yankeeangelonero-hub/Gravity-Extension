@@ -316,14 +316,14 @@ function formatStateView(state, mode = 'full') {
         }
     }
 
-    // Story Summary — tiered display
-    // Slim: last 3 entries. Full: consolidated + last 10.
-    const summary = Array.isArray(state.story_summary) ? state.story_summary : [];
-    if (summary.length) {
-        // Separate consolidated entries (tagged [CONSOLIDATED:]) from regular
+    // Timeline — single chronological record, strict temporal order
+    // Replaces both story_summary and pc.timeline as one unified log
+    const timeline = Array.isArray(state.story_summary) ? state.story_summary : [];
+    if (timeline.length) {
+        // Separate consolidated entries from regular
         const consolidated = [];
         const regular = [];
-        for (const s of summary) {
+        for (const s of timeline) {
             const text = typeof s === 'object' ? (s.text || '') : String(s);
             if (text.includes('[CONSOLIDATED:')) {
                 consolidated.push(s);
@@ -333,11 +333,11 @@ function formatStateView(state, mode = 'full') {
         }
 
         const displayEntries = slim
-            ? regular.slice(-3)
-            : [...consolidated, ...regular.slice(-10)];
+            ? [...consolidated, ...regular.slice(-10)]
+            : [...consolidated, ...regular];
 
         lines.push('');
-        lines.push(slim ? 'RECENT STORY' : `STORY SO FAR (${summary.length} total, showing ${displayEntries.length})`);
+        lines.push(slim ? `TIMELINE (${timeline.length} total, showing ${displayEntries.length})` : `TIMELINE (${timeline.length})`);
         for (const s of displayEntries) {
             const text = typeof s === 'object' ? s.text : s;
             const time = typeof s === 'object' ? (s.t || '') : '';
@@ -593,10 +593,18 @@ FACTIONS — create and manage factions with political simulation
 DIVINATION — record current draw only (no history accumulation)
   > SET divination field=last_draw value="XIV — Temperance" -- Record draw (overwrites previous)
 
-STORY SUMMARY — append after every significant scene, not just chapter closes
-  Summaries are the primary continuity mechanism — they replace chat history as context.
-  Each entry: 2-4 sentences capturing what happened, who was involved, what changed, and specific sensory/textural detail.
-  > APPEND summary field=text value="Ch1 'Wrong Place': Tifa pulled Autumn from Reactor 1 rubble. The asymmetry established: she knows everything about what just happened to his life. He knows nothing." -- Chapter summary
+TIMELINE — the single chronological record. Strict temporal order. APPEND after every significant beat.
+  This IS the story's memory. When chat history truncates, this is all that survives.
+  Write entries that let you reconstruct the scene's weight without the original prose.
+
+  Format: "[Day N — HH:MM] 2-4 sentences. What happened, who was involved, what changed
+  emotionally or materially, and one specific physical/sensory detail that makes the
+  moment recoverable. Not a log line — a compressed scene."
+
+  > APPEND summary value="[Day 1 — 21:10] Tifa pulled Autumn from Reactor 1 rubble. Head wound, minor. He heard knocking in a burning apartment and ran inside — she followed without hesitating. The first debt: she treated his wound before her own, using the cloth she'd been pressing against her ribs."
+  > APPEND summary value="[Day 3 — 14:00] First potion batch. Six bottles, luminous blue, professional grade. Tifa watched from the doorway in the voice at the bottom of her register and said 'I'm glad you're here.' He said 'Yeap?' and cleaned the counter. The not-reacting is the reaction."
+
+  Do NOT use pc.timeline — this is the only timeline. One log, one place.
 
 STATE MACHINES (MOVE between adjacent states only, no skipping):
   Character tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
