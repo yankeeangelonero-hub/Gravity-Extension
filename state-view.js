@@ -49,13 +49,11 @@ function formatStateView(state, mode = 'full') {
             const woundList = Object.entries(char.wounds).map(([k, v]) => `${k}: ${v}`).join(', ');
             lines.push(`    Wounds: ${woundList}`);
         }
-        // Key moments — always shown (permanent character history)
+        // Key moments — ALWAYS shown, ALL entries (permanent character history)
         const moments = Array.isArray(char.key_moments) ? char.key_moments : [];
         if (moments.length) {
-            const display = slim ? moments.slice(-5) : moments;
-            const label = slim && moments.length > 5 ? `Key moments (last 5 of ${moments.length})` : `Key moments (${moments.length})`;
-            lines.push(`    ${label}:`);
-            for (const m of display) lines.push(`      - ${m}`);
+            lines.push(`    Key moments (${moments.length}):`);
+            for (const m of moments) lines.push(`      - ${m}`);
         }
     }
     if (Object.keys(state.characters).length === 0) lines.push('  (none)');
