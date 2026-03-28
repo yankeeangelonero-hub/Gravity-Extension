@@ -1384,6 +1384,7 @@ function createInputButtons() {
     bar.innerHTML = `
         <button class="gl-input-btn" id="gl-input-advance" title="Advance — world takes a turn"><i class="fa-solid fa-play"></i> Advance</button>
         <button class="gl-input-btn" id="gl-input-combat" title="Initiate combat"><i class="fa-solid fa-burst"></i> Combat</button>
+        <button class="gl-input-btn" id="gl-input-intimacy" title="Initiate intimate scene"><i class="fa-solid fa-heart"></i> Intimacy</button>
         <button class="gl-input-btn" id="gl-input-skip" title="Timeskip"><i class="fa-solid fa-forward"></i> Skip</button>
         <button class="gl-input-btn" id="gl-input-good" title="Flag good prose — paste exemplar"><i class="fa-solid fa-thumbs-up"></i> Good</button>
     `;
@@ -1391,6 +1392,7 @@ function createInputButtons() {
 
     document.getElementById('gl-input-advance').addEventListener('click', handleAdvanceButton);
     document.getElementById('gl-input-combat').addEventListener('click', handleCombatButton);
+    document.getElementById('gl-input-intimacy').addEventListener('click', handleIntimacyButton);
     document.getElementById('gl-input-skip').addEventListener('click', handleTimeskipButton);
     document.getElementById('gl-input-good').addEventListener('click', handleGoodTurnButton);
 }
