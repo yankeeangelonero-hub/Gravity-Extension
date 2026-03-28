@@ -1013,7 +1013,18 @@ function handleIntimacyButton() {
         }
     }
 
+    const intimacyDraw = drawDivination();
+
     _pendingOOCInjection = `[GRAVITY INTIMACY — ${pcName} initiates an intimate scene.
+
+${intimacyDraw.label}: ${intimacyDraw.reading}${intimacyDraw.html ? `\nRender this HTML card reveal before interpreting:\n${intimacyDraw.html}` : ''}
+The draw shapes the TONE AND TEXTURE of this intimate encounter — not what happens, but HOW it feels. Apply the draw to the sexual energy, not the plot:
+- The Fool = first-time energy, discovery, unexpected tenderness
+- The Tower = something breaks open mid-act, a wall falls, overwhelming intensity
+- Temperance = slow, balanced, both people finding rhythm together
+- The Devil = hunger, urgency, the comfortable trap of wanting more than you should
+- Death = transformation through intimacy, one version of them ending so another can exist
+Interpret the draw through the body, not the mind. The card colors the sensation, the pacing, the involuntary responses.
 
 ═══ GATE CHECK — read this FIRST ═══
 Before activating, check:
