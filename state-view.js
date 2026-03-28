@@ -122,8 +122,10 @@ function formatStateView(state, mode = 'full') {
         lines.push('Factions:');
         for (const f of factionEntities) {
             if (slim) {
+                // Slim: just name + power + stance
                 const slimStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
-                lines.push(`  ${f.name || f.id} | Stance: ${slimStance} → id: ${f.id}`);
+                const slimPower = f.power ? ` [${f.power}]` : '';
+                lines.push(`  ${f.name || f.id}${slimPower} | Stance: ${slimStance} → id: ${f.id}`);
             } else {
                 // shown in detail section below
                 lines.push(`  ${f.name || f.id} → id: ${f.id}`);
@@ -201,24 +203,28 @@ function formatStateView(state, mode = 'full') {
             lines.push('');
             lines.push('FACTIONS');
             for (const f of factionEntities) {
-                let line = `  ${f.name || f.id}: ${f.objective || ''}`;
-                line += ` | Resources: ${f.resources || '?'}`;
-                // Stance: prefer reads[pc], fall back to stance_toward_pc
-                const factionStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
-                line += ` | Stance: ${factionStance}`;
-                if (f.power) line += ` | Power: ${f.power}`;
-                // Momentum: merge with last_move if separate
-                const momentum = f.last_move && f.momentum && !f.momentum.includes(f.last_move)
-                    ? `${f.momentum}; last: ${f.last_move}` : (f.momentum || f.last_move || '');
-                if (momentum) line += ` | Momentum: ${momentum}`;
-                lines.push(line);
+                if (f.profile) {
+                    // New: single profile paragraph
+                    lines.push(`  ${f.name || f.id}: ${f.profile}`);
+                } else {
+                    // Legacy: separate fields
+                    let line = `  ${f.name || f.id}: ${f.objective || ''}`;
+                    line += ` | Resources: ${f.resources || '?'}`;
+                    const factionStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
+                    line += ` | Stance: ${factionStance}`;
+                    if (f.power) line += ` | Power: ${f.power}`;
+                    const momentum = f.last_move && f.momentum && !f.momentum.includes(f.last_move)
+                        ? `${f.momentum}; last: ${f.last_move}` : (f.momentum || f.last_move || '');
+                    if (momentum) line += ` | Momentum: ${momentum}`;
+                    lines.push(line);
+                    if (f.leverage) lines.push(`    Leverage: ${f.leverage}`);
+                    if (f.vulnerability) lines.push(`    Vulnerability: ${f.vulnerability}`);
+                }
                 if (f.relations && typeof f.relations === 'object') {
                     for (const [targetId, relation] of Object.entries(f.relations)) {
                         lines.push(`    ↔ ${targetId}: ${relation}`);
                     }
                 }
-                if (f.leverage) lines.push(`    Leverage: ${f.leverage}`);
-                if (f.vulnerability) lines.push(`    Vulnerability: ${f.vulnerability}`);
             }
         }
 
@@ -351,7 +357,10 @@ OPERATIONS:
 FIELD MERGES — use these combined fields:
   doing: includes cost. Format: "action | Cost: what this neglects/risks"
   reads: includes stance toward PC. Use READ char:id target=pc for PC stance.
-  momentum (factions): includes last move. "Currently doing X; last: did Y."
+  faction profile: single paragraph. SET faction:id field=profile value="[full description]"
+    Include: objective, power, resources, momentum, leverage, vulnerability, stance toward PC.
+    Rewrite WHOLE paragraph during chapter close or advance. One SET, not seven.
+    relations{} stays separate (MAP_SET for inter-faction stances).
   Do NOT use separate cost, stance_toward_pc, last_move, or pc.reputation fields.
 
 STATE MACHINES (adjacent only, no skipping):

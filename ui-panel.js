@@ -665,14 +665,22 @@ function renderWorld(state) {
         for (const f of factions) {
             parts.push(`<div class="gl-d-constraint">`);
             parts.push(`<b>${esc(f.name || f.id)}</b>`);
-            if (f.objective) parts.push(`<div class="gl-d-detail">Objective: ${esc(f.objective)}</div>`);
-            if (f.resources) parts.push(`<div class="gl-d-detail">Resources: ${esc(f.resources)}</div>`);
-            if (f.stance_toward_pc) parts.push(`<div class="gl-d-detail">Stance toward PC: ${esc(f.stance_toward_pc)}</div>`);
-            if (f.power) parts.push(`<div class="gl-d-detail">Power: <b>${esc(f.power)}</b></div>`);
-            if (f.momentum) parts.push(`<div class="gl-d-detail">Momentum: ${esc(f.momentum)}</div>`);
-            if (f.last_move) parts.push(`<div class="gl-d-detail">Last move: ${esc(f.last_move)}</div>`);
-            if (f.leverage) parts.push(`<div class="gl-d-detail">Leverage: ${esc(f.leverage)}</div>`);
-            if (f.vulnerability) parts.push(`<div class="gl-d-detail">Vulnerability: ${esc(f.vulnerability)}</div>`);
+            if (f.profile) {
+                // New: single profile paragraph
+                parts.push(`<div class="gl-d-detail">${esc(f.profile)}</div>`);
+            } else {
+                // Legacy: separate fields
+                if (f.objective) parts.push(`<div class="gl-d-detail">Objective: ${esc(f.objective)}</div>`);
+                if (f.resources) parts.push(`<div class="gl-d-detail">Resources: ${esc(f.resources)}</div>`);
+                const fStance = (f.reads && f.reads.pc) || f.stance_toward_pc;
+                if (fStance) parts.push(`<div class="gl-d-detail">Stance toward PC: ${esc(fStance)}</div>`);
+                if (f.power) parts.push(`<div class="gl-d-detail">Power: <b>${esc(f.power)}</b></div>`);
+                const fMomentum = f.last_move && f.momentum && !f.momentum.includes(f.last_move)
+                    ? `${f.momentum}; last: ${f.last_move}` : (f.momentum || f.last_move || '');
+                if (fMomentum) parts.push(`<div class="gl-d-detail">Momentum: ${esc(fMomentum)}</div>`);
+                if (f.leverage) parts.push(`<div class="gl-d-detail">Leverage: ${esc(f.leverage)}</div>`);
+                if (f.vulnerability) parts.push(`<div class="gl-d-detail">Vulnerability: ${esc(f.vulnerability)}</div>`);
+            }
             if (f.relations && typeof f.relations === 'object') {
                 const relEntries = Object.entries(f.relations);
                 if (relEntries.length) {
