@@ -424,14 +424,14 @@ After prose, append:
 WHAT TO TRACK — emit in PRIORITY ORDER (budget: 20 lines):
 1. State transitions (MOVE constraint integrity, collision status, chapter status)
 2. Collision distance changes (SET distance)
-3. Character DOING/WANT updates (SET)
+3. Character DOING(+cost)/WANT updates (SET doing value="action | Cost: risk")
 4. Location/condition updates (SET location, condition, equipment)
 5. World state changes (SET world_state)
-6. Faction updates (SET power/momentum/last_move, MAP_SET relations)
+6. Faction updates (SET power/momentum, MAP_SET relations) — momentum includes last move
 7. Story summary (APPEND summary) — every significant scene, 2-4 sentences with texture
 8. Key moments / noticed details (APPEND)
-9. READS updates when interpretation shifts (READ)
-10. PC traits, timeline, reputation (APPEND / MAP_SET)
+9. READS updates incl. stance toward PC (READ char:id target=pc "...") — no separate stance_toward_pc
+10. PC traits, timeline (APPEND)
 11. Intimacy stance shifts after constraint/narrative changes (SET intimacy_stance — with reason)
 12. Intimate history after intimate scenes (MAP_SET intimate_history)
 

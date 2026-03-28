@@ -478,16 +478,27 @@ function renderPCDossier(state) {
         parts.push(collapsibleList(traitItems, 5, 'older traits'));
     }
 
-    // Reputation — per-entity narrative blocks
-    const rep = toObj(pc.reputation);
-    if (Object.keys(rep).length) {
-        parts.push(`<div class="gl-d-section"><b>Reputation:</b></div>`);
-        for (const [who, r] of Object.entries(rep)) {
-            const hist = getFieldHistory(state, 'pc', '_', `reputation.${who}`);
+    // How others see PC — merged from character reads[pc] + legacy pc.reputation
+    const pcReads = [];
+    for (const char of Object.values(state.characters)) {
+        if (char.tier === 'UNKNOWN') continue;
+        const readOfPc = char.reads?.pc || char.reads?.[pc.name] || char.stance_toward_pc;
+        if (readOfPc) pcReads.push({ who: char.name || char.id, read: readOfPc, id: char.id });
+    }
+    const legacyRep = toObj(pc.reputation);
+    for (const [who, r] of Object.entries(legacyRep)) {
+        if (!pcReads.some(p => p.who.toLowerCase().includes(who.toLowerCase()))) {
+            pcReads.push({ who, read: r, id: who });
+        }
+    }
+    if (pcReads.length) {
+        parts.push(`<div class="gl-d-section"><b>How Others See PC:</b></div>`);
+        for (const { who, read, id } of pcReads) {
+            const hist = getFieldHistory(state, 'char', id, 'reads.pc') || getFieldHistory(state, 'pc', '_', `reputation.${who}`);
             parts.push(`<div class="gl-read-block">`);
             parts.push(`<div class="gl-read-target">${esc(who)}:</div>`);
-            parts.push(`<div class="gl-read-text">${esc(r)}</div>`);
-            if (hist.length > 1) {
+            parts.push(`<div class="gl-read-text">${esc(read)}</div>`);
+            if (hist && hist.length > 1) {
                 parts.push(`<div class="gl-history-toggle">History (${hist.length})</div>`);
                 parts.push(`<div class="gl-history-list" style="display:none">${hist.map(historyLine).join('<br>')}</div>`);
             }
@@ -524,8 +535,11 @@ function renderCharDossier(char, state) {
     if (char.location) parts.push(`<div class="gl-d-row"><b>Location:</b> ${esc(char.location)}</div>`);
     if (char.condition) parts.push(`<div class="gl-d-row"><b>Condition:</b> ${esc(char.condition)}</div>`);
     if (char.want) parts.push(`<div class="gl-d-row"><b>WANT:</b> ${esc(char.want)}</div>`);
-    if (char.doing) parts.push(`<div class="gl-d-row"><b>DOING:</b> ${esc(char.doing)}${char.cost ? ` | <b>COST:</b> ${esc(char.cost)}` : ''}</div>`);
-    if (char.stance_toward_pc) parts.push(`<div class="gl-d-row"><b>Stance toward PC:</b> ${esc(char.stance_toward_pc)}</div>`);
+    // doing now includes cost (merged field)
+    if (char.doing) parts.push(`<div class="gl-d-row"><b>DOING:</b> ${esc(char.doing)}${char.cost && !char.doing.includes('Cost:') ? ` | <b>Cost:</b> ${esc(char.cost)}` : ''}</div>`);
+    // Stance toward PC: prefer reads[pc], fall back to stance_toward_pc (legacy)
+    const stanceTowardPc = (char.reads?.pc) || char.stance_toward_pc;
+    if (stanceTowardPc) parts.push(`<div class="gl-d-row"><b>Reads PC as:</b> ${esc(stanceTowardPc)}</div>`);
     const charWounds = toObj(char.wounds);
     if (Object.keys(charWounds).length) {
         parts.push(`<div class="gl-d-row"><b>Wounds:</b> ${Object.entries(charWounds).map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(', ')}</div>`);

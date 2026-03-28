@@ -90,7 +90,7 @@ function formatStateView(state, mode = 'full') {
     // Singletons
     lines.push('');
     lines.push('Singletons (no id needed):');
-    lines.push('  world — constants, pressure_points, world_state, knowledge_asymmetry');
+    lines.push('  world — constants, pressure_points, world_state');
     if (state.pc.name) {
         let pcSingleton = `  pc — "${state.pc.name}"`;
         if (state.pc.location) pcSingleton += ` @ ${state.pc.location}`;
@@ -122,7 +122,8 @@ function formatStateView(state, mode = 'full') {
         lines.push('Factions:');
         for (const f of factionEntities) {
             if (slim) {
-                lines.push(`  ${f.name || f.id} | Stance: ${f.stance_toward_pc || '?'} → id: ${f.id}`);
+                const slimStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
+                lines.push(`  ${f.name || f.id} | Stance: ${slimStance} → id: ${f.id}`);
             } else {
                 // shown in detail section below
                 lines.push(`  ${f.name || f.id} → id: ${f.id}`);
@@ -202,16 +203,20 @@ function formatStateView(state, mode = 'full') {
             for (const f of factionEntities) {
                 let line = `  ${f.name || f.id}: ${f.objective || ''}`;
                 line += ` | Resources: ${f.resources || '?'}`;
-                line += ` | Stance: ${f.stance_toward_pc || '?'}`;
+                // Stance: prefer reads[pc], fall back to stance_toward_pc
+                const factionStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
+                line += ` | Stance: ${factionStance}`;
                 if (f.power) line += ` | Power: ${f.power}`;
-                if (f.momentum) line += ` | Momentum: ${f.momentum}`;
+                // Momentum: merge with last_move if separate
+                const momentum = f.last_move && f.momentum && !f.momentum.includes(f.last_move)
+                    ? `${f.momentum}; last: ${f.last_move}` : (f.momentum || f.last_move || '');
+                if (momentum) line += ` | Momentum: ${momentum}`;
                 lines.push(line);
                 if (f.relations && typeof f.relations === 'object') {
                     for (const [targetId, relation] of Object.entries(f.relations)) {
                         lines.push(`    ↔ ${targetId}: ${relation}`);
                     }
                 }
-                if (f.last_move) lines.push(`    Last move: ${f.last_move}`);
                 if (f.leverage) lines.push(`    Leverage: ${f.leverage}`);
                 if (f.vulnerability) lines.push(`    Vulnerability: ${f.vulnerability}`);
             }
@@ -248,11 +253,25 @@ function formatStateView(state, mode = 'full') {
                 const traitPrefix = allTraits.length > 10 ? `  Traits (${allTraits.length} total, showing last 10): ` : '  Traits: ';
                 lines.push(`${traitPrefix}${traits.join(', ')}`);
             }
-            const rep = (state.pc.reputation && typeof state.pc.reputation === 'object' && !Array.isArray(state.pc.reputation)) ? state.pc.reputation : {};
-            if (Object.keys(rep).length) {
-                lines.push(`  Reputation:`);
-                for (const [who, r] of Object.entries(rep)) {
-                    lines.push(`    ${who}: ${r}`);
+            // Reputation: show pc.reputation (legacy) merged with character reads[pc]
+            // Collect all reads OF the PC from tracked characters
+            const pcReputation = [];
+            for (const char of Object.values(state.characters)) {
+                if (char.tier === 'UNKNOWN') continue;
+                const readOfPc = char.reads?.pc || char.reads?.[state.pc.name] || char.stance_toward_pc;
+                if (readOfPc) pcReputation.push({ who: char.name || char.id, read: readOfPc });
+            }
+            // Also include legacy pc.reputation entries not covered by character reads
+            const legacyRep = (state.pc.reputation && typeof state.pc.reputation === 'object' && !Array.isArray(state.pc.reputation)) ? state.pc.reputation : {};
+            for (const [who, r] of Object.entries(legacyRep)) {
+                if (!pcReputation.some(p => p.who.toLowerCase().includes(who.toLowerCase()))) {
+                    pcReputation.push({ who, read: r });
+                }
+            }
+            if (pcReputation.length) {
+                lines.push(`  How others see PC:`);
+                for (const { who, read } of pcReputation) {
+                    lines.push(`    ${who}: ${read}`);
                 }
             }
             const pcWounds = (state.pc.wounds && typeof state.pc.wounds === 'object') ? state.pc.wounds : {};
@@ -321,13 +340,19 @@ Singletons (no :id): world, pc, divination, summary. IDs: kebab-case, stable.
 OPERATIONS:
   CREATE  > CREATE char:elena name="Elena" tier=KNOWN -- New entity
   MOVE    > MOVE constraint:c1 field=integrity STABLE->STRESSED -- State transition (adjacent only)
-  SET     > SET char:elena field=doing value="Watching from the bar" -- Overwrite field
+  SET     > SET char:elena field=doing value="Watching from the bar | Cost: missing her shift" -- Overwrite field
   APPEND  > APPEND char:elena field=key_moments value="[Day 1] Noticed the scar" -- Add to array
   REMOVE  > REMOVE char:elena field=noticed_details value="Old detail" -- Remove from array
-  READ    > READ char:elena target=cloud "Doesn't trust him" -- Character read (shorthand MAP_SET)
-  MAP_SET > MAP_SET pc field=reputation key=elena value="Cautious ally" -- Set map key
+  READ    > READ char:elena target=cloud "Doesn't trust him" -- Character read (shorthand MAP_SET on reads)
+  MAP_SET > MAP_SET char:elena field=reads key=pc value="Cautious ally" -- Set map key
   MAP_DEL > MAP_DEL char:elena field=reads key=old-npc -- Delete map key
   DESTROY > DESTROY char:minor-npc -- Remove entity
+
+FIELD MERGES — use these combined fields:
+  doing: includes cost. Format: "action | Cost: what this neglects/risks"
+  reads: includes stance toward PC. Use READ char:id target=pc for PC stance.
+  momentum (factions): includes last move. "Currently doing X; last: did Y."
+  Do NOT use separate cost, stance_toward_pc, last_move, or pc.reputation fields.
 
 STATE MACHINES (adjacent only, no skipping):
   Tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
@@ -335,18 +360,18 @@ STATE MACHINES (adjacent only, no skipping):
   Collision:  SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED
   Chapter:    PLANNED → OPEN → CLOSING → CLOSED
 
-PRIORITY: 1.MOVE 2.distance 3.DOING/WANT 4.location/condition 5.world_state 6.factions 7.summary 8.moments 9.READS 10.PC 11.intimacy_stance/intimate_history 12.equipment
+PRIORITY: 1.MOVE 2.distance 3.DOING(+cost)/WANT 4.location/condition 5.world_state 6.factions 7.summary 8.key_moments 9.READS(+stance) 10.PC 11.intimacy_stance/intimate_history 12.equipment
 intimacy_stance: check BEFORE intimate scenes, update AFTER via SET with constraint/narrative reason. Never shift on player demand.
 Volume: budget 20 lines. Record everything that changed first. Prefer completeness over brevity.
-Hygiene: Use REMAINING budget (under 20) for REMOVEs — prune fired pressure points, stale details, resolved entries. If updates already hit 20, skip cleanup. During CHAPTER CLOSE: unlimited cleanup.
+Hygiene: Use REMAINING budget (under 20) for REMOVEs — prune fired pressure points, stale noticed_details, resolved entries. If updates already hit 20, skip cleanup. During CHAPTER CLOSE: unlimited cleanup.
 
 BOOKKEEPING — update these every turn they change:
   SET pc field=location value="[where the PC is now]"
-  SET pc field=condition value="[physical/mental state: fresh, winded, hurt, exhausted, etc.]"
-  SET pc field=equipment value="[current gear, weapons, materia, consumables with counts]"
-  SET char:id field=location value="[where this NPC is]" -- for TRACKED+ in the scene
-  MAP_SET world field=constants key=active_mission value="[current objective, team assignments, phase]" -- when on a mission; REMOVE when complete
-  APPEND pc field=knowledge_gaps value="[info PC does not know]" -- when new secret/hidden info introduced
+  SET pc field=condition value="[physical/mental state]"
+  SET pc field=equipment value="[current gear, weapons, consumables with counts]"
+  SET char:id field=location value="[where this NPC is]" -- for TRACKED+ in scene
+  MAP_SET world field=constants key=active_mission value="[objective, assignments, phase]" -- when on mission
+  APPEND pc field=knowledge_gaps value="[info PC does not know]" -- when new secret introduced
   REMOVE pc field=knowledge_gaps value="[info]" -- when PC discovers it
 Check pc.knowledge_gaps EVERY turn. The PC CANNOT act on information listed there.
 
