@@ -74,6 +74,45 @@ const ARCANA_TABLE = [
 ];
 
 /**
+ * Draw from the active divination system.
+ * @returns {{ system: string, label: string, num: number, reading: string }}
+ */
+function drawDivination() {
+    const system = (_currentState?.divination?.active_system || 'arcana').toLowerCase();
+
+    if (system === 'iching' || system === 'i_ching' || system === 'i ching') {
+        const num = Math.floor(Math.random() * 64) + 1; // 1-64
+        return {
+            system: 'iching',
+            label: 'THE I CHING DREW',
+            num,
+            reading: `Hexagram ${num} — interpret per the 易経 King Wen sequence. The hexagram shapes the CIRCUMSTANCE, not the outcome.`,
+        };
+    }
+
+    if (system === 'classic' || system === '2d10') {
+        const d1 = Math.floor(Math.random() * 10) + 1;
+        const d2 = Math.floor(Math.random() * 10) + 1;
+        const total = d1 + d2;
+        return {
+            system: 'classic',
+            label: 'THE DICE ROLLED',
+            num: total,
+            reading: `${d1} + ${d2} = ${total} — consult the Classic Entropy table for conditions.`,
+        };
+    }
+
+    // Default: arcana (d22, 0-indexed)
+    const num = Math.floor(Math.random() * 22);
+    return {
+        system: 'arcana',
+        label: 'THE ARCANA DREW',
+        num,
+        reading: `#${num} — ${ARCANA_TABLE[num]}`,
+    };
+}
+
+/**
  * Add failed lines to the correction queue.
  * If a line has been retried too many times, drop it.
  */
@@ -247,10 +286,9 @@ function injectPrompt(mode) {
                 if (isNaN(dist)) continue;
                 const status = (col.status || '').trim().toUpperCase();
                 if (dist <= 0 && status !== 'RESOLVED') {
-                    const cardNum = Math.floor(Math.random() * 22);
-                    const cardReading = ARCANA_TABLE[cardNum];
+                    const draw = drawDivination();
                     const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
-                    arrivals.push({ id, col, cardNum, cardReading, forces });
+                    arrivals.push({ id, col, draw, forces });
                     _firedCollisionArrivals.add(id);
                 }
             }
@@ -307,13 +345,13 @@ Forces: ${a.forces}
 Cost: ${a.col.cost || 'unspecified'}
 ${a.col.target_constraint ? `Target constraint: ${a.col.target_constraint}` : ''}
 
-THE ARCANA DREW: #${a.cardNum} — ${a.cardReading}
+${a.draw.label}: ${a.draw.reading}
 
 This collision has reached distance 0. It detonates NOW.
 
 You have FULL LICENSE to make this happen. Move NPCs into the scene. Spawn threats. Have someone arrive with information. Trigger events. Create new characters. Use environmental disasters. Whatever it takes to force this issue into the player's immediate reality.
 
-The tarot card shapes the CIRCUMSTANCE of how this collision arrives — not the outcome. Write the situation, not the resolution. The player must respond to it.
+The draw shapes the CIRCUMSTANCE of how this collision arrives — not the outcome. Write the situation, not the resolution. The player must respond to it.
 
 THIS COLLISION IS NOW SPENT. After this scene, MOVE its status to RESOLVED.
 
@@ -712,9 +750,8 @@ function handleAdvanceButton() {
         }
     }
 
-    // Roll one card for the whole advance
-    const cardNum = Math.floor(Math.random() * 22);
-    const cardReading = ARCANA_TABLE[cardNum];
+    // Draw from active divination system
+    const draw = drawDivination();
 
     if (ripeCollisions.length > 0) {
         // Advance = collision detonation. The ripe collision IS the thing that happens.
@@ -727,8 +764,8 @@ ${a.col.target_constraint ? `Target constraint: ${a.col.target_constraint}` : ''
 
         _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} yields the turn. The world moves.
 
-THE ARCANA DREW: #${cardNum} — ${cardReading}
-The card shapes the CIRCUMSTANCE of what happens — not the outcome.
+${draw.label}: ${draw.reading}
+The draw shapes the CIRCUMSTANCE of what happens — not the outcome.
 
 ${ripeCollisions.length === 1 ? 'A collision has arrived:' : 'These collisions have arrived:'}
 
@@ -747,7 +784,7 @@ WHAT HAPPENS NEXT depends on what the confrontation produces:
 
 No collision survives detonation. If the tension persists in a new shape, CREATE a fresh collision.
 
-Record the draw: SET divination field=last_draw value="[card name]"
+Record the draw: SET divination field=last_draw value="[draw result]"
 Full turn: deduction + prose + ledger block.]`;
     } else if (inProgressCollisions.length > 0) {
         // Collision already detonated but not resolved — player is yielding, push it forward
@@ -758,8 +795,8 @@ Cost: ${a.col.cost || 'unspecified'}`
 
         _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} yields the turn. A collision is in progress.
 
-THE ARCANA DREW: #${cardNum} — ${cardReading}
-The card shapes what happens next — not the outcome.
+${draw.label}: ${draw.reading}
+The draw shapes what happens next — not the outcome.
 
 IN-PROGRESS COLLISION:
 ${collisionBlocks}
@@ -771,14 +808,14 @@ This collision is already spent — it MUST reach RESOLVED. Either the confronta
 • COSTLY — someone paid. MOVE to RESOLVED. Record the cost.
 • EVOLUTION — MOVE to RESOLVED, CREATE a new collision from what surfaced.
 
-Record the draw: SET divination field=last_draw value="[card name]"
+Record the draw: SET divination field=last_draw value="[draw result]"
 Full turn: deduction + prose + ledger block.]`;
     } else {
         // No ripe or in-progress collisions — normal world-advance with multi-beat structure
         _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
 
-THE ARCANA DREW: #${cardNum} — ${cardReading}
-The card colors the world's move — it does not prescribe it.
+${draw.label}: ${draw.reading}
+The draw colors the world's move — it does not prescribe it.
 
 This is the world's turn. You may write MULTIPLE BEATS and CUT between character angles:
 
@@ -817,7 +854,7 @@ If no pressure points exist or none fit, PICK from Gravity_State_View instead:
 - A collision tightens because the world moved
 - A dormant character's WANT pulls them back
 
-Record the draw: SET divination field=last_draw value="[card name]"
+Record the draw: SET divination field=last_draw value="[draw result]"
 Full turn: deduction + prose + ledger block.]`;
     }
 
@@ -892,28 +929,33 @@ function handleCombatButton() {
 
     // Build the injection
     const isSetup = combatCollisions.length === 0;
+    const combatDraw = drawDivination();
 
     _pendingOOCInjection = `[GRAVITY COMBAT — ${pcName} ${isSetup ? 'initiates combat' : 'fights'}.
 
 ══ COMBAT ══${powerAssessment || (pcPower != null ? `\nPC power: ${pcPower}` : '')}${woundLine}
 ${combatRules ? `\nCOMBAT RULES (this story):\n${combatRules}\n` : ''}
+${combatDraw.label}: ${combatDraw.reading}
+The draw shapes the CIRCUMSTANCE of this combat exchange — not the outcome.
+
 COMBAT PROTOCOL (extends your Logic + Fairness principles):
 - In your Contest section: assess the PC's action against demonstrated_traits and established preparations from Gravity_State_View. Unearned capability fails or costs.
 - Power gap of 2+: direct combat cannot win. Only advantages established in the ledger (reads, key_moments, world state) can close the gap logically.
 - The enemy fights to their described capability (in cost field). They adapt to repeated tactics. They exploit trait gaps and existing wounds.
 - Every action costs something. No free hits.
 - Distance is elastic (same as narrative collisions). Decrement when the fight's momentum genuinely shifts.
-- At distance 0: arcana fires, decisive moment arrives.
+- At distance 0: the draw shapes the decisive moment's arrival.
 - Wounds are descriptive via MAP_SET on characters. Track what matters to the story.
 - Combat outcomes ripple into collisions, factions, world state.
 
-ABSOLUTE RULE: No dice. No rolls. No HP. No condition tracks. No modifiers. No hit counters. No turn sequences. No mechanical resolution of ANY kind. Dice exist ONLY for divination — NEVER for combat. The power scale is a narrative reference for YOUR judgment, not a game mechanic. You resolve combat through prose using Logic and Fairness. Write the fight as fiction. Do not simulate it.
+ABSOLUTE RULE: No dice. No rolls. No HP. No condition tracks. No modifiers. No hit counters. No turn sequences. No mechanical resolution of ANY kind. Divination draws are NOT combat dice — they shape circumstance and atmosphere. The power scale is a narrative reference for YOUR judgment, not a game mechanic. You resolve combat through prose using Logic and Fairness. Write the fight as fiction. Do not simulate it.
 ${isSetup ? `
 SETUP TURN: No combat collision exists yet. This turn is SETUP:
 1. CREATE a collision with mode=combat. Establish forces, distance, and threat (in cost field).
 2. SET power on any new enemy characters based on the combat rules above.
 3. Describe the threat and the opening situation.
 4. Do NOT resolve a combat exchange yet — setup is the beat.` : ''}
+Record the draw: SET divination field=last_draw value="[draw result]"
 Full turn: deduction + prose + ledger block.]`;
 
     injectPrompt('advance');
