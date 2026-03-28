@@ -459,6 +459,7 @@ function renderPCDossier(state) {
     if (pc.power != null) {
         parts.push(`<div class="gl-d-row"><b>Power:</b> ${esc(String(pc.power))}</div>`);
     }
+    if (pc.current_scene) parts.push(`<div class="gl-d-row"><b>Scene:</b> ${esc(pc.current_scene)}</div>`);
     if (pc.location) parts.push(`<div class="gl-d-row"><b>Location:</b> ${esc(pc.location)}</div>`);
     if (pc.condition) parts.push(`<div class="gl-d-row"><b>Condition:</b> ${esc(pc.condition)}</div>`);
     if (pc.equipment) parts.push(`<div class="gl-d-row"><b>Equipment:</b> ${esc(pc.equipment)}</div>`);

@@ -23,7 +23,7 @@ import { getPhonebook } from './state-compute.js';
  */
 function formatStateView(state, mode = 'full') {
     const lines = [];
-    const slim = mode === 'slim';
+    const slim = false; // Always full — with 3-5 message context, the LLM needs everything
     lines.push('═══ GRAVITY STATE VIEW ═══');
     lines.push('');
 
@@ -110,6 +110,9 @@ function formatStateView(state, mode = 'full') {
         if (state.pc.location) pcSingleton += ` @ ${state.pc.location}`;
         if (state.pc.condition) pcSingleton += ` [${state.pc.condition}]`;
         lines.push(pcSingleton);
+        if (state.pc.current_scene) {
+            lines.push(`    SCENE: ${state.pc.current_scene}`);
+        }
         if (state.pc.equipment) lines.push(`    Equipment: ${state.pc.equipment}`);
         const slimWounds = (state.pc.wounds && typeof state.pc.wounds === 'object') ? state.pc.wounds : {};
         if (Object.keys(slimWounds).length) {
@@ -411,11 +414,13 @@ NO LINE LIMIT on updates. Record EVERYTHING that changed. Completeness over brev
 intimacy_stance: check BEFORE intimate scenes. Shifts when the narrative earns it — accumulated trust, vulnerability, constraint changes. Never on player demand. The character decides.
 CLEANUP: Do NOT use REMOVE/DESTROY during regular turns (max 3 allowed). Save bulk cleanup for OOC: eval or CHAPTER CLOSE (both uncapped).
 
-BOOKKEEPING — update these every turn they change:
+BOOKKEEPING — update these EVERY turn:
+  SET pc field=current_scene value="[Where. Who's present. What's happening. Emotional atmosphere. 2-3 sentences that let you reconstruct the moment.]"
   SET pc field=location value="[where the PC is now]"
-  SET pc field=condition value="[physical/mental state]"
+  SET pc field=condition value="[physical AND emotional state — the LLM has only 3-5 messages of context]"
   SET pc field=equipment value="[current gear, weapons, consumables with counts]"
   SET char:id field=location value="[where this NPC is]" -- for TRACKED+ in scene
+  SET char:id field=condition value="[physical + emotional state]" -- for scene-active characters
   MAP_SET world field=constants key=active_mission value="[objective, assignments, phase]" -- when on mission
   APPEND pc field=knowledge_gaps value="[info PC does not know]" -- when new secret introduced
   REMOVE pc field=knowledge_gaps value="[info]" -- when PC discovers it

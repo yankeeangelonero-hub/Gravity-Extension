@@ -411,39 +411,16 @@ No collision survives detonation.`;
         }
 
         // Nudge — full on regular turns, slim on advance/integration (those prompts already instruct on ledger)
-        if (isRegular) {
-            setExtensionPrompt(`${MODULE_NAME}_nudge`,
-                `[SYSTEM: Your response is INCOMPLETE without a ---LEDGER--- block at the end. This is mandatory.
+        const nudgeText = isRegular
+            ? `[SYSTEM: ---LEDGER--- block after prose is MANDATORY.
 
-After prose, append:
----LEDGER---
-> [Day N — HH:MM] OPERATION entity:id key=value -- reason
----END LEDGER---
-
-WHAT TO TRACK — NO LINE LIMIT on updates. Record EVERYTHING that changed:
-- State transitions (MOVE constraint integrity, collision status, chapter status)
-- Collision distance changes (SET distance)
-- Character DOING(+cost)/WANT (SET doing value="action | Cost: risk")
-- Location/condition/equipment (SET)
-- World state changes (SET world_state)
-- Faction profile (SET profile — rewrite paragraph when faction acts)
-- Timeline (APPEND summary — every significant beat, 2-4 sentences with timestamp, emotional weight, and one concrete detail that makes the moment recoverable)
-- Key moments (APPEND — permanent, never remove)
-- READS updates incl. stance toward PC (READ char:id target=pc)
-- PC traits, timeline (APPEND)
-- Intimacy stance shifts (SET — with constraint/narrative reason)
-- Intimate history (MAP_SET — after intimate scenes)
-
-CLEANUP RULES: Do NOT use REMOVE, DESTROY, or MAP_DEL during regular turns (max 3 allowed).
-Save ALL cleanup for OOC: eval or CHAPTER CLOSE — both are uncapped.
-STALE CHECK: Are location, condition, equipment, doing still accurate? If not, update them.
-If nothing changed: (empty)]`,
-                PROMPT_IN_CHAT, 0);
-        } else {
-            setExtensionPrompt(`${MODULE_NAME}_nudge`,
-                `[SYSTEM: Include a ---LEDGER--- block at the end. No line limit — record all changes. Cleanup (REMOVE/DESTROY) only during eval or chapter close${_uncappedTurn ? ' (UNCAPPED — full cleanup allowed this turn)' : ''}.]`,
-                PROMPT_IN_CHAT, 0);
-        }
+You have ONLY 3-5 messages of chat context. Gravity_State_View is your COMPLETE memory.
+Record EVERYTHING — no line limit. ALWAYS update current_scene, location, condition.
+APPEND timeline (summary) for every significant beat — 2-4 sentences with timestamp and texture.
+CLEANUP (REMOVE/DESTROY): max 3 per regular turn. Save bulk cleanup for eval or chapter close.
+If nothing changed: (empty)]`
+            : `[SYSTEM: ---LEDGER--- block after response. No line limit. Full cleanup allowed this turn${_uncappedTurn ? ' (UNCAPPED)' : ''}.]`;
+        setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
     }
