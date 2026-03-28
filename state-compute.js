@@ -57,13 +57,12 @@ function createEmptyState() {
             world_state: '',
             pressure_points: [],
             constants: {},
-            knowledge_asymmetry: {},
         },
         pc: {
             name: '',
             demonstrated_traits: [],
-            reputation: {},
             timeline: [],
+            knowledge_gaps: [],
         },
         divination: {
             active_system: '',  // 'classic', 'arcana', 'iching'
