@@ -420,27 +420,28 @@ After prose, append:
 > [Day N — HH:MM] OPERATION entity:id key=value -- reason
 ---END LEDGER---
 
-WHAT TO TRACK — emit in PRIORITY ORDER (budget: 20 lines):
-1. State transitions (MOVE constraint integrity, collision status, chapter status)
-2. Collision distance changes (SET distance)
-3. Character DOING(+cost)/WANT updates (SET doing value="action | Cost: risk")
-4. Location/condition updates (SET location, condition, equipment)
-5. World state changes (SET world_state)
-6. Faction updates (SET power/momentum, MAP_SET relations) — momentum includes last move
-7. Story summary (APPEND summary) — every significant scene, 2-4 sentences with texture
-8. Key moments / noticed details (APPEND)
-9. READS updates incl. stance toward PC (READ char:id target=pc "...") — no separate stance_toward_pc
-10. PC traits, timeline (APPEND)
-11. Intimacy stance shifts after constraint/narrative changes (SET intimacy_stance — with reason)
-12. Intimate history after intimate scenes (MAP_SET intimate_history)
+WHAT TO TRACK — NO LINE LIMIT on updates. Record EVERYTHING that changed:
+- State transitions (MOVE constraint integrity, collision status, chapter status)
+- Collision distance changes (SET distance)
+- Character DOING(+cost)/WANT (SET doing value="action | Cost: risk")
+- Location/condition/equipment (SET)
+- World state changes (SET world_state)
+- Faction profile (SET profile — rewrite paragraph when faction acts)
+- Story summary (APPEND summary — every significant scene, 2-4 sentences with texture)
+- Key moments (APPEND — permanent, never remove)
+- READS updates incl. stance toward PC (READ char:id target=pc)
+- PC traits, timeline (APPEND)
+- Intimacy stance shifts (SET — with constraint/narrative reason)
+- Intimate history (MAP_SET — after intimate scenes)
 
-HOUSEKEEPING: If your updates use FEWER than 20 lines, use remaining budget for REMOVEs — prune fired pressure points, stale noticed details, resolved entries. If updates already hit 20, skip cleanup — save it for chapter close. During CHAPTER CLOSE: unlimited cleanup, consolidate aggressively.
+CLEANUP RULES: Do NOT use REMOVE, DESTROY, or MAP_DEL during regular turns (max 3 allowed).
+Save ALL cleanup for OOC: eval or CHAPTER CLOSE — both are uncapped.
 STALE CHECK: Are location, condition, equipment, doing still accurate? If not, update them.
 If nothing changed: (empty)]`,
                 PROMPT_IN_CHAT, 0);
         } else {
             setExtensionPrompt(`${MODULE_NAME}_nudge`,
-                `[SYSTEM: Include a ---LEDGER--- block at the end. Budget: 20 lines — record all changes, use remaining lines for cleanup${_uncappedTurn ? ' (UNCAPPED this turn)' : ''}.]`,
+                `[SYSTEM: Include a ---LEDGER--- block at the end. No line limit — record all changes. Cleanup (REMOVE/DESTROY) only during eval or chapter close${_uncappedTurn ? ' (UNCAPPED — full cleanup allowed this turn)' : ''}.]`,
                 PROMPT_IN_CHAT, 0);
         }
     } catch (err) {
@@ -569,14 +570,26 @@ async function onMessageReceived(messageId) {
         return;
     }
 
-    // Hard cap: drop transactions beyond 20 to prevent bulk-remove dumps
-    // Disabled for eval and chapter-close turns which legitimately need large blocks
-    const TX_CAP = 20;
-    let txOverflow = 0;
-    if (!_uncappedTurn && extraction.transactions.length > TX_CAP) {
-        txOverflow = extraction.transactions.length - TX_CAP;
-        extraction.transactions.length = TX_CAP;
-        console.warn(`${LOG_PREFIX} Ledger block exceeded cap (${TX_CAP + txOverflow} lines). Dropped ${txOverflow} excess transactions.`);
+    // Cleanup gate: REMOVE/DESTROY/MAP_DEL capped outside eval/chapter-close turns
+    // All other operations (SET, APPEND, MAP_SET, MOVE, CREATE, READ) are unlimited
+    const CLEANUP_OPS = ['R', 'MR', 'D'];
+    const CLEANUP_CAP = 3;
+    let cleanupDropped = 0;
+    if (!_uncappedTurn) {
+        let cleanupCount = 0;
+        extraction.transactions = extraction.transactions.filter(tx => {
+            if (CLEANUP_OPS.includes(tx.op)) {
+                cleanupCount++;
+                if (cleanupCount > CLEANUP_CAP) {
+                    cleanupDropped++;
+                    return false;
+                }
+            }
+            return true;
+        });
+        if (cleanupDropped > 0) {
+            console.warn(`${LOG_PREFIX} Dropped ${cleanupDropped} cleanup operations (cap ${CLEANUP_CAP} outside eval/chapter-close).`);
+        }
     }
     _uncappedTurn = false;
 
@@ -648,9 +661,9 @@ async function onMessageReceived(messageId) {
     if (sizeWarnings) {
         _pendingReinforcement = (_pendingReinforcement || '') + '\n' + sizeWarnings;
     }
-    if (txOverflow > 0) {
+    if (cleanupDropped > 0) {
         _pendingReinforcement = (_pendingReinforcement || '') +
-            `\n[LEDGER: OVERFLOW — ${txOverflow} lines dropped (cap is ${TX_CAP}). Emit in priority order: state transitions > distance > DOING/WANT > world > summary > details. REMOVEs are LOWEST priority — 2–3 per turn max.]`;
+            `\n[LEDGER: ${cleanupDropped} cleanup operations dropped (REMOVE/DESTROY capped at ${CLEANUP_CAP} outside eval/chapter-close). Save bulk cleanup for OOC: eval or chapter close.]`;
     }
     if (allErrors.length > 0 && validTxns.length > 0) {
         _pendingReinforcement = (_pendingReinforcement || '') +
