@@ -34,6 +34,52 @@ const TIER_CONFIG = {
     },
 };
 
+// ─── Condensation ───────────────────────────────────────────────────────────
+
+/**
+ * Condense a batch of entries into a single summary entry.
+ * This is a simple text-based compression — no LLM needed.
+ * Extracts timestamps and key content, concatenates into one paragraph.
+ * @param {Array} batch - entries being rotated to cold
+ * @param {string} label - field label for tagging
+ * @returns {Object|string} condensed entry
+ */
+function condenseBatch(batch, label) {
+    if (!batch || batch.length === 0) return null;
+
+    // Extract text from each entry
+    const texts = batch.map(entry => {
+        if (typeof entry === 'object') return entry.text || entry.t || JSON.stringify(entry);
+        return String(entry);
+    });
+
+    // Find time range
+    const timestamps = batch
+        .map(e => typeof e === 'object' ? (e.t || '') : '')
+        .filter(t => t.includes('Day'));
+    const timeRange = timestamps.length >= 2
+        ? `${timestamps[0]} to ${timestamps[timestamps.length - 1]}`
+        : timestamps[0] || '';
+
+    // Truncate each entry to ~80 chars and join
+    const compressed = texts
+        .map(t => t.length > 80 ? t.substring(0, 77) + '...' : t)
+        .join(' | ');
+
+    // Cap total at ~500 chars
+    const finalText = compressed.length > 500
+        ? compressed.substring(0, 497) + '...'
+        : compressed;
+
+    const condensedText = `[CONDENSED: ${label}${timeRange ? ` ${timeRange}` : ''}, ${batch.length} entries] ${finalText}`;
+
+    // Return in the same format as the source entries
+    if (typeof batch[0] === 'object') {
+        return { text: condensedText, t: timeRange, _ts: new Date().toISOString(), _condensed: true };
+    }
+    return condensedText;
+}
+
 // ─── Cold Storage ───────────────────────────────────────────────────────────
 
 function getColdStorage() {
@@ -74,22 +120,32 @@ function checkAndRotate(state) {
 
             if (batch.length === 0) continue;
 
-            // Move to cold storage
+            // Move originals to cold storage
             const coldKey = key === 'story_summary' ? 'summaries'
                 : key === 'pc_timeline' ? 'timeline'
                 : key === 'pc_traits' ? 'traits'
                 : 'summaries';
             cold[coldKey].push(...batch);
 
+            // Extension-side consolidation: compress batch into one summary entry
+            // that stays in hot as a bridge — memories never just vanish
+            const condensed = condenseBatch(batch, cfg.label);
+            if (condensed) {
+                // Insert the consolidated entry at the beginning of the array
+                // (oldest position in hot = these are deep history)
+                arr.splice(start, 0, condensed);
+            }
+
             pendingBatches.push({
                 key,
                 label: cfg.label,
                 entries: batch,
                 count: batch.length,
+                condensed,
             });
         }
 
-        console.log(`${LOG_PREFIX} Rotated ${overflow} entries from ${cfg.label} to cold storage.`);
+        console.log(`${LOG_PREFIX} Rotated ${overflow} entries from ${cfg.label} to cold storage, kept condensed summaries in hot.`);
     }
 
     // key_moments are PERMANENT — never rotated, never trimmed.
