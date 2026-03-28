@@ -813,29 +813,25 @@ Full turn: deduction + prose + ledger block.]`;
     insertChatMessage(`*${pcName} continues what they were doing.*`);
 }
 
-async function handleCombatSetupButton() {
-    const { Popup, chatMetadata, saveMetadata } = SillyTavern.getContext();
-    const text = await Popup.show.input(
-        'Combat Setup',
-        'Define your power scale and combat rules. Example:\n"1=civilian, 3=soldier, 5=dragon. Combat is gritty and lethal."'
-    );
-    if (!text) return;
+function handleCombatSetupButton() {
+    _pendingOOCInjection = `[GRAVITY COMBAT SETUP — The player's message contains their combat rules input. Read it and extrapolate a complete power scale for this story.
 
-    chatMetadata['gravity_combat_rules'] = text.trim();
-    await saveMetadata();
+YOUR TASK:
+1. Read the player's message for their combat scaling reference (e.g. "5 = Sephiroth" means Sephiroth is the ceiling).
+2. Extrapolate a full power scale from 1 to that ceiling, filling in tiers based on the story's setting, characters, and established lore.
+3. SET power on ALL existing characters in Gravity_State_View based on this scale.
+4. SET power on the PC.
+5. Write a brief summary of the scale you derived and the assignments you made.
 
-    _pendingOOCInjection = `[GRAVITY COMBAT SETUP — The player has defined combat rules for this story.
+Store the full scale description in a world constant:
+> MAP_SET world field=constants key=combat_rules value="[your derived scale]"
 
-COMBAT RULES:
-${text.trim()}
+HARD RULE: Do NOT create any mechanical combat system. No dice. No rolls. No HP. No condition tracks. No attack tables. No modifiers. No turn sequences. NONE. Dice in Gravity exist ONLY for divination — NEVER for combat. Combat is resolved through narrative prose using the Logic and Fairness principles. The power scale is a NARRATIVE REFERENCE for your judgment, not game mechanics.
 
-YOUR TASK: SET power on all existing characters in Gravity_State_View based on this scale. Emit ledger commands ONLY. Brief confirmation in prose.
-
-HARD RULE: Do NOT create any mechanical combat system. No dice. No rolls. No HP. No condition tracks. No attack tables. No modifiers. No turn sequences. NONE. Dice in Gravity exist ONLY for divination. Combat is resolved through narrative prose using the Logic and Fairness principles. The power scale is a reference for your judgment, not game mechanics. Just SET the power values and confirm.]`;
+Do not write prose. Just derive the scale, assign power values via ledger, and confirm.]`;
 
     injectPrompt('integration');
-    insertChatMessage('OOC: Combat setup.');
-    toastr.success('Combat rules stored.');
+    // Don't overwrite the user's input — they already typed their rules
 }
 
 function handleCombatButton() {
@@ -869,9 +865,11 @@ function handleCombatButton() {
         }
     }
 
-    // Get combat rules from chatMetadata
+    // Get combat rules from world constants (LLM-set) or chatMetadata (user-set)
     const { chatMetadata } = SillyTavern.getContext();
-    const combatRules = chatMetadata?.['gravity_combat_rules'] || '';
+    const combatRules = _currentState?.world?.constants?.combat_rules
+        || chatMetadata?.['gravity_combat_rules']
+        || '';
 
     // Get PC wounds
     const pcWounds = _currentState?.pc?.wounds;
