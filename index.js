@@ -1070,8 +1070,18 @@ AFTER THE SCENE: Resume full deduction + prose + ledger. Post-intimacy ledger mu
 - READ updates (how characters see each other now)
 - MOVE constraint if intimacy pressured one
 - APPEND key_moments (intimate scene recorded — permanent)
-- MAP_SET intimate_history: encounters, dynamic, preferences, boundaries, evolution, aftermath
-- SET intimacy_stance if the stance shifted through the scene]`;
+- SET intimacy_stance if the stance shifted through the scene
+
+INTIMATE HISTORY — cumulative development tracking. Each MAP_SET BUILDS on previous, never replaces:
+- encounters: count + brief note per encounter ("3rd — she initiated for the first time, pulled him down")
+- dynamic: who initiates, who leads, power balance, how it's SHIFTING ("was passive → now directs his hands")
+- preferences: what they've DISCOVERED they like — not assumed, found ("likes teeth on collarbone — discovered encounter 2, repeated every time since")
+- kinks: what's developing beyond vanilla as trust/comfort grows ("light restraint — she held his wrists encounter 4, he reciprocated encounter 5, becoming a pattern")
+- boundaries: what they've hit, what made them stop, what they're not ready for YET ("won't be on top — tried once, froze, he read it instantly")
+- evolution: the ARC of their sexual relationship ("encounter 1: discovery pace, tentative, stopped early. encounter 3: she knows what she wants, takes it. encounter 5: comfortable enough to laugh mid-act")
+- aftermath: how they behave AFTER — this reveals more than the act ("encounter 1: buried face in chest, silent. encounter 4: talks, traces his skin, stays awake")
+
+Each update should reference encounter NUMBER so the development arc is traceable. A preference discovered in encounter 2 that becomes a pattern by encounter 5 is character growth. Track it.]`;
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} moves closer.*`);
