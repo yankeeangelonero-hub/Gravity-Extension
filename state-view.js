@@ -60,7 +60,15 @@ function formatStateView(state, mode = 'full') {
         for (const c of constraints) {
             const owner = state.characters[c.owner_id];
             const ownerName = owner?.name || c.owner_id;
-            lines.push(`  ${c.name} [${c.integrity}] (${ownerName}) → id: ${c.id}`);
+            let cLine = `  ${c.name} [${c.integrity}] (${ownerName})`;
+            if (c.shedding_order) cLine += ` shed:${c.shedding_order}`;
+            cLine += ` → id: ${c.id}`;
+            lines.push(cLine);
+            if (!slim && c.profile) {
+                lines.push(`    ${c.profile}`);
+            } else if (!slim && c.current_pressure) {
+                lines.push(`    Pressure: ${c.current_pressure}`);
+            }
         }
     }
 
@@ -149,9 +157,16 @@ function formatStateView(state, mode = 'full') {
     const openChapter = Object.values(state.chapters).find(ch => ch.status === 'OPEN');
     if (openChapter) {
         lines.push('');
-        lines.push(`CHAPTER ${openChapter.number || '?'}: "${openChapter.title || openChapter.focus || '?'}" [${openChapter.status}]`);
-        if (openChapter.arc) lines.push(`  Arc: ${openChapter.arc}`);
-        if (openChapter.central_tension) lines.push(`  Tension: ${openChapter.central_tension}`);
+        if (openChapter.profile) {
+            // New: single profile paragraph
+            lines.push(`CHAPTER [${openChapter.status}] → id: ${openChapter.id}`);
+            lines.push(`  ${openChapter.profile}`);
+        } else {
+            // Legacy: separate fields
+            lines.push(`CHAPTER ${openChapter.number || '?'}: "${openChapter.title || openChapter.focus || '?'}" [${openChapter.status}]`);
+            if (openChapter.arc) lines.push(`  Arc: ${openChapter.arc}`);
+            if (openChapter.central_tension) lines.push(`  Tension: ${openChapter.central_tension}`);
+        }
     }
 
     // Constants — always shown (voice/tone are critical for prose)
@@ -370,8 +385,14 @@ FIELD MERGES — use these combined fields:
     relations{} stays separate (MAP_SET for inter-faction stances).
   collision details: single paragraph. SET collision:id field=details value="[full description]"
     Include: name, forces, cost/stakes, target constraint, mode (combat/narrative), upper hand.
-    status and distance stay as separate fields (extension reads them mechanically).
-    Rewrite details when the collision's shape changes. One SET.
+    status and distance stay separate (extension reads them mechanically).
+  constraint profile: single paragraph. SET constraint:id field=profile value="[full description]"
+    Include: prevents, threshold, replacement, replacement_type, current_pressure.
+    integrity, owner_id, shedding_order stay separate (extension reads them mechanically).
+  chapter profile: single paragraph. SET chapter:id field=profile value="[full description]"
+    Include: number, title, arc, central_tension.
+    status stays separate (extension reads it mechanically).
+  divination: active_system stays separate. last_draw as simple string. readings[] → drop, not referenced.
   Do NOT use separate cost, stance_toward_pc, last_move, forces, target_constraint, or pc.reputation fields.
 
 STATE MACHINES (adjacent only, no skipping):

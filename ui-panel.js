@@ -562,10 +562,16 @@ function renderCharDossier(char, state) {
             parts.push(`<div class="gl-constraint-card">`);
             parts.push(`<div class="gl-constraint-title"><b>${esc(c.name)}</b> ${badge(c.integrity)}${integrityDesc ? ` <span class="gl-integrity-desc">— ${esc(integrityDesc)}</span>` : ''}</div>`);
 
-            if (c.prevents) parts.push(`<div class="gl-d-detail"><b>Prevents:</b> ${esc(c.prevents)}</div>`);
-            if (c.threshold) parts.push(`<div class="gl-d-detail"><b>Threshold:</b> ${esc(c.threshold)}</div>`);
-            if (c.replacement) parts.push(`<div class="gl-d-detail"><b>Replacement (if breached):</b> ${esc(c.replacement)}${c.replacement_type ? ` <i>(${esc(c.replacement_type)})</i>` : ''}</div>`);
-            if (c.current_pressure) parts.push(`<div class="gl-d-pressure"><b>Current pressure:</b> ${esc(c.current_pressure)}</div>`);
+            if (c.profile) {
+                // New: single profile paragraph
+                parts.push(`<div class="gl-d-detail">${esc(c.profile)}</div>`);
+            } else {
+                // Legacy: separate fields
+                if (c.prevents) parts.push(`<div class="gl-d-detail"><b>Prevents:</b> ${esc(c.prevents)}</div>`);
+                if (c.threshold) parts.push(`<div class="gl-d-detail"><b>Threshold:</b> ${esc(c.threshold)}</div>`);
+                if (c.replacement) parts.push(`<div class="gl-d-detail"><b>Replacement (if breached):</b> ${esc(c.replacement)}${c.replacement_type ? ` <i>(${esc(c.replacement_type)})</i>` : ''}</div>`);
+                if (c.current_pressure) parts.push(`<div class="gl-d-pressure"><b>Current pressure:</b> ${esc(c.current_pressure)}</div>`);
+            }
 
             if (history.length > 0) {
                 parts.push(`<div class="gl-history-toggle">Integrity history (${history.length})</div>`);
@@ -786,11 +792,18 @@ function renderArc(state) {
     if (active.length) {
         for (const ch of active) {
             parts.push(`<div class="gl-collision-card">`);
-            parts.push(`<div class="gl-collision-name">Ch${ch.number || '?'}: ${esc(ch.title || ch.focus || '?')} ${badge(ch.status)}</div>`);
-            if (ch.arc) parts.push(`<div class="gl-d-detail"><b>Arc:</b> ${esc(ch.arc)}</div>`);
-            if (ch.central_tension) parts.push(`<div class="gl-d-detail"><b>Tension:</b> ${esc(ch.central_tension)}</div>`);
-            const targets = toArr(ch.target_collisions);
-            if (targets.length) parts.push(`<div class="gl-d-detail"><b>Target collisions:</b> ${targets.map(t => esc(t)).join(', ')}</div>`);
+            if (ch.profile) {
+                // New: single profile paragraph
+                parts.push(`<div class="gl-collision-name">${badge(ch.status)} ${esc(ch.id)}</div>`);
+                parts.push(`<div class="gl-d-detail">${esc(ch.profile)}</div>`);
+            } else {
+                // Legacy: separate fields
+                parts.push(`<div class="gl-collision-name">Ch${ch.number || '?'}: ${esc(ch.title || ch.focus || '?')} ${badge(ch.status)}</div>`);
+                if (ch.arc) parts.push(`<div class="gl-d-detail"><b>Arc:</b> ${esc(ch.arc)}</div>`);
+                if (ch.central_tension) parts.push(`<div class="gl-d-detail"><b>Tension:</b> ${esc(ch.central_tension)}</div>`);
+                const targets = toArr(ch.target_collisions);
+                if (targets.length) parts.push(`<div class="gl-d-detail"><b>Target collisions:</b> ${targets.map(t => esc(t)).join(', ')}</div>`);
+            }
             parts.push(`</div>`);
         }
     }
