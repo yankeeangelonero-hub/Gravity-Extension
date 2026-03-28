@@ -432,6 +432,18 @@ function renderPCDossier(state) {
     const parts = [];
     parts.push(`<div class="gl-dossier-header"><b>${esc(pc.name)}</b> ${badge('PC')}</div>`);
 
+    // Power & Wounds
+    if (pc.power != null) {
+        parts.push(`<div class="gl-d-row"><b>Power:</b> ${esc(String(pc.power))}</div>`);
+    }
+    const pcWounds = toObj(pc.wounds);
+    if (Object.keys(pcWounds).length) {
+        parts.push(`<div class="gl-d-section"><b>Wounds:</b></div>`);
+        for (const [k, v] of Object.entries(pcWounds)) {
+            parts.push(`<div class="gl-d-detail">${esc(k)}: ${esc(v)}</div>`);
+        }
+    }
+
     // Demonstrated traits — detailed narrative entries
     const traits = toArr(pc.demonstrated_traits);
     if (traits.length) {
@@ -484,9 +496,14 @@ function renderCharDossier(char, state) {
 
     parts.push(`<div class="gl-dossier-header"><b>${esc(char.name || char.id)}</b> ${badge(char.tier)}</div>`);
 
+    if (char.power != null) parts.push(`<div class="gl-d-row"><b>Power:</b> ${esc(String(char.power))}</div>`);
     if (char.want) parts.push(`<div class="gl-d-row"><b>WANT:</b> ${esc(char.want)}</div>`);
     if (char.doing) parts.push(`<div class="gl-d-row"><b>DOING:</b> ${esc(char.doing)}${char.cost ? ` | <b>COST:</b> ${esc(char.cost)}` : ''}</div>`);
     if (char.stance_toward_pc) parts.push(`<div class="gl-d-row"><b>Stance toward PC:</b> ${esc(char.stance_toward_pc)}</div>`);
+    const charWounds = toObj(char.wounds);
+    if (Object.keys(charWounds).length) {
+        parts.push(`<div class="gl-d-row"><b>Wounds:</b> ${Object.entries(charWounds).map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(', ')}</div>`);
+    }
 
     // Shedding order
     const constraints = Object.values(state.constraints).filter(c => c.owner_id === char.id);
