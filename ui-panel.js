@@ -26,8 +26,10 @@ let _onRevertTurn = null;
 let _onGoodTurn = null;
 let _onCombat = null;
 let _onCombatSetup = null;
+let _onDivinationChange = null;
+let _onIntimacy = null;
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onCombatSetup }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onCombatSetup, onDivinationChange, onIntimacy }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
@@ -40,6 +42,8 @@ function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapte
     _onGoodTurn = onGoodTurn;
     _onCombat = onCombat;
     _onCombatSetup = onCombatSetup;
+    _onDivinationChange = onDivinationChange;
+    _onIntimacy = onIntimacy;
 }
 
 let _currentBookName = '';
@@ -130,6 +134,7 @@ function createPanel() {
             <button class="gl-cmd-btn" data-cmd="advance" title="Yield initiative — let the world move"><i class="fa-solid fa-play"></i> Advance</button>
             <button class="gl-cmd-btn" data-cmd="combat_setup" title="Define power scale and combat rules"><i class="fa-solid fa-shield-halved"></i> Combat Setup</button>
             <button class="gl-cmd-btn" data-cmd="combat" title="Initiate combat — fight this"><i class="fa-solid fa-burst"></i> Combat</button>
+            <button class="gl-cmd-btn" data-cmd="intimacy" title="Initiate intimate scene"><i class="fa-solid fa-heart"></i> Intimacy</button>
             <button class="gl-cmd-btn" data-cmd="good_turn" title="Flag good prose — paste exemplar"><i class="fa-solid fa-thumbs-up"></i> Good</button>
         </div>
         <div class="gl-setup-indicator gl-hidden" id="gl-setup-indicator">
@@ -164,6 +169,7 @@ function createPanel() {
             case 'advance': if (_onAdvance) _onAdvance(); break;
             case 'combat_setup': if (_onCombatSetup) _onCombatSetup(); break;
             case 'combat': if (_onCombat) _onCombat(); break;
+            case 'intimacy': if (_onIntimacy) _onIntimacy(); break;
             case 'good_turn': if (_onGoodTurn) _onGoodTurn(); break;
         }
     });
@@ -247,6 +253,14 @@ function renderAllSections() {
             toggle.classList.toggle('open');
         });
     });
+
+    // Divination system selector
+    const divSelect = container.querySelector('#gl-divination-select');
+    if (divSelect) {
+        divSelect.addEventListener('change', () => {
+            if (_onDivinationChange) _onDivinationChange(divSelect.value);
+        });
+    }
 
     // Exemplar edit/remove buttons
     container.querySelectorAll('.gl-exemplar-edit').forEach(btn => {
@@ -835,13 +849,18 @@ function renderArc(state) {
 
 function renderDivination(state) {
     const div = state.divination || {};
+    const { chatMetadata } = SillyTavern.getContext();
+    const activeSystem = chatMetadata?.['gravity_divination_system'] || div.active_system || 'arcana';
     const parts = [];
 
-    if (div.active_system) {
-        parts.push(`<div class="gl-d-row"><b>Active System:</b> ${esc(div.active_system)}</div>`);
-    } else {
-        parts.push(`<div class="gl-d-row"><b>Active System:</b> Not set</div>`);
-    }
+    // Dropdown selector
+    parts.push(`<div class="gl-d-row"><b>System:</b>
+        <select class="gl-div-select" id="gl-divination-select">
+            <option value="arcana"${activeSystem === 'arcana' ? ' selected' : ''}>Major Arcana (d22)</option>
+            <option value="iching"${activeSystem === 'iching' || activeSystem === 'i ching' ? ' selected' : ''}>易経 I Ching (d64)</option>
+            <option value="classic"${activeSystem === 'classic' || activeSystem === '2d10' ? ' selected' : ''}>Classic Entropy (2d10)</option>
+        </select>
+    </div>`);
 
     if (div.last_draw) {
         parts.push(`<div class="gl-d-section"><b>Last Draw:</b></div>`);

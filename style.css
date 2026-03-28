@@ -144,6 +144,10 @@
 #gravity-ledger-panel .gl-exemplar-btn:hover { background:rgba(255,255,255,.1); color:#fff; }
 #gravity-ledger-panel .gl-exemplar-remove:hover { color:#f66; border-color:#f66; }
 
+/* Divination select */
+#gravity-ledger-panel .gl-div-select { background:#1e1e1e; border:1px solid #444; border-radius:3px; color:#ddd; font-size:11px; padding:2px 6px; margin-left:4px; font-family:inherit; }
+#gravity-ledger-panel .gl-div-select:focus { border-color:#88f; outline:none; }
+
 /* Collapsible lists */
 #gravity-ledger-panel .gl-collapse-toggle { font-size:10px; color:#88f; cursor:pointer; padding:2px 0; opacity:.7; margin-bottom:2px; }
 #gravity-ledger-panel .gl-collapse-toggle:hover { opacity:1; }

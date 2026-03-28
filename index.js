@@ -73,22 +73,59 @@ const ARCANA_TABLE = [
     'The World — Completion. A cycle closes. The full picture visible.',
 ];
 
+// ─── Divination System ─────────────────────────────────────────────────────
+
+const NARRATIVE_FORCING = 'NARRATIVE FORCING: The draw must visibly alter the scene — not just color the mood. Something HAPPENS because of this draw. A person appears, a plan fails, a door opens, a body drops, a truth surfaces. The draw is not a metaphor — it is an event. Find the coolest, most unexpected intersection with the current scene and MAKE IT HAPPEN in the prose.';
+
+const CLASSIC_TABLE = `| Roll | Conditions |
+| 2 | Worst conditions. Maximum preparation on opposing side. A second complication compounds the first. The board shifts. |
+| 3-5 | Heavy. The force arrives prepared and hostile. No easy angles. |
+| 6-9 | Hard. Direct, no advantages for anyone. Exactly as serious as it looks. |
+| 10-14 | Contested. Mixed signals, incomplete information. Neither side has clean advantage. |
+| 15-18 | Exploitable. A vulnerability, a gap, a piece of timing that gives an opening. |
+| 19 | Favorable. The force arrives weakened, distracted, or compromised. |
+| 20 | The board changes shape. A second collision crashes into the first. Nobody predicted this. |
+2 and 20 are special. Both reshape the board. Dice never override logic.`;
+
+const ICHING_TRIGRAMS = `Lower trigram = inner situation. Upper trigram = outer/visible situation.
+乾 (Heaven) = active force, initiative. 坤 (Earth) = yielding, nurture. 震 (Thunder) = shock, action. 坎 (Water) = danger, the abyss. 艮 (Mountain) = stillness, obstruction. 巽 (Wind) = gentle penetration. 離 (Fire) = clarity, illumination. 兌 (Lake) = joy, openness.
+The hexagram carries rhythm. Stillness slows the beat. Movement compresses — things arrive before anyone processes them.`;
+
+const ARCANA_ROMAN = ['0', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX', 'XXI'];
+
+/**
+ * Get the active divination system. Checks chatMetadata first, then ledger state.
+ */
+function getActiveDivinationSystem() {
+    const { chatMetadata } = SillyTavern.getContext();
+    return chatMetadata?.['gravity_divination_system']
+        || (_currentState?.divination?.active_system || 'arcana').toLowerCase();
+}
+
+/**
+ * Set the active divination system.
+ */
+async function setDivinationSystem(system) {
+    const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+    chatMetadata['gravity_divination_system'] = system;
+    await saveMetadata();
+}
+
 /**
  * Draw from the active divination system.
- * @returns {{ system: string, label: string, num: number, reading: string }}
+ * @returns {{ system: string, label: string, num: number, reading: string, html: string }}
  */
 function drawDivination() {
-    const system = (_currentState?.divination?.active_system || 'arcana').toLowerCase();
-
-    const COOL_RULE = 'NARRATIVE FORCING: The draw must visibly alter the scene — not just color the mood. Something HAPPENS because of this draw. A person appears, a plan fails, a door opens, a body drops, a truth surfaces. The draw is not a metaphor — it is an event. Find the coolest, most unexpected intersection with the current scene and MAKE IT HAPPEN in the prose.';
+    const system = getActiveDivinationSystem();
 
     if (system === 'iching' || system === 'i_ching' || system === 'i ching') {
-        const num = Math.floor(Math.random() * 64) + 1; // 1-64
+        const num = Math.floor(Math.random() * 64) + 1;
         return {
             system: 'iching',
             label: 'THE I CHING DREW',
             num,
-            reading: `Hexagram ${num} — interpret per the 易経 King Wen sequence. The hexagram shapes CIRCUMSTANCE, not outcome. ${COOL_RULE}`,
+            reading: `Hexagram ${num} — interpret per the 易経 King Wen sequence (1=乾, 2=坤, 3=屯... 64=未済). You know the 易経. From the number derive: hexagram symbol, Chinese name, English translation, core situational reading. ${ICHING_TRIGRAMS}\n${NARRATIVE_FORCING}`,
+            html: `<div style="background:linear-gradient(180deg,#0a0a0a 0%,#1a1008 100%);border:1px solid #8b7355;border-radius:4px;padding:20px;margin:16px auto;max-width:280px;text-align:center;"><div style="color:#8b7355;font-size:0.7em;letter-spacing:4px;text-transform:uppercase;">易経 · The Book of Changes</div><div style="color:#f0e6d3;font-size:1.4em;margin:12px 0 4px 0;">[HEXAGRAM NAME]</div><div style="color:#8b7355;font-size:0.9em;font-style:italic;">[English] · ${num}</div><div style="width:40px;height:1px;background:#8b7355;margin:12px auto;"></div><div style="color:#a89070;font-size:0.85em;line-height:1.5;">[One-line situational reading]</div></div>`,
         };
     }
 
@@ -100,17 +137,21 @@ function drawDivination() {
             system: 'classic',
             label: 'THE DICE ROLLED',
             num: total,
-            reading: `${d1} + ${d2} = ${total} — consult the Classic Entropy table for conditions. ${COOL_RULE}`,
+            reading: `${d1} + ${d2} = ${total}\n${CLASSIC_TABLE}\n${NARRATIVE_FORCING}`,
+            html: '',
         };
     }
 
     // Default: arcana (d22, 0-indexed)
     const num = Math.floor(Math.random() * 22);
+    const cardName = ARCANA_TABLE[num].split(' — ')[0];
+    const cardMeaning = ARCANA_TABLE[num].split(' — ')[1] || '';
     return {
         system: 'arcana',
         label: 'THE ARCANA DREW',
         num,
-        reading: `#${num} — ${ARCANA_TABLE[num]} ${COOL_RULE}`,
+        reading: `#${num} — ${ARCANA_TABLE[num]}\nUSE THIS EXACT CARD. Do not override or pick a different one.\n${NARRATIVE_FORCING}`,
+        html: `<div style="background:linear-gradient(180deg,#0a0a1a 0%,#1a0a2e 100%);border:1px solid #d4af37;border-radius:8px;padding:20px;margin:16px auto;max-width:280px;text-align:center;box-shadow:0 0 15px rgba(212,175,55,0.2);"><div style="color:#d4af37;font-size:0.75em;letter-spacing:3px;text-transform:uppercase;">The Arcana</div><div style="color:#f0e6d3;font-size:1.8em;margin:12px 0 4px 0;font-weight:bold;">${cardName}</div><div style="color:#d4af37;font-size:0.9em;font-style:italic;">${ARCANA_ROMAN[num]}</div><div style="width:40px;height:1px;background:#d4af37;margin:12px auto;"></div><div style="color:#a89070;font-size:0.85em;line-height:1.4;">${cardMeaning}</div></div>`,
     };
 }
 
@@ -346,7 +387,7 @@ function injectPrompt(mode) {
                     return `═══ COLLISION ARRIVAL: "${a.col.name || a.id}" ═══
 ${colDetails}
 
-${a.draw.label}: ${a.draw.reading}
+${a.draw.label}: ${a.draw.reading}${a.draw.html ? `\nRender this HTML card reveal before interpreting:\n${a.draw.html}` : ''}
 
 This collision has reached distance 0. It detonates NOW.
 
@@ -753,7 +794,7 @@ function handleAdvanceButton() {
 
         _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} yields the turn. The world moves.
 
-${draw.label}: ${draw.reading}
+${draw.label}: ${draw.reading}${draw.html ? `\nRender this HTML card reveal before interpreting:\n${draw.html}` : ''}
 The draw shapes the CIRCUMSTANCE of what happens — not the outcome.
 
 ${ripeCollisions.length === 1 ? 'A collision has arrived:' : 'These collisions have arrived:'}
@@ -784,7 +825,7 @@ Full turn: deduction + prose + ledger block.]`;
 
         _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} yields the turn. A collision is in progress.
 
-${draw.label}: ${draw.reading}
+${draw.label}: ${draw.reading}${draw.html ? `\nRender this HTML card reveal before interpreting:\n${draw.html}` : ''}
 The draw shapes what happens next — not the outcome.
 
 IN-PROGRESS COLLISION:
@@ -803,7 +844,7 @@ Full turn: deduction + prose + ledger block.]`;
         // No ripe or in-progress collisions — normal world-advance with multi-beat structure
         _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
 
-${draw.label}: ${draw.reading}
+${draw.label}: ${draw.reading}${draw.html ? `\nRender this HTML card reveal before interpreting:\n${draw.html}` : ''}
 The draw colors the world's move — it does not prescribe it.
 
 This is the world's turn. You may write MULTIPLE BEATS and CUT between character angles:
@@ -949,6 +990,83 @@ Full turn: deduction + prose + ledger block.]`;
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} ${isSetup ? 'prepares to fight.' : 'engages in combat.'}*`);
+}
+
+function handleIntimacyButton() {
+    const pcName = _currentState?.pc?.name || '{{user}}';
+
+    // Gather intimacy stances for scene-active characters
+    const stances = [];
+    for (const [id, char] of Object.entries(_currentState?.characters || {})) {
+        if (char.tier === 'UNKNOWN' || char.tier === 'KNOWN') continue;
+        if (char.intimacy_stance) {
+            stances.push(`${char.name || id}: ${char.intimacy_stance}`);
+        }
+    }
+
+    // Gather intimate history if exists
+    const histories = [];
+    for (const [id, char] of Object.entries(_currentState?.characters || {})) {
+        const ih = char.intimate_history;
+        if (ih && typeof ih === 'object' && Object.keys(ih).length) {
+            histories.push(`${char.name || id}: ${Object.entries(ih).map(([k, v]) => `${k}: ${v}`).join('; ')}`);
+        }
+    }
+
+    _pendingOOCInjection = `[GRAVITY INTIMACY — ${pcName} initiates an intimate scene.
+
+═══ GATE CHECK — read this FIRST ═══
+Before activating, check:
+1. Is a sex scene the natural, earned next beat given the relationship, the tone, and the story?
+2. Has the player's action or the narrative clearly escalated past casual physical contact?
+3. Would both characters plausibly consent in this moment given their dossiers and intimacy stances?
+
+If ANY answer is no: IGNORE this instruction entirely. Write normal prose. Do not acknowledge the gate failed.
+If ALL answers are yes: ACTIVATE the intimate scene.
+
+${stances.length ? `INTIMACY STANCES:\n${stances.map(s => `  ${s}`).join('\n')}\nThe stance defines what the character would do RIGHT NOW. Respect it.` : ''}
+
+${histories.length ? `INTIMATE HISTORY:\n${histories.map(h => `  ${h}`).join('\n')}\nIf none exists, everything is discovery.` : 'No intimate history exists. Everything is discovery.'}
+
+CONSTRAINT CHECK: Read constraint integrity from Gravity_State_View. Intimacy may pressure constraints — vulnerability blocks, trust thresholds. The constraint doesn't prevent the scene, it shapes HOW the character experiences it.
+
+═══ THE EXPERIENCE ═══
+Multi-turn interactive scene. Each turn:
+1. One short, visceral prose beat (200-400 words)
+2. 3-4 clickable options for the player
+3. Player picks or writes their own
+
+No fixed phase counts. Ends when: a collision arrives and demands resolution, player reaches natural conclusion, or player types "OOC: fade to black."
+
+PROSE RULES:
+- ONE SENSORY BEAT per turn. Direct vocabulary. Sensation chains (stimulus → where it travels → involuntary response).
+- Texture of touch (material, temperature, pressure). Sounds rendered, not described.
+- Pacing mimics the act (longer sentences for slow, fragments at peaks).
+- Character first — how they have sex IS characterization.
+- The partner is NOT passive — every 2-3 turns, skip choices and let partner act.
+
+PARTNER INTERIORITY: Every 2-3 turns, short italicized first-person block from partner's perspective. 2-4 sentences. Raw internal experience from dossier and constraints.
+
+CHOICE FRAMEWORKS (rotate based on scene phase):
+- By Sensation: Touch / Mouth / Visual / Denial
+- By Dynamic: He leads / She leads / Mutual / Vacuum (stillness)
+- By Register: Worship / Need / Play / Ruin
+- By Focus: Mouth / Chest / Hips and below / Somewhere unexpected
+Option 4 always pushes a boundary. Dominant and surprising, never degrading.
+
+COLLISION CHECK: Each turn, check collision distances. If one reaches zero, it fires mid-scene. The world does not pause for intimacy.
+
+EARLY EXIT: "OOC: fade to black" → cut to afterglow. No judgment.
+
+AFTER THE SCENE: Resume full deduction + prose + ledger. Post-intimacy ledger must include:
+- READ updates (how characters see each other now)
+- MOVE constraint if intimacy pressured one
+- APPEND key_moments (intimate scene recorded — permanent)
+- MAP_SET intimate_history: encounters, dynamic, preferences, boundaries, evolution, aftermath
+- SET intimacy_stance if the stance shifted through the scene]`;
+
+    injectPrompt('advance');
+    insertChatMessage(`*${pcName} moves closer.*`);
 }
 
 async function handleGoodTurnButton() {
@@ -1202,6 +1320,11 @@ async function handleImportData(data) {
         onGoodTurn: handleGoodTurnButton,
         onCombat: handleCombatButton,
         onCombatSetup: handleCombatSetupButton,
+        onIntimacy: handleIntimacyButton,
+        onDivinationChange: async (system) => {
+            await setDivinationSystem(system);
+            toastr.info(`Divination system: ${system}`);
+        },
     });
 
     // Setup wizard phase change callback
