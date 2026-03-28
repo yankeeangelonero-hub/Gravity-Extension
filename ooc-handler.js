@@ -11,7 +11,7 @@ import {
 } from './ledger-store.js';
 
 const OOC_PATTERNS = [
-    { pattern: /ooc:\s*combat\s+setup\s+([\s\S]+)/i, handler: handleCombatSetup },
+    { pattern: /ooc:\s*combat\s+setup\b/i, handler: handleCombatSetup },
     { pattern: /ooc:\s*combat\s+rules\b/i, handler: handleCombatRules },
     { pattern: /ooc:\s*power\s+(\S+)\s+(\d+)/i, handler: handlePower },
     { pattern: /ooc:\s*wound\s+(\S+)\s+(\S+)\s+"([^"]+)"/i, handler: handleWound },
@@ -160,7 +160,16 @@ async function handleConsolidate() {
 // ─── Combat OOC Commands ─────────────────────────────────────────────────────
 
 async function handleCombatSetup(match) {
-    const rulesText = match[1].trim();
+    // match.input is the full message; extract everything after "combat setup"
+    const fullMessage = match.input || match[0];
+    const setupMatch = fullMessage.match(/ooc:\s*combat\s+setup\b\s*([\s\S]*)/i);
+    const afterSetup = setupMatch ? setupMatch[1] : '';
+    // Strip HTML tags (SillyTavern messages may contain <br>, <p>, etc.)
+    const rulesText = afterSetup.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
+
+    if (!rulesText) {
+        return `[LEDGER: No rules provided. Usage: "OOC: combat setup <your power scale and combat rules>"\nExample: "OOC: combat setup 1=civilian, 3=soldier, 5=dragon. Combat is gritty and lethal."]`;
+    }
     const { chatMetadata, saveMetadata } = SillyTavern.getContext();
     chatMetadata['gravity_combat_rules'] = rulesText;
     await saveMetadata();
