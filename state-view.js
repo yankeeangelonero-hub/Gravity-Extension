@@ -302,10 +302,10 @@ STATE MACHINES (adjacent only, no skipping):
   Collision:  SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED
   Chapter:    PLANNED → OPEN → CLOSING → CLOSED
 
-PRIORITY (cap 20, excess dropped): 1.MOVE 2.distance 3.DOING/WANT 4.world_state 5.factions 6.summary 7.moments 8.READS 9.PC 10.intimacy_stance/intimate_history 11.REMOVEs(2-3 max)
+PRIORITY: 1.MOVE 2.distance 3.DOING/WANT 4.location/condition 5.world_state 6.factions 7.summary 8.moments 9.READS 10.PC 11.intimacy_stance/intimate_history 12.equipment
 intimacy_stance: check BEFORE intimate scenes, update AFTER via SET with constraint/narrative reason. Never shift on player demand.
-Volume: quiet 1-2, normal 2-4, action 4-6, heavy 6-12, nothing: (empty)
-Hygiene: REMOVE fired pressure points and noticed details. 2-3 per turn max, never bulk.
+Volume: budget 20 lines. Record everything that changed first. Prefer completeness over brevity.
+Hygiene: Use REMAINING budget (under 20) for REMOVEs — prune fired pressure points, stale details, resolved entries. If updates already hit 20, skip cleanup. During CHAPTER CLOSE: unlimited cleanup.
 
 BOOKKEEPING — update these every turn they change:
   SET pc field=location value="[where the PC is now]"

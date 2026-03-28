@@ -380,24 +380,26 @@ After prose, append:
 > [Day N — HH:MM] OPERATION entity:id key=value -- reason
 ---END LEDGER---
 
-WHAT TO TRACK — emit in PRIORITY ORDER (cap: 20 lines, excess dropped):
+WHAT TO TRACK — emit in PRIORITY ORDER (budget: 20 lines):
 1. State transitions (MOVE constraint integrity, collision status, chapter status)
 2. Collision distance changes (SET distance)
 3. Character DOING/WANT updates (SET)
-4. World state changes (SET world_state)
-5. Faction updates (SET power/momentum/last_move, MAP_SET relations)
-6. Story summary (APPEND summary) — every significant scene, 2-4 sentences with texture
-7. Key moments / noticed details (APPEND)
-8. READS updates when interpretation shifts (READ)
-9. PC traits, timeline, reputation (APPEND / MAP_SET)
-10. Intimacy stance shifts after constraint/narrative changes (SET intimacy_stance — with reason)
-11. Intimate history after intimate scenes (MAP_SET intimate_history)
-12. Housekeeping REMOVEs — ALWAYS LAST, 2–3 per turn max, never bulk dumps
+4. Location/condition updates (SET location, condition, equipment)
+5. World state changes (SET world_state)
+6. Faction updates (SET power/momentum/last_move, MAP_SET relations)
+7. Story summary (APPEND summary) — every significant scene, 2-4 sentences with texture
+8. Key moments / noticed details (APPEND)
+9. READS updates when interpretation shifts (READ)
+10. PC traits, timeline, reputation (APPEND / MAP_SET)
+11. Intimacy stance shifts after constraint/narrative changes (SET intimacy_stance — with reason)
+12. Intimate history after intimate scenes (MAP_SET intimate_history)
+
+HOUSEKEEPING: If your updates use FEWER than 20 lines, use remaining budget for REMOVEs — prune fired pressure points, stale noticed details, resolved entries. If updates already hit 20, skip cleanup — save it for chapter close. During CHAPTER CLOSE: unlimited cleanup, consolidate aggressively.
 If nothing changed: (empty)]`,
                 PROMPT_IN_CHAT, 0);
         } else {
             setExtensionPrompt(`${MODULE_NAME}_nudge`,
-                `[SYSTEM: Include a ---LEDGER--- block at the end. Cap: 20 lines${_uncappedTurn ? ' (UNCAPPED this turn)' : ''}.]`,
+                `[SYSTEM: Include a ---LEDGER--- block at the end. Budget: 20 lines — record all changes, use remaining lines for cleanup${_uncappedTurn ? ' (UNCAPPED this turn)' : ''}.]`,
                 PROMPT_IN_CHAT, 0);
         }
     } catch (err) {
@@ -408,9 +410,9 @@ If nothing changed: (empty)]`,
 // ─── Array Size Checks ────────────────────────────────────────────────────────
 
 const ARRAY_SIZE_LIMITS = {
-    pressure_points: { path: s => s.world?.pressure_points, label: 'PRESSURE_POINTS', cap: 10 },
-    demonstrated_traits: { path: s => s.pc?.demonstrated_traits, label: 'PC TRAITS', cap: 12 },
-    timeline: { path: s => s.pc?.timeline, label: 'PC TIMELINE', cap: 20 },
+    pressure_points: { path: s => s.world?.pressure_points, label: 'PRESSURE_POINTS', cap: 15 },
+    demonstrated_traits: { path: s => s.pc?.demonstrated_traits, label: 'PC TRAITS', cap: 20 },
+    timeline: { path: s => s.pc?.timeline, label: 'PC TIMELINE', cap: 30 },
 };
 
 function checkArraySizes(state) {
