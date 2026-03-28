@@ -472,10 +472,8 @@ function checkArraySizes(state) {
         if (Array.isArray(noticed) && noticed.length > 15) {
             warnings.push(`${char.name || id} NOTICED_DETAILS: ${noticed.length} entries — REMOVE fired/resolved details.`);
         }
-        const moments = char.key_moments;
-        if (Array.isArray(moments) && moments.length > 25) {
-            warnings.push(`${char.name || id} KEY_MOMENTS: ${moments.length} entries — consolidate to most significant.`);
-        }
+        // key_moments are PERMANENT — never warn about size, never trim.
+        // They are the character's lived history.
     }
     if (warnings.length === 0) return null;
     return `[LEDGER HYGIENE WARNING — arrays over capacity:\n${warnings.map(w => '  • ' + w).join('\n')}\nPrune 2–3 stale entries per turn using REMOVE. Do NOT batch-remove everything at once — spread cleanup across multiple turns. Pressure points that fired or resolved are history, not live wires.]`;

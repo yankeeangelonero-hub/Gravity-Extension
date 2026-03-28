@@ -92,24 +92,8 @@ function checkAndRotate(state) {
         console.log(`${LOG_PREFIX} Rotated ${overflow} entries from ${cfg.label} to cold storage.`);
     }
 
-    // Also check per-character key_moments
-    for (const [charId, char] of Object.entries(state.characters || {})) {
-        const moments = Array.isArray(char.key_moments) ? char.key_moments : [];
-        const charCap = 10;
-        if (moments.length > charCap) {
-            const overflow = moments.length - charCap;
-            const batch = moments.slice(0, overflow);
-            if (!cold.moments[charId]) cold.moments[charId] = [];
-            cold.moments[charId].push(...batch);
-            pendingBatches.push({
-                key: `char_moments_${charId}`,
-                label: `${char.name || charId}.key_moments`,
-                entries: batch,
-                count: batch.length,
-            });
-            console.log(`${LOG_PREFIX} Rotated ${overflow} key_moments from ${char.name || charId} to cold.`);
-        }
-    }
+    // key_moments are PERMANENT — never rotated, never trimmed.
+    // They are the character's lived history and must not be stripped.
 
     if (pendingBatches.length > 0) {
         const { saveMetadata } = SillyTavern.getContext();
@@ -168,13 +152,12 @@ function getHotView(key, state) {
 }
 
 /**
- * Get hot view for a character's key_moments.
+ * Get ALL key_moments for a character — these are permanent, never trimmed.
  * @param {Object} char
  * @returns {Array}
  */
-function getHotMoments(char) {
-    const moments = Array.isArray(char.key_moments) ? char.key_moments : [];
-    return moments.slice(-10);
+function getAllMoments(char) {
+    return Array.isArray(char.key_moments) ? char.key_moments : [];
 }
 
 /**
@@ -197,7 +180,7 @@ export {
     checkAndRotate,
     buildConsolidationPrompt,
     getHotView,
-    getHotMoments,
+    getAllMoments,
     getColdStats,
     getColdStorage,
     TIER_CONFIG,

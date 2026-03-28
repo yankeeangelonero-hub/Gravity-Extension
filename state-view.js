@@ -350,6 +350,9 @@ BOOKKEEPING — update these every turn they change:
   REMOVE pc field=knowledge_gaps value="[info]" -- when PC discovers it
 Check pc.knowledge_gaps EVERY turn. The PC CANNOT act on information listed there.
 
+key_moments are PERMANENT. NEVER remove them. They are the character's lived history.
+noticed_details are TEMPORARY. Fire them in scenes, then REMOVE.
+
 ═══ END QUICK REFERENCE ═══`;
 }
 
