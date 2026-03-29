@@ -706,6 +706,28 @@ async function onUserMessage(messageId) {
     const message = context.chat?.[messageId];
     if (!message?.mes) return;
 
+    // Detect intimacy action from st-clickable-actions (data-value starts with "intimate:")
+    const rawText = message.mes.replace(/<[^>]+>/g, '').trim();
+    if (rawText.startsWith('intimate:') || rawText.startsWith('*intimate:')) {
+        // Re-inject intimacy context so the LLM stays in intimate scene mode
+        _pendingOOCInjection = `[GRAVITY INTIMACY — continuing intimate scene. The player chose an action.
+
+STAY IN INTIMATE SCENE MODE. Write the next prose beat (200-400 words) responding to the player's action.
+Then generate 4-5 new clickable choices at the end:
+<span class="act" data-value="intimate: [concrete first-person action]">Short display text</span>
+
+RULES STILL ACTIVE:
+- One sensory beat per turn. Sensation chains. Anatomical precision.
+- Body description: verbose, specific — shape, weight, texture, temperature, response to touch.
+- Partner not passive — every 2-3 turns, partner acts on their own.
+- Partner interiority flash every 2-3 turns (italicized first-person, 2-4 sentences).
+- Collision check: if any collision hits distance 0, it fires mid-scene.
+- "OOC: fade to black" → cut to afterglow.
+- Option 4-5 always escalates or pushes a boundary.]`;
+        injectPrompt('advance');
+        return;
+    }
+
     const result = await processOOC(message.mes);
     if (result.handled && result.injection) {
         _uncappedTurn = /ooc:\s*(eval|cleanup)\b/i.test(message.mes);
