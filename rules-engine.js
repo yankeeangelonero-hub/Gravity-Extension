@@ -188,12 +188,16 @@ Beat: [ONE sensory beat.]
 // ─── Build Function ──────────────────────────────────────────────────────
 
 /**
- * Get the active word count setting.
- * @returns {string}
+ * Get prose settings from chatMetadata.
  */
-function getWordCount() {
+function getProseSettings() {
     const { chatMetadata } = SillyTavern.getContext();
-    return chatMetadata?.['gravity_word_count'] || 'flexible';
+    return {
+        wordCount: chatMetadata?.['gravity_word_count'] || 'flexible',
+        voice: chatMetadata?.['gravity_voice'] || '',
+        tone: chatMetadata?.['gravity_tone'] || '',
+        toneRules: chatMetadata?.['gravity_tone_rules'] || '',
+    };
 }
 
 /**
@@ -209,17 +213,26 @@ function buildRulesInjection(turnType) {
         intimacy: INTIMACY_RULES,
     };
 
-    const wordCount = getWordCount();
-    const lengthLine = wordCount === 'flexible'
+    const settings = getProseSettings();
+
+    const lengthLine = settings.wordCount === 'flexible'
         ? 'LENGTH: Flexible — match the scene. Dialogue-heavy: shorter. Action/establishment: longer.'
-        : `LENGTH: ${wordCount} words. This is a CEILING. Do not exceed. If past it, you wrote too many beats — cut the last ones.`;
+        : `LENGTH: ${settings.wordCount} words. This is a CEILING. Do not exceed. If past it, you wrote too many beats — cut the last ones.`;
+
+    const voiceToneBlock = [
+        settings.voice ? `VOICE: ${settings.voice}` : '',
+        settings.tone ? `TONE: ${settings.tone}` : '',
+        settings.toneRules ? `TONE RULES:\n${settings.toneRules}` : '',
+    ].filter(Boolean).join('\n');
+
+    const proseSettings = [lengthLine, voiceToneBlock].filter(Boolean).join('\n\n');
 
     if (turnType === 'integration') {
-        return `${SHARED_CORE}\n\n${lengthLine}\n\n${NORMAL_RULES}\n\n${ADVANCE_RULES}\n\n${COMBAT_RULES}`;
+        return `${SHARED_CORE}\n\n${proseSettings}\n\n${NORMAL_RULES}\n\n${ADVANCE_RULES}\n\n${COMBAT_RULES}`;
     }
 
     const variant = variants[turnType] || variants.normal;
-    return `${SHARED_CORE}\n\n${lengthLine}\n\n${variant}`;
+    return `${SHARED_CORE}\n\n${proseSettings}\n\n${variant}`;
 }
 
 export { buildRulesInjection };

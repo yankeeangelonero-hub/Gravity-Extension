@@ -201,7 +201,7 @@ function renderAllSections() {
         { id: 'world', icon: 'fa-globe', title: 'Factions & World', html: renderWorld(_lastState) },
         { id: 'collisions', icon: 'fa-burst', title: 'Collisions', html: renderCollisions(_lastState) },
         { id: 'arc', icon: 'fa-book-open', title: 'Arc & Chapters', html: renderArc(_lastState) },
-        { id: 'divination', icon: 'fa-star', title: 'Divination', html: renderDivination(_lastState) },
+        { id: 'settings', icon: 'fa-gear', title: 'Settings', html: renderSettings(_lastState) },
         { id: 'exemplars', icon: 'fa-thumbs-up', title: 'Style Exemplars', html: renderExemplars() },
     ];
 
@@ -269,6 +269,22 @@ function renderAllSections() {
     if (lenSelect) {
         lenSelect.addEventListener('change', () => {
             if (_onLengthChange) _onLengthChange(lenSelect.value);
+        });
+    }
+
+    // Prose settings save button
+    const saveProseBtn = container.querySelector('#gl-save-prose-settings');
+    if (saveProseBtn) {
+        saveProseBtn.addEventListener('click', async () => {
+            const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+            const voice = document.getElementById('gl-setting-voice')?.value?.trim() || '';
+            const tone = document.getElementById('gl-setting-tone')?.value?.trim() || '';
+            const toneRules = document.getElementById('gl-setting-tone-rules')?.value?.trim() || '';
+            chatMetadata['gravity_voice'] = voice;
+            chatMetadata['gravity_tone'] = tone;
+            chatMetadata['gravity_tone_rules'] = toneRules;
+            await saveMetadata();
+            toastr.success('Prose settings saved');
         });
     }
 
@@ -855,26 +871,38 @@ function renderArc(state) {
     return parts.length ? parts.join('') : '<div class="gl-empty">No chapters or story data</div>';
 }
 
-// ─── Tab 5: Divination ──────────────────────────────────────────────────────────
+// ─── Tab 5: Settings ────────────────────────────────────────────────────────────
 
-function renderDivination(state) {
+function renderSettings(state) {
     const div = state.divination || {};
     const { chatMetadata } = SillyTavern.getContext();
-    const activeSystem = chatMetadata?.['gravity_divination_system'] || div.active_system || 'arcana';
     const parts = [];
 
-    // Divination dropdown
-    parts.push(`<div class="gl-d-row"><b>Divination:</b>
-        <select class="gl-div-select" id="gl-divination-select">
-            <option value="arcana"${activeSystem === 'arcana' ? ' selected' : ''}>Major Arcana (d22)</option>
-            <option value="iching"${activeSystem === 'iching' || activeSystem === 'i ching' ? ' selected' : ''}>易経 I Ching (d64)</option>
-            <option value="classic"${activeSystem === 'classic' || activeSystem === '2d10' ? ' selected' : ''}>Classic Entropy (2d10)</option>
-        </select>
-    </div>`);
+    // ── Prose Settings ──
+    parts.push(`<div class="gl-d-section"><b>Prose Settings:</b></div>`);
 
-    // Word count dropdown
+    // Voice
+    const voice = chatMetadata?.['gravity_voice'] || state.world?.constants?.voice || '';
+    parts.push(`<div class="gl-d-row"><b>Voice:</b></div>`);
+    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input" id="gl-setting-voice" rows="2" placeholder="e.g. Grounded, close-third, sensory. Short sentences under pressure.">${esc(voice)}</textarea></div>`);
+
+    // Tone
+    const tone = chatMetadata?.['gravity_tone'] || state.world?.constants?.tone || '';
+    parts.push(`<div class="gl-d-row"><b>Tone:</b></div>`);
+    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input" id="gl-setting-tone" rows="2" placeholder="e.g. Consequences real and lingering. Trust 2-4 scenes to earn.">${esc(tone)}</textarea></div>`);
+
+    // Tone Rules
+    const toneRules = chatMetadata?.['gravity_tone_rules'] || state.world?.constants?.tone_rules || '';
+    parts.push(`<div class="gl-d-row"><b>Tone Rules (3 behavioral rules):</b></div>`);
+    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input" id="gl-setting-tone-rules" rows="3" placeholder="1. Weight earns release. 2. Inhabited not analyzed. 3. Hope is concrete.">${esc(typeof toneRules === 'string' ? toneRules : Array.isArray(toneRules) ? toneRules.join('\n') : '')}</textarea></div>`);
+
+    // Save button
+    parts.push(`<div class="gl-d-row"><button class="gl-cmd-btn" id="gl-save-prose-settings">Save Prose Settings</button></div>`);
+
+    // ── Word Count ──
+    parts.push(`<div class="gl-d-section"><b>Word Count:</b></div>`);
     const activeLength = chatMetadata?.['gravity_word_count'] || 'flexible';
-    parts.push(`<div class="gl-d-row"><b>Length:</b>
+    parts.push(`<div class="gl-d-row">
         <select class="gl-div-select" id="gl-length-select">
             <option value="under 150"${activeLength === 'under 150' ? ' selected' : ''}>Under 150 words</option>
             <option value="150-300"${activeLength === '150-300' ? ' selected' : ''}>150-300 words</option>
@@ -885,14 +913,25 @@ function renderDivination(state) {
         </select>
     </div>`);
 
+    // ── Divination ──
+    parts.push(`<div class="gl-d-section"><b>Divination System:</b></div>`);
+    const activeSystem = chatMetadata?.['gravity_divination_system'] || div.active_system || 'arcana';
+    parts.push(`<div class="gl-d-row">
+        <select class="gl-div-select" id="gl-divination-select">
+            <option value="arcana"${activeSystem === 'arcana' ? ' selected' : ''}>Major Arcana (d22)</option>
+            <option value="iching"${activeSystem === 'iching' || activeSystem === 'i ching' ? ' selected' : ''}>易経 I Ching (d64)</option>
+            <option value="classic"${activeSystem === 'classic' || activeSystem === '2d10' ? ' selected' : ''}>Classic Entropy (2d10)</option>
+        </select>
+    </div>`);
+
+    // Last draw
     if (div.last_draw) {
         parts.push(`<div class="gl-d-section"><b>Last Draw:</b></div>`);
         const ld = typeof div.last_draw === 'object' ? div.last_draw : { value: div.last_draw };
-        if (ld.value) parts.push(`<div class="gl-d-row"><b>Value:</b> ${esc(ld.value)}</div>`);
-        if (ld.reading) parts.push(`<div class="gl-d-row"><b>Reading:</b> ${esc(ld.reading)}</div>`);
-        if (ld.timestamp || ld.t) parts.push(`<div class="gl-d-row gl-history-time">${esc(ld.timestamp || ld.t)}</div>`);
+        if (ld.value) parts.push(`<div class="gl-d-row">${esc(ld.value)}</div>`);
     }
 
+    // Reading history
     const readings = toArr(div.readings);
     if (readings.length) {
         parts.push(`<div class="gl-d-section"><b>Reading History (${readings.length}):</b></div>`);
@@ -903,7 +942,7 @@ function renderDivination(state) {
         parts.push(collapsibleList(readItems, 3, 'older readings'));
     }
 
-    return parts.length ? parts.join('') : '<div class="gl-empty">No divination data</div>';
+    return parts.join('');
 }
 
 function renderExemplars() {
