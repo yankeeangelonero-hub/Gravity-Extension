@@ -743,7 +743,16 @@ RULES STILL ACTIVE:
 - Partner interiority flash every 2-3 turns (italicized first-person, 2-4 sentences).
 - Collision check: if any collision hits distance 0, it fires mid-scene.
 - "OOC: fade to black" → cut to afterglow.
-- Option 4-5 always escalates or pushes a boundary.]`;
+
+INTIMACY DEDUCTION (use this format, one line per item):
+---DEDUCTION---
+Stance: [partner's current intimacy_stance]
+Constraint: [which is pressured — or: none]
+Partner wants: [what their body is showing]
+History: [pattern from intimate_history — or: first encounter]
+Beat: [ONE sensory beat.]
+---END DEDUCTION---
+Then prose, then choices, then ledger block.]`;
         injectPrompt('advance');
         return;
     }
@@ -947,7 +956,16 @@ The draw colors the world's move — it does not prescribe it.
 ${focusPrompt}
 
 Record the draw: SET divination field=last_draw value="[draw result]"
-Full turn: deduction + prose + ledger block.]`;
+
+ADVANCE DEDUCTION (use this format, one line per item):
+---DEDUCTION---
+Focus: [scene/world/offscreen/new_threat/collision]
+What moves: [the specific thing that happens]
+Draw: [how the divination shapes this]
+Collision: [which tightens or spawns — or: none]
+Beat: [what happens.]
+---END DEDUCTION---
+Then prose, then ledger block.]`;
     }
 
     injectPrompt('advance');
@@ -1048,7 +1066,18 @@ SETUP TURN: No combat collision exists yet. This turn is SETUP:
 3. Describe the threat and the opening situation.
 4. Do NOT resolve a combat exchange yet — setup is the beat.` : ''}
 Record the draw: SET divination field=last_draw value="[draw result]"
-Full turn: deduction + prose + ledger block.]`;
+
+COMBAT DEDUCTION (use this format, one line per item):
+---DEDUCTION---
+Action: [what the PC is attempting]
+Power: [PC power:X vs enemy power:Y — gap, can this work?]
+Advantages: [what PC has established — traits, prep, terrain, reads]
+Enemy: [what the enemy would logically do — adapt, counter, exploit weakness]
+Wounds: [PC wounds, enemy wounds — how these affect this exchange]
+Distance: [current → change? why?]
+Beat: [ONE exchange. What happens.]
+---END DEDUCTION---
+Then prose, then ledger block.]`;
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} ${isSetup ? 'prepares to fight.' : 'engages in combat.'}*`);
@@ -1173,7 +1202,18 @@ INTIMATE HISTORY — cumulative development tracking. Each MAP_SET BUILDS on pre
 - evolution: the ARC of their sexual relationship ("encounter 1: discovery pace, tentative, stopped early. encounter 3: she knows what she wants, takes it. encounter 5: comfortable enough to laugh mid-act")
 - aftermath: how they behave AFTER — this reveals more than the act ("encounter 1: buried face in chest, silent. encounter 4: talks, traces his skin, stays awake")
 
-Each update should reference encounter NUMBER so the development arc is traceable. A preference discovered in encounter 2 that becomes a pattern by encounter 5 is character growth. Track it.]`;
+Each update should reference encounter NUMBER so the development arc is traceable. A preference discovered in encounter 2 that becomes a pattern by encounter 5 is character growth. Track it.
+
+INTIMACY DEDUCTION (use this format, one line per item):
+---DEDUCTION---
+Stance: [partner's current intimacy_stance — what they'd do right now]
+Constraint: [which constraint is pressured by this intimacy — or: none]
+Partner wants: [what they haven't asked for but their body is showing]
+History: [what pattern from intimate_history applies — or: first encounter]
+Draw: [how divination shapes the sexual energy]
+Beat: [ONE sensory beat.]
+---END DEDUCTION---
+Then prose, then choices, then ledger block.]`;
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} moves closer.*`);
