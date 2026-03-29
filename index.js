@@ -41,6 +41,7 @@ let _pendingReinforcement = null;
 let _pendingOOCInjection = null;
 let _uncappedTurn = false;
 let _currentInjectMode = 'regular';
+let _pendingDeductionType = 'regular'; // regular, combat, advance, intimacy
 
 // ─── Collision Arrival Tracking ───────────────────────────────────────────────
 
@@ -472,11 +473,8 @@ No collision survives detonation.`;
         }
 
         // Nudge — full on regular turns, slim on advance/integration (those prompts already instruct on ledger)
-        const nudgeText = isRegular
-            ? `[SYSTEM: TURN FORMAT — you MUST follow this exact structure:
-
-1. ---DEDUCTION--- block (compact checklist, one line per item):
----DEDUCTION---
+        const DEDUCTION_TEMPLATES = {
+            regular: `---DEDUCTION---
 Intent: [what the player is trying to do — one line]
 Logic: [would this succeed? yes/no and why]
 Cost: [what this action costs or risks]
@@ -484,17 +482,51 @@ Constraint: [which is pressured — or: none]
 Tone: [which tone rule applies]
 Scene: [who's present, atmosphere — for current_scene update]
 Plan: [ONE beat. Stop after the first shift.]
----END DEDUCTION---
+---END DEDUCTION---`,
+            combat: `---DEDUCTION---
+Action: [what the PC is attempting]
+Power: [PC power:X vs enemy power:Y — gap, can this work?]
+Advantages: [what PC has established — traits, prep, terrain, reads]
+Enemy: [what the enemy would logically do — adapt, counter, exploit]
+Wounds: [PC wounds, enemy wounds — effect on this exchange]
+Distance: [current → change? why?]
+Beat: [ONE exchange. What happens.]
+---END DEDUCTION---`,
+            advance: `---DEDUCTION---
+Focus: [scene/world/offscreen/new_threat/collision]
+What moves: [the specific thing that happens]
+Draw: [how the divination shapes this]
+Collision: [which tightens or spawns — or: none]
+Beat: [what happens.]
+---END DEDUCTION---`,
+            intimacy: `---DEDUCTION---
+Stance: [partner's current intimacy_stance]
+Constraint: [which is pressured — or: none]
+Partner wants: [what their body is showing]
+History: [pattern from intimate_history — or: first encounter]
+Draw: [how divination shapes the sexual energy]
+Beat: [ONE sensory beat.]
+---END DEDUCTION---`,
+        };
 
-2. Prose (one beat)
+        const deductionTemplate = DEDUCTION_TEMPLATES[_pendingDeductionType] || DEDUCTION_TEMPLATES.regular;
+        _pendingDeductionType = 'regular'; // reset after use
 
-3. ---LEDGER--- block (record EVERYTHING that changed, no line limit):
+        const nudgeText = `[SYSTEM: TURN FORMAT — you MUST follow this exact structure:
+
+IMPORTANT: Use the DEDUCTION block below as your reasoning. Do NOT think outside of it. All your analysis, planning, and assessment goes INSIDE the deduction markers. Keep each line to ONE sentence. The deduction IS your thinking — do not duplicate it with extended reasoning.
+
+1. DEDUCTION block (your ONLY reasoning space — compact, one line per item):
+${deductionTemplate}
+
+2. Prose
+
+3. ---LEDGER--- block (record EVERYTHING that changed, no line limit)${_uncappedTurn ? ' (UNCAPPED — full cleanup allowed)' : ''}
 ALWAYS update current_scene, location, condition.
-APPEND timeline (summary) for every significant beat.
-CLEANUP (REMOVE/DESTROY): max 3. Save bulk for eval or chapter close.
+CLEANUP (REMOVE/DESTROY): max 3 per regular turn. Save bulk for eval or chapter close.
 
-You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memory.]`
-            : `[SYSTEM: ---LEDGER--- block after response. No line limit. Full cleanup allowed this turn${_uncappedTurn ? ' (UNCAPPED)' : ''}.]`;
+You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memory.]`;
+        setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
         setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
@@ -743,6 +775,7 @@ async function onUserMessage(messageId) {
     // Detect intimacy action from st-clickable-actions (data-value starts with "intimate:")
     const rawText = message.mes.replace(/<[^>]+>/g, '').trim();
     if (rawText.startsWith('intimate:') || rawText.startsWith('*intimate:')) {
+        _pendingDeductionType = 'intimacy';
         // Re-inject intimacy context so the LLM stays in intimate scene mode
         _pendingOOCInjection = `[GRAVITY INTIMACY — continuing intimate scene. The player chose an action.
 
@@ -818,6 +851,7 @@ async function handleSetupButton() {
 }
 
 function handleAdvanceButton() {
+    _pendingDeductionType = 'advance';
     const pcName = _currentState?.pc?.name || '{{user}}';
     const doing = _currentState?.pc?.doing || 'what they were doing';
 
@@ -1008,6 +1042,7 @@ Do not write prose. Just derive the scale, assign power values via ledger, and c
 }
 
 function handleCombatButton() {
+    _pendingDeductionType = 'combat';
     const pcName = _currentState?.pc?.name || '{{user}}';
     const pcPower = _currentState?.pc?.power;
 
@@ -1098,6 +1133,7 @@ Then prose, then ledger block.]`;
 }
 
 function handleIntimacyButton() {
+    _pendingDeductionType = 'intimacy';
     const pcName = _currentState?.pc?.name || '{{user}}';
 
     // Gather intimacy stances for scene-active characters
