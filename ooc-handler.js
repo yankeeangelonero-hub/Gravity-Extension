@@ -11,6 +11,9 @@ import {
 } from './ledger-store.js';
 
 const OOC_PATTERNS = [
+    { pattern: /ooc:\s*set\s+voice\b/i, handler: handleSetVoice },
+    { pattern: /ooc:\s*set\s+tone\s+rules\b/i, handler: handleSetToneRules },
+    { pattern: /ooc:\s*set\s+tone\b/i, handler: handleSetTone },
     { pattern: /ooc:\s*combat\s+setup\b/i, handler: handleCombatSetup },
     { pattern: /ooc:\s*combat\s+rules\b/i, handler: handleCombatRules },
     { pattern: /ooc:\s*power\s+(\S+)\s+(\d+)/i, handler: handlePower },
@@ -23,6 +26,7 @@ const OOC_PATTERNS = [
     { pattern: /ooc:\s*eval\b/i, handler: handleEval },
     { pattern: /ooc:\s*history\s+(.+)/i, handler: handleHistory },
     { pattern: /ooc:\s*timeline\s+(.+)\s+to\s+(.+)/i, handler: handleTimeline },
+    { pattern: /ooc:\s*divination\s+(arcana|iching|i.ching|classic|2d10)\b/i, handler: handleDivinationSwitch },
     { pattern: /ooc:\s*archive\b/i, handler: handleConsolidate },
     { pattern: /ooc:\s*consolidate\b/i, handler: handleConsolidate },
 ];
@@ -161,6 +165,38 @@ async function handleConsolidate() {
     const state = computeCurrentState();
     const snap = await createSnapshot(state, 'Consolidation checkpoint');
     return `[LEDGER: Consolidated. Snapshot #${snap.id} at tx ${snap.lastTxId}.]`;
+}
+
+// ─── Prose Settings OOC Commands ─────────────────────────────────────────────
+
+async function handleSetVoice(match) {
+    const fullMessage = match.input || match[0];
+    const text = fullMessage.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/ooc:\s*set\s+voice\s*/i, '').trim();
+    if (!text) return `[LEDGER: No voice provided. Usage: "OOC: set voice <description>"]`;
+    const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+    chatMetadata['gravity_voice'] = text;
+    await saveMetadata();
+    return `[LEDGER: Voice set — "${text}"]`;
+}
+
+async function handleSetTone(match) {
+    const fullMessage = match.input || match[0];
+    const text = fullMessage.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/ooc:\s*set\s+tone\s*/i, '').trim();
+    if (!text) return `[LEDGER: No tone provided. Usage: "OOC: set tone <description>"]`;
+    const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+    chatMetadata['gravity_tone'] = text;
+    await saveMetadata();
+    return `[LEDGER: Tone set — "${text}"]`;
+}
+
+async function handleSetToneRules(match) {
+    const fullMessage = match.input || match[0];
+    const text = fullMessage.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/ooc:\s*set\s+tone\s+rules\s*/i, '').trim();
+    if (!text) return `[LEDGER: No tone rules provided. Usage: "OOC: set tone rules 1. Rule 2. Rule 3. Rule"]`;
+    const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+    chatMetadata['gravity_tone_rules'] = text;
+    await saveMetadata();
+    return `[LEDGER: Tone rules set — "${text}"]`;
 }
 
 // ─── Combat OOC Commands ─────────────────────────────────────────────────────
