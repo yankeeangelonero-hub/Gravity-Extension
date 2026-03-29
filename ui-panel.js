@@ -272,6 +272,28 @@ function renderAllSections() {
         });
     }
 
+    // Tense selector
+    const tenseSelect = container.querySelector('#gl-tense-select');
+    if (tenseSelect) {
+        tenseSelect.addEventListener('change', async () => {
+            const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+            chatMetadata['gravity_tense'] = tenseSelect.value;
+            await saveMetadata();
+            toastr.info(`Tense: ${tenseSelect.value}`);
+        });
+    }
+
+    // Perspective selector
+    const perspSelect = container.querySelector('#gl-perspective-select');
+    if (perspSelect) {
+        perspSelect.addEventListener('change', async () => {
+            const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+            chatMetadata['gravity_perspective'] = perspSelect.value;
+            await saveMetadata();
+            toastr.info(`Perspective: ${perspSelect.value}`);
+        });
+    }
+
     // Prose settings save button
     const saveProseBtn = container.querySelector('#gl-save-prose-settings');
     if (saveProseBtn) {
@@ -880,6 +902,26 @@ function renderSettings(state) {
 
     // ── Prose Settings ──
     parts.push(`<div class="gl-d-section"><b>Prose Settings:</b></div>`);
+
+    // Tense
+    const activeTense = chatMetadata?.['gravity_tense'] || 'present';
+    parts.push(`<div class="gl-d-row"><b>Tense:</b>
+        <select class="gl-div-select" id="gl-tense-select">
+            <option value="present"${activeTense === 'present' ? ' selected' : ''}>Present</option>
+            <option value="past"${activeTense === 'past' ? ' selected' : ''}>Past</option>
+        </select>
+    </div>`);
+
+    // Perspective
+    const activePerspective = chatMetadata?.['gravity_perspective'] || 'close-third';
+    parts.push(`<div class="gl-d-row"><b>Perspective:</b>
+        <select class="gl-div-select" id="gl-perspective-select">
+            <option value="close-third"${activePerspective === 'close-third' ? ' selected' : ''}>Close Third-Person</option>
+            <option value="first"${activePerspective === 'first' ? ' selected' : ''}>First-Person</option>
+            <option value="second"${activePerspective === 'second' ? ' selected' : ''}>Second-Person</option>
+            <option value="omniscient"${activePerspective === 'omniscient' ? ' selected' : ''}>Omniscient</option>
+        </select>
+    </div>`);
 
     // Voice
     const voice = chatMetadata?.['gravity_voice'] || state.world?.constants?.voice || '';

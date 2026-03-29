@@ -187,7 +187,7 @@ async function handleSetVoice(match) {
     const { chatMetadata, saveMetadata } = SillyTavern.getContext();
     chatMetadata['gravity_voice'] = text;
     await saveMetadata();
-    return `[LEDGER: Voice set — "${text}"]`;
+    return `[LEDGER: Voice set — "${text}"\n\nNow generate 3 TONE RULES based on this voice. Tone rules are concrete behavioral rules for prose — not descriptions, but instructions. Format: "1. Rule 2. Rule 3. Rule". Emit them as: MAP_SET world field=constants key=tone_rules value="1. ... 2. ... 3. ..."]`;
 }
 
 async function handleSetTone(match) {
@@ -197,7 +197,7 @@ async function handleSetTone(match) {
     const { chatMetadata, saveMetadata } = SillyTavern.getContext();
     chatMetadata['gravity_tone'] = text;
     await saveMetadata();
-    return `[LEDGER: Tone set — "${text}"]`;
+    return `[LEDGER: Tone set — "${text}"\n\nIf no tone rules exist yet, generate 3 TONE RULES based on this tone. Tone rules are concrete behavioral rules — not descriptions, but instructions. Format: "1. Rule 2. Rule 3. Rule". Emit them as: MAP_SET world field=constants key=tone_rules value="1. ... 2. ... 3. ..."]`;
 }
 
 async function handleSetToneRules(match) {

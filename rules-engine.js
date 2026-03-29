@@ -44,8 +44,8 @@ Anyone can die. When the player dies, write it fully, then offer a return point.
 
 // ─── Variant A: Normal Turn ──────────────────────────────────────────────
 
-const NORMAL_RULES = `═══ PROSE ═══
-Style: Noir Realist. Present tense. Close-third rotating focus through the subjective lens of the character in focus.
+const NORMAL_RULES_TEMPLATE = `═══ PROSE ═══
+Style: Noir Realist. {{TENSE}} tense. {{PERSPECTIVE}}.
 - Every object is a judgment. Describe spaces through what they reveal about power and people.
 - Surface is substance: clothing, wear patterns, damage tell function and history. The observer's attention reveals the observer.
 - Physical response precedes conscious thought in emotional moments: somatic → awareness → interpretation → verbal (often contradicts the body).
@@ -198,9 +198,11 @@ function getProseSettings() {
             voice: chatMetadata?.['gravity_voice'] || '',
             tone: chatMetadata?.['gravity_tone'] || '',
             toneRules: chatMetadata?.['gravity_tone_rules'] || '',
+            tense: chatMetadata?.['gravity_tense'] || 'present',
+            perspective: chatMetadata?.['gravity_perspective'] || 'close-third',
         };
     } catch (e) {
-        return { wordCount: 'flexible', voice: '', tone: '', toneRules: '' };
+        return { wordCount: 'flexible', voice: '', tone: '', toneRules: '', tense: 'present', perspective: 'close-third' };
     }
 }
 
@@ -210,14 +212,28 @@ function getProseSettings() {
  * @returns {string}
  */
 function buildRulesInjection(turnType) {
+    const settings = getProseSettings();
+
+    // Build perspective description
+    const perspMap = {
+        'close-third': 'Close-third rotating focus through the subjective lens of the character in focus',
+        'first': 'First-person narration from the PC\'s perspective',
+        'second': 'Second-person narration addressing the player directly',
+        'omniscient': 'Omniscient narration — the narrator knows all but characters only act on what they plausibly know',
+    };
+    const perspDesc = perspMap[settings.perspective] || perspMap['close-third'];
+
+    // Apply tense + perspective to normal rules
+    const NORMAL_RULES = NORMAL_RULES_TEMPLATE
+        .replace('{{TENSE}}', settings.tense.charAt(0).toUpperCase() + settings.tense.slice(1))
+        .replace('{{PERSPECTIVE}}', perspDesc);
+
     const variants = {
         normal: NORMAL_RULES,
         advance: ADVANCE_RULES,
         combat: COMBAT_RULES,
         intimacy: INTIMACY_RULES,
     };
-
-    const settings = getProseSettings();
 
     const lengthLine = settings.wordCount === 'flexible'
         ? 'LENGTH: Flexible — match the scene. Dialogue-heavy: shorter. Action/establishment: longer.'
