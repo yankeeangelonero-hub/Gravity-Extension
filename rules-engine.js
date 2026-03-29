@@ -45,14 +45,10 @@ Anyone can die. When the player dies, write it fully, then offer a return point.
 // ─── Variant A: Normal Turn ──────────────────────────────────────────────
 
 const NORMAL_RULES_TEMPLATE = `═══ PROSE ═══
-Style: Noir Realist. {{TENSE}} tense. {{PERSPECTIVE}}.
-- Every object is a judgment. Describe spaces through what they reveal about power and people.
-- Surface is substance: clothing, wear patterns, damage tell function and history. The observer's attention reveals the observer.
-- Physical response precedes conscious thought in emotional moments: somatic → awareness → interpretation → verbal (often contradicts the body).
-- Dialogue matches personality: anxious hedges, confident declares, guarded gives minimum. Not grammatically perfect unless that IS their voice.
+{{TENSE}} tense. {{PERSPECTIVE}}.
+{{PROSE_STYLE}}
 - Length: CEILING, not target. One beat = one response. Current setting injected below.
-- Concrete detail: every scene needs one detail that could only exist in this world, at this moment.
-- New location: 3-4 paragraphs of establishment. Returning location: the delta. Same location: nothing.
+- New location: 2-3 paragraphs of establishment. Returning location: the delta. Same location: nothing.
 - New character: physical impression first, name last.
 
 BANNED: "As [action], [action]" openers (max once per response). "couldn't help but" / "found themselves" / "Something shifted/changed" / internal monologue restating dialogue / epistemic hedges without purpose. No consecutive paragraphs with same syntactic structure.
@@ -195,16 +191,50 @@ function getProseSettings() {
         const { chatMetadata } = SillyTavern.getContext();
         return {
             wordCount: chatMetadata?.['gravity_word_count'] || 'flexible',
-            voice: chatMetadata?.['gravity_voice'] || '',
-            tone: chatMetadata?.['gravity_tone'] || '',
-            toneRules: chatMetadata?.['gravity_tone_rules'] || '',
+            proseStyle: chatMetadata?.['gravity_prose_style'] || 'noir-realist',
             tense: chatMetadata?.['gravity_tense'] || 'present',
             perspective: chatMetadata?.['gravity_perspective'] || 'close-third',
         };
     } catch (e) {
-        return { wordCount: 'flexible', voice: '', tone: '', toneRules: '', tense: 'present', perspective: 'close-third' };
+        return { wordCount: 'flexible', proseStyle: 'noir-realist', tense: 'present', perspective: 'close-third' };
     }
 }
+
+// ─── Prose Style Variants ───────────────────────────────────────────────────
+
+const PROSE_STYLES = {
+    'noir-realist': `Style: Noir Realist.
+- Every object is a judgment. Describe spaces through what they reveal about power and people.
+- Surface is substance: clothing, wear patterns, damage tell function and history. The observer's attention reveals the observer.
+- Physical response precedes conscious thought in emotional moments: somatic → awareness → interpretation → verbal (often contradicts the body).
+- Dialogue matches personality: anxious hedges, confident declares, guarded gives minimum.
+- Concrete detail: every scene needs one detail that could only exist in this world, at this moment.
+- Consequences are real and lingering. Strangers are guarded. Trust takes 2-4 scenes to earn. Help is reluctant or transactional.`,
+
+    'literary': `Style: Literary Fiction.
+- Prose is the medium, not a vehicle. Sentence rhythm matters — vary length, structure, cadence.
+- Interiority is the engine: characters think, misinterpret, contradict themselves. The gap between perception and reality drives the scene.
+- Metaphor and imagery earn their place through precision, not decoration. One perfect image per scene.
+- Dialogue is subtext. What's unsaid carries more weight than what's spoken.
+- Time is elastic — slow down for emotional weight, skip over the mechanical.
+- The narrator has opinions. The prose itself takes sides through word choice and emphasis.`,
+
+    'cinematic': `Style: Cinematic.
+- Write like a camera. Establish wide, then push in. Every scene opens with the geography.
+- Action is choreographed: spatial relationships matter, who stands where, what's between them.
+- Dialogue is punchy, overlapping, interrupted. People talk over each other and past each other.
+- Cross-cutting between simultaneous scenes builds tension. Use --- for hard cuts.
+- Sound design in prose: what the room sounds like matters as much as what it looks like.
+- Pacing is visual: short paragraphs for speed, long ones for weight. White space is a beat.`,
+
+    'minimalist': `Style: Minimalist.
+- Less is more. Short sentences. Simple words. The weight is in what's left out.
+- No adjectives unless load-bearing. No adverbs ever. The verb does the work.
+- Dialogue carries the scene. Action beats between lines — no dialogue tags beyond "said."
+- One sensory detail per scene. Make it the right one.
+- Emotion lives in gesture and silence, never in description.
+- Every sentence you write, ask: does this need to be here? If no, delete it.`,
+};
 
 /**
  * Build the rules injection for the current turn type.
@@ -223,10 +253,12 @@ function buildRulesInjection(turnType) {
     };
     const perspDesc = perspMap[settings.perspective] || perspMap['close-third'];
 
-    // Apply tense + perspective to normal rules
+    // Apply tense + perspective + prose style to normal rules
+    const styleContent = PROSE_STYLES[settings.proseStyle] || PROSE_STYLES['noir-realist'];
     const NORMAL_RULES = NORMAL_RULES_TEMPLATE
         .replace('{{TENSE}}', settings.tense.charAt(0).toUpperCase() + settings.tense.slice(1))
-        .replace('{{PERSPECTIVE}}', perspDesc);
+        .replace('{{PERSPECTIVE}}', perspDesc)
+        .replace('{{PROSE_STYLE}}', styleContent);
 
     const variants = {
         normal: NORMAL_RULES,
@@ -239,20 +271,12 @@ function buildRulesInjection(turnType) {
         ? 'LENGTH: Flexible — match the scene. Dialogue-heavy: shorter. Action/establishment: longer.'
         : `LENGTH: ${settings.wordCount} words. This is a CEILING. Do not exceed. If past it, you wrote too many beats — cut the last ones.`;
 
-    const voiceToneBlock = [
-        settings.voice ? `VOICE: ${settings.voice}` : '',
-        settings.tone ? `TONE: ${settings.tone}` : '',
-        settings.toneRules ? `TONE RULES:\n${settings.toneRules}` : '',
-    ].filter(Boolean).join('\n');
-
-    const proseSettings = [lengthLine, voiceToneBlock].filter(Boolean).join('\n\n');
-
     if (turnType === 'integration') {
-        return `${SHARED_CORE}\n\n${proseSettings}\n\n${NORMAL_RULES}\n\n${ADVANCE_RULES}\n\n${COMBAT_RULES}`;
+        return `${SHARED_CORE}\n\n${lengthLine}\n\n${NORMAL_RULES}\n\n${ADVANCE_RULES}\n\n${COMBAT_RULES}`;
     }
 
     const variant = variants[turnType] || variants.normal;
-    return `${SHARED_CORE}\n\n${proseSettings}\n\n${variant}`;
+    return `${SHARED_CORE}\n\n${lengthLine}\n\n${variant}`;
 }
 
 export { buildRulesInjection };

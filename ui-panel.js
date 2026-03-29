@@ -294,6 +294,17 @@ function renderAllSections() {
         });
     }
 
+    // Prose style selector
+    const styleSelect = container.querySelector('#gl-style-select');
+    if (styleSelect) {
+        styleSelect.addEventListener('change', async () => {
+            const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+            chatMetadata['gravity_prose_style'] = styleSelect.value;
+            await saveMetadata();
+            toastr.info(`Prose style: ${styleSelect.value}`);
+        });
+    }
+
     // Auto-save textareas — save on blur (click away)
     container.querySelectorAll('.gl-auto-save').forEach(el => {
         el.addEventListener('blur', async () => {
@@ -919,20 +930,16 @@ function renderSettings(state) {
         </select>
     </div>`);
 
-    // Voice
-    const voice = chatMetadata?.['gravity_voice'] || state.world?.constants?.voice || '';
-    parts.push(`<div class="gl-d-row"><b>Voice:</b></div>`);
-    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input gl-auto-save" data-key="gravity_voice" rows="2" placeholder="e.g. Grounded, close-third, sensory. Short sentences under pressure.">${esc(voice)}</textarea></div>`);
-
-    // Tone
-    const tone = chatMetadata?.['gravity_tone'] || state.world?.constants?.tone || '';
-    parts.push(`<div class="gl-d-row"><b>Tone:</b></div>`);
-    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input gl-auto-save" data-key="gravity_tone" rows="2" placeholder="e.g. Consequences real and lingering. Trust 2-4 scenes to earn.">${esc(tone)}</textarea></div>`);
-
-    // Tone Rules
-    const toneRules = chatMetadata?.['gravity_tone_rules'] || state.world?.constants?.tone_rules || '';
-    parts.push(`<div class="gl-d-row"><b>Tone Rules (3 behavioral rules):</b></div>`);
-    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input gl-auto-save" data-key="gravity_tone_rules" rows="3" placeholder="1. Weight earns release. 2. Inhabited not analyzed. 3. Hope is concrete.">${esc(typeof toneRules === 'string' ? toneRules : Array.isArray(toneRules) ? toneRules.join('\n') : '')}</textarea></div>`);
+    // Prose Style
+    const activeStyle = chatMetadata?.['gravity_prose_style'] || 'noir-realist';
+    parts.push(`<div class="gl-d-row"><b>Prose Style:</b>
+        <select class="gl-div-select" id="gl-style-select">
+            <option value="noir-realist"${activeStyle === 'noir-realist' ? ' selected' : ''}>Noir Realist</option>
+            <option value="literary"${activeStyle === 'literary' ? ' selected' : ''}>Literary Fiction</option>
+            <option value="cinematic"${activeStyle === 'cinematic' ? ' selected' : ''}>Cinematic</option>
+            <option value="minimalist"${activeStyle === 'minimalist' ? ' selected' : ''}>Minimalist</option>
+        </select>
+    </div>`);
 
     // ── Word Count ──
     parts.push(`<div class="gl-d-section"><b>Word Count:</b></div>`);
