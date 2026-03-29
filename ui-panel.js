@@ -29,8 +29,9 @@ let _onCombatSetup = null;
 let _onDivinationChange = null;
 let _onIntimacy = null;
 let _onLengthChange = null;
+let _onSettingsChange = null;
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onCombatSetup, onDivinationChange, onIntimacy, onLengthChange }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onCombatSetup, onDivinationChange, onIntimacy, onLengthChange, onSettingsChange }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
@@ -46,6 +47,7 @@ function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapte
     _onDivinationChange = onDivinationChange;
     _onIntimacy = onIntimacy;
     _onLengthChange = onLengthChange;
+    _onSettingsChange = onSettingsChange;
 }
 
 let _currentBookName = '';
@@ -256,53 +258,43 @@ function renderAllSections() {
         });
     });
 
+    // Helper: save setting + trigger re-inject
+    const saveSetting = async (key, value, label) => {
+        const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+        chatMetadata[key] = value;
+        await saveMetadata();
+        toastr.info(`${label}: ${value}`);
+        if (_onSettingsChange) _onSettingsChange();
+    };
+
     // Divination system selector
     const divSelect = container.querySelector('#gl-divination-select');
     if (divSelect) {
-        divSelect.addEventListener('change', () => {
-            if (_onDivinationChange) _onDivinationChange(divSelect.value);
-        });
+        divSelect.addEventListener('change', () => saveSetting('gravity_divination_system', divSelect.value, 'Divination'));
     }
 
     // Word count selector
     const lenSelect = container.querySelector('#gl-length-select');
     if (lenSelect) {
-        lenSelect.addEventListener('change', () => {
-            if (_onLengthChange) _onLengthChange(lenSelect.value);
-        });
+        lenSelect.addEventListener('change', () => saveSetting('gravity_word_count', lenSelect.value, 'Word count'));
     }
 
     // Tense selector
     const tenseSelect = container.querySelector('#gl-tense-select');
     if (tenseSelect) {
-        tenseSelect.addEventListener('change', async () => {
-            const { chatMetadata, saveMetadata } = SillyTavern.getContext();
-            chatMetadata['gravity_tense'] = tenseSelect.value;
-            await saveMetadata();
-            toastr.info(`Tense: ${tenseSelect.value}`);
-        });
+        tenseSelect.addEventListener('change', () => saveSetting('gravity_tense', tenseSelect.value, 'Tense'));
     }
 
     // Perspective selector
     const perspSelect = container.querySelector('#gl-perspective-select');
     if (perspSelect) {
-        perspSelect.addEventListener('change', async () => {
-            const { chatMetadata, saveMetadata } = SillyTavern.getContext();
-            chatMetadata['gravity_perspective'] = perspSelect.value;
-            await saveMetadata();
-            toastr.info(`Perspective: ${perspSelect.value}`);
-        });
+        perspSelect.addEventListener('change', () => saveSetting('gravity_perspective', perspSelect.value, 'Perspective'));
     }
 
     // Prose style selector
     const styleSelect = container.querySelector('#gl-style-select');
     if (styleSelect) {
-        styleSelect.addEventListener('change', async () => {
-            const { chatMetadata, saveMetadata } = SillyTavern.getContext();
-            chatMetadata['gravity_prose_style'] = styleSelect.value;
-            await saveMetadata();
-            toastr.info(`Prose style: ${styleSelect.value}`);
-        });
+        styleSelect.addEventListener('change', () => saveSetting('gravity_prose_style', styleSelect.value, 'Prose style'));
     }
 
     // Auto-save textareas — save on blur (click away)

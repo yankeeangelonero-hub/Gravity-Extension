@@ -1493,6 +1493,10 @@ async function handleImportData(data) {
             await saveMetadata();
             toastr.info(`Word count: ${length}`);
         },
+        onSettingsChange: () => {
+            // Re-inject prompts immediately so the LLM sees updated settings
+            injectPrompt();
+        },
     });
 
     // Setup wizard phase change callback
