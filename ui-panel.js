@@ -946,6 +946,7 @@ function renderSettings(state) {
             <option value="literary"${activeStyle === 'literary' ? ' selected' : ''}>Literary Fiction</option>
             <option value="cinematic"${activeStyle === 'cinematic' ? ' selected' : ''}>Cinematic</option>
             <option value="minimalist"${activeStyle === 'minimalist' ? ' selected' : ''}>Minimalist</option>
+            <option value="wuxia-chronicle"${activeStyle === 'wuxia-chronicle' ? ' selected' : ''}>Wuxia Chronicle</option>
         </select>
     </div>`);
 

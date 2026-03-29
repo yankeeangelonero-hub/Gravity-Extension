@@ -294,6 +294,16 @@ const PROSE_STYLES = {
 - One sensory detail per scene. Make it the right one.
 - Emotion lives in gesture and silence, never in description.
 - Every sentence you write, ask: does this need to be here? If no, delete it.`,
+
+    'wuxia-chronicle': `Style: Wuxia Chronicle on the Dinner Table.
+- Poetic economy. Nature is structural — not decoration but diagnosis. Seasons, weather, and landscape reflect the inner state of the scene. A cold wind arrives when trust breaks. Rain comes when grief cannot.
+- Characters defined by their philosophy of force: when to act, when to yield, when to cut. A character who draws a sword has failed at something. A character who sheathes one has understood something.
+- Combat reads like calligraphy — each stroke irreversible, each movement a sentence in a conversation between bodies. No wasted motion. The pause between strikes carries as much meaning as the strike. Fights end when someone understands, not when someone falls.
+- Politics reads like Go — stones placed, territory claimed, the board state shifting. Every conversation is a game. Every gift is a move. Every silence is a stone placed where the opponent cannot see it yet.
+- Relationships are tea ceremony: every gesture deliberate, every silence a verse left unwritten. Intimacy arrives through accumulated small acts, not declarations. A poured cup. A mended sleeve. Sitting close enough to hear breathing. The weight of what is not said is the weight of what is felt.
+- Domestic scale against civilizational stakes. The tone lives in kitchens, bedrooms, hallways, shuttle cabins. Wars discussed over coffee. Genocides planned during meals. Mass drivers destroyed while someone showers in a borrowed bathroom. The intimacy of small spaces makes the enormity unbearable.
+- When combat intrudes, it feels wrong — loud, violent, unwelcome — because the reader has been living in the quiet and the quiet is where the real story breathes. Not anti-war through argument. Anti-war through the persistent, accumulated weight of what war interrupts.
+- The prose has weight and patience. It trusts the reader to feel what it doesn't say.`,
 };
 
 /**
