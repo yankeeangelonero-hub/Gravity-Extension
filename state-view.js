@@ -587,20 +587,20 @@ DIVINATION — record current draw only (no history accumulation)
 
 TIMELINE — the single chronological record. This IS the story's complete memory.
   With only 3-5 messages of chat context, the LLM reconstructs EVERYTHING from these entries.
-  Each entry must be rich enough to write the next scene from, not just remember the last one.
 
-  Every entry MUST include:
-  1. Timestamp: [Day N — HH:MM]
-  2. What happened: the physical event, who acted, who was present
-  3. How it felt: emotional register, body language, what the silence carried
-  4. What it changed: relationship shift, constraint pressure, collision movement, power dynamic
-  5. What it left open: unresolved tension, unanswered question, the thing that follows the character out of the scene
-  6. One concrete sensory detail: the specific image, sound, texture, or gesture that makes this moment THIS moment and not any other
+  WRITE CLEARLY. No metaphors, no poetic shorthand, no ambiguous references in timeline entries.
+  Timeline entries are REFERENCE MATERIAL, not prose. They must be unambiguous when read months later.
 
-  3-5 sentences per entry. Not a log. Not a summary. A compressed scene you can write FROM.
+  Every entry uses this EXACT structure:
+  [Day N — HH:MM] LOCATION. WHO was present. WHAT happened (plain facts). WHAT CHANGED (state shifts, relationship movement). WHAT'S UNRESOLVED. One specific physical detail.
 
-  > APPEND summary value="[Day 1 — 21:10] Tifa pulled Autumn from Reactor 1 rubble — head wound, minor, hands steady. He heard survivor knocking in a burning apartment and ran inside without calculating; she followed. First debt established: she treated his wound before her own, using the cloth she'd been pressing against her ribs. He noticed. She noticed him noticing. Neither said anything. The asymmetry starts here — she knows what just happened to his world, he doesn't know she was part of it."
-  > APPEND summary value="[Day 7 — 19:28] Storage room. Blue potion light. Autumn kissed Tifa slowly — 'I want to make good the claim, the my girl part.' Not the brief table kiss. Her hands gripped his back. A small pre-verbal sound into his mouth. She leaned in — the lean she didn't give at the table. His fingers found her hair near the pink band. When it ended at three inches she said 'okay' in a voice reduced to one syllable. Forehead to sternum. The claim made good. C2 still CRITICAL — the guilt underneath the wanting didn't dissolve, it got quieter."
+  3-5 sentences. Plain language. No metaphors. Every noun refers to a specific person or object.
+
+  GOOD:
+  > APPEND summary value="[Day 1 — 21:10] Sector 7 rubble near Reactor 1. Tifa pulled Autumn from collapsed building — head wound, minor. He ran into a burning apartment to help a trapped survivor; she followed without hesitation. She treated his wound before her own, using cloth she'd been pressing against her own injured ribs. First interaction established a dynamic: she knows about the bombing, he doesn't know she was involved. Unresolved: he doesn't know her connection to Avalanche."
+
+  BAD (too poetic, ambiguous):
+  > "The asymmetry starts here — a sword on a wall. Behind them, silence. Ahead, the shape of something neither could name."
 
   Do NOT use pc.timeline — this is the only timeline. One log, one place.
 
