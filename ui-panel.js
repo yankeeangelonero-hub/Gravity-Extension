@@ -294,21 +294,17 @@ function renderAllSections() {
         });
     }
 
-    // Prose settings save button
-    const saveProseBtn = container.querySelector('#gl-save-prose-settings');
-    if (saveProseBtn) {
-        saveProseBtn.addEventListener('click', async () => {
+    // Auto-save textareas — save on blur (click away)
+    container.querySelectorAll('.gl-auto-save').forEach(el => {
+        el.addEventListener('blur', async () => {
+            const key = el.dataset.key;
+            if (!key) return;
             const { chatMetadata, saveMetadata } = SillyTavern.getContext();
-            const voice = document.getElementById('gl-setting-voice')?.value?.trim() || '';
-            const tone = document.getElementById('gl-setting-tone')?.value?.trim() || '';
-            const toneRules = document.getElementById('gl-setting-tone-rules')?.value?.trim() || '';
-            chatMetadata['gravity_voice'] = voice;
-            chatMetadata['gravity_tone'] = tone;
-            chatMetadata['gravity_tone_rules'] = toneRules;
+            chatMetadata[key] = el.value.trim();
             await saveMetadata();
-            toastr.success('Prose settings saved');
+            toastr.info(`Saved: ${key.replace('gravity_', '')}`);
         });
-    }
+    });
 
     // Exemplar edit/remove buttons
     container.querySelectorAll('.gl-exemplar-edit').forEach(btn => {
@@ -926,20 +922,17 @@ function renderSettings(state) {
     // Voice
     const voice = chatMetadata?.['gravity_voice'] || state.world?.constants?.voice || '';
     parts.push(`<div class="gl-d-row"><b>Voice:</b></div>`);
-    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input" id="gl-setting-voice" rows="2" placeholder="e.g. Grounded, close-third, sensory. Short sentences under pressure.">${esc(voice)}</textarea></div>`);
+    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input gl-auto-save" data-key="gravity_voice" rows="2" placeholder="e.g. Grounded, close-third, sensory. Short sentences under pressure.">${esc(voice)}</textarea></div>`);
 
     // Tone
     const tone = chatMetadata?.['gravity_tone'] || state.world?.constants?.tone || '';
     parts.push(`<div class="gl-d-row"><b>Tone:</b></div>`);
-    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input" id="gl-setting-tone" rows="2" placeholder="e.g. Consequences real and lingering. Trust 2-4 scenes to earn.">${esc(tone)}</textarea></div>`);
+    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input gl-auto-save" data-key="gravity_tone" rows="2" placeholder="e.g. Consequences real and lingering. Trust 2-4 scenes to earn.">${esc(tone)}</textarea></div>`);
 
     // Tone Rules
     const toneRules = chatMetadata?.['gravity_tone_rules'] || state.world?.constants?.tone_rules || '';
     parts.push(`<div class="gl-d-row"><b>Tone Rules (3 behavioral rules):</b></div>`);
-    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input" id="gl-setting-tone-rules" rows="3" placeholder="1. Weight earns release. 2. Inhabited not analyzed. 3. Hope is concrete.">${esc(typeof toneRules === 'string' ? toneRules : Array.isArray(toneRules) ? toneRules.join('\n') : '')}</textarea></div>`);
-
-    // Save button
-    parts.push(`<div class="gl-d-row"><button class="gl-cmd-btn" id="gl-save-prose-settings">Save Prose Settings</button></div>`);
+    parts.push(`<div class="gl-d-row"><textarea class="gl-settings-input gl-auto-save" data-key="gravity_tone_rules" rows="3" placeholder="1. Weight earns release. 2. Inhabited not analyzed. 3. Hope is concrete.">${esc(typeof toneRules === 'string' ? toneRules : Array.isArray(toneRules) ? toneRules.join('\n') : '')}</textarea></div>`);
 
     // ── Word Count ──
     parts.push(`<div class="gl-d-section"><b>Word Count:</b></div>`);
