@@ -167,6 +167,17 @@ async function handleConsolidate() {
     return `[LEDGER: Consolidated. Snapshot #${snap.id} at tx ${snap.lastTxId}.]`;
 }
 
+// ─── Divination OOC Command ──────────────────────────────────────────────────
+
+async function handleDivinationSwitch(match) {
+    const system = match[1].toLowerCase().replace(/[\s.]/g, '');
+    const normalized = system === '2d10' ? 'classic' : system;
+    const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+    chatMetadata['gravity_divination_system'] = normalized;
+    await saveMetadata();
+    return `[LEDGER: Divination system set to ${normalized}.]`;
+}
+
 // ─── Prose Settings OOC Commands ─────────────────────────────────────────────
 
 async function handleSetVoice(match) {
