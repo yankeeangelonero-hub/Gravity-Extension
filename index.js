@@ -485,7 +485,8 @@ No collision survives detonation.`;
         }
 
         // Nudge — minimal reminder (rules + deduction template are in _rules now)
-        _pendingDeductionType = 'regular'; // reset after use
+        // _pendingDeductionType is reset in onMessageReceived, NOT here —
+        // GENERATION_STARTED re-fires injectPrompt() and must see the correct type.
         const nudgeText = `[SYSTEM: ---DEDUCTION--- → Prose → ---LEDGER---
 Do ALL thinking inside deduction markers. One pass, not two.
 Record all changes in ledger. Update current_scene every turn.${_uncappedTurn ? ' UNCAPPED — full cleanup allowed.' : ''}]`;
@@ -500,7 +501,7 @@ Record all changes in ledger. Update current_scene every turn.${_uncappedTurn ? 
 const ARRAY_SIZE_LIMITS = {
     pressure_points: { path: s => s.world?.pressure_points, label: 'PRESSURE_POINTS', cap: 15 },
     demonstrated_traits: { path: s => s.pc?.demonstrated_traits, label: 'PC TRAITS', cap: 20 },
-    timeline: { path: s => s.pc?.timeline, label: 'PC TIMELINE', cap: 30 },
+    story_summary: { path: s => s.story_summary, label: 'STORY_SUMMARY', cap: 40 },
 };
 
 function checkArraySizes(state) {
@@ -544,6 +545,8 @@ async function initialize(force = false) {
     _pendingReinforcement = null;
     _pendingOOCInjection = null;
     _uncappedTurn = false;
+    _currentInjectMode = 'regular';
+    _pendingDeductionType = 'regular';
     _firedCollisionArrivals = new Set();
 
     if (!chatId) {
@@ -581,8 +584,9 @@ async function onChatChanged() {
 
 async function onMessageReceived(messageId) {
     if (!_initialized) await initialize();
-    // Reset inject mode and clear OOC injection — the special turn is over
+    // Reset inject mode, deduction type, and clear OOC injection — the special turn is over
     _currentInjectMode = 'regular';
+    _pendingDeductionType = 'regular';
     const context = SillyTavern.getContext();
     if (context.setExtensionPrompt) {
         context.setExtensionPrompt(`${MODULE_NAME}_ooc`, '', PROMPT_NONE, 0);

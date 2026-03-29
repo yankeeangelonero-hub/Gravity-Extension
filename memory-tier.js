@@ -20,12 +20,7 @@ const TIER_CONFIG = {
         getArray: (state) => state.story_summary || [],
         label: 'story_summary',
     },
-    pc_timeline: {
-        hotCap: 30,
-        batchSize: 15,
-        getArray: (state) => state.pc?.timeline || [],
-        label: 'pc.timeline',
-    },
+    // pc_timeline removed — timeline unified into story_summary
     pc_traits: {
         hotCap: 20,
         batchSize: 10,
@@ -76,7 +71,6 @@ function checkAndRotate(state) {
 
         // Copy to cold storage
         const coldKey = key === 'story_summary' ? 'summaries'
-            : key === 'pc_timeline' ? 'timeline'
             : key === 'pc_traits' ? 'traits'
             : 'summaries';
         cold[coldKey].push(...batch);

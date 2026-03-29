@@ -9,11 +9,10 @@ import {
     getTransactionsInRange,
     append,
 } from './ledger-store.js';
+import { checkAndRotate, buildConsolidationPrompt } from './memory-tier.js';
 
 const OOC_PATTERNS = [
-    { pattern: /ooc:\s*set\s+voice\b/i, handler: handleSetVoice },
-    { pattern: /ooc:\s*set\s+tone\s+rules\b/i, handler: handleSetToneRules },
-    { pattern: /ooc:\s*set\s+tone\b/i, handler: handleSetTone },
+    // Voice/tone OOC commands removed — replaced by Prose Style dropdown in Settings tab
     { pattern: /ooc:\s*combat\s+setup\b/i, handler: handleCombatSetup },
     { pattern: /ooc:\s*combat\s+rules\b/i, handler: handleCombatRules },
     { pattern: /ooc:\s*power\s+(\S+)\s+(\d+)/i, handler: handlePower },
@@ -110,7 +109,7 @@ async function handleEval() {
     lines.push('AUDIT AND CLEANUP (uncapped — no line limit this turn):');
     lines.push('1. CONTINUITY: Check for errors, missing/ghost state, rule violations, stale fields.');
     lines.push('2. STALE FIELDS: Review ALL location, condition, equipment, doing fields. Update any that are outdated.');
-    lines.push('3. KNOWLEDGE GAPS: Verify pc.knowledge_gaps is accurate — add missing gaps, remove discovered ones.');
+    lines.push('3. CURRENT SCENE: Verify pc.current_scene reflects the actual scene. Update demonstrated_traits if stale.');
     lines.push('4. PRUNE: REMOVE fired pressure points, stale noticed details, resolved entries, duplicate summaries.');
     lines.push('5. CONSOLIDATE: If story_summary exceeds 30 entries, consolidate oldest batches into 3-5 sentence overviews.');
     lines.push('6. FIX: emit AMEND for any continuity errors found.');
@@ -164,7 +163,14 @@ async function handleTimeline(match) {
 async function handleConsolidate() {
     const state = computeCurrentState();
     const snap = await createSnapshot(state, 'Consolidation checkpoint');
-    return `[LEDGER: Consolidated. Snapshot #${snap.id} at tx ${snap.lastTxId}.]`;
+
+    // Run hot→cold rotation and check if consolidation is needed
+    const { needsConsolidation, pendingBatches } = checkAndRotate(state);
+    if (needsConsolidation) {
+        const prompt = buildConsolidationPrompt(pendingBatches);
+        return `[LEDGER: Snapshot #${snap.id} at tx ${snap.lastTxId}. Memory rotated — ${pendingBatches.length} batch(es) archived to cold storage.\n\n${prompt}]`;
+    }
+    return `[LEDGER: Snapshot #${snap.id} at tx ${snap.lastTxId}. No arrays over hot cap — nothing to rotate.]`;
 }
 
 // ─── Divination OOC Command ──────────────────────────────────────────────────
@@ -176,38 +182,6 @@ async function handleDivinationSwitch(match) {
     chatMetadata['gravity_divination_system'] = normalized;
     await saveMetadata();
     return `[LEDGER: Divination system set to ${normalized}.]`;
-}
-
-// ─── Prose Settings OOC Commands ─────────────────────────────────────────────
-
-async function handleSetVoice(match) {
-    const fullMessage = match.input || match[0];
-    const text = fullMessage.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/ooc:\s*set\s+voice\s*/i, '').trim();
-    if (!text) return `[LEDGER: No voice provided. Usage: "OOC: set voice <description>"]`;
-    const { chatMetadata, saveMetadata } = SillyTavern.getContext();
-    chatMetadata['gravity_voice'] = text;
-    await saveMetadata();
-    return `[LEDGER: Voice set — "${text}"\n\nNow generate 3 TONE RULES based on this voice. Tone rules are concrete behavioral rules for prose — not descriptions, but instructions. Format: "1. Rule 2. Rule 3. Rule". Emit them as: MAP_SET world field=constants key=tone_rules value="1. ... 2. ... 3. ..."]`;
-}
-
-async function handleSetTone(match) {
-    const fullMessage = match.input || match[0];
-    const text = fullMessage.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/ooc:\s*set\s+tone\s*/i, '').trim();
-    if (!text) return `[LEDGER: No tone provided. Usage: "OOC: set tone <description>"]`;
-    const { chatMetadata, saveMetadata } = SillyTavern.getContext();
-    chatMetadata['gravity_tone'] = text;
-    await saveMetadata();
-    return `[LEDGER: Tone set — "${text}"\n\nIf no tone rules exist yet, generate 3 TONE RULES based on this tone. Tone rules are concrete behavioral rules — not descriptions, but instructions. Format: "1. Rule 2. Rule 3. Rule". Emit them as: MAP_SET world field=constants key=tone_rules value="1. ... 2. ... 3. ..."]`;
-}
-
-async function handleSetToneRules(match) {
-    const fullMessage = match.input || match[0];
-    const text = fullMessage.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/ooc:\s*set\s+tone\s+rules\s*/i, '').trim();
-    if (!text) return `[LEDGER: No tone rules provided. Usage: "OOC: set tone rules 1. Rule 2. Rule 3. Rule"]`;
-    const { chatMetadata, saveMetadata } = SillyTavern.getContext();
-    chatMetadata['gravity_tone_rules'] = text;
-    await saveMetadata();
-    return `[LEDGER: Tone rules set — "${text}"]`;
 }
 
 // ─── Combat OOC Commands ─────────────────────────────────────────────────────

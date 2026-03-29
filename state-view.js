@@ -23,7 +23,7 @@ import { getPhonebook } from './state-compute.js';
  */
 function formatStateView(state, mode = 'full') {
     const lines = [];
-    const slim = false; // Always full — with 3-5 message context, the LLM needs everything
+    const slim = (mode === 'slim');
     lines.push('═══ GRAVITY STATE VIEW ═══');
     lines.push('');
 
