@@ -1131,20 +1131,29 @@ PARTNER INTERIORITY: Every 2-3 turns, short italicized first-person block from p
 CLICKABLE CHOICES — after EVERY prose beat, generate 4-5 options using this EXACT HTML format:
 <span class="act" data-value="intimate: first-person action description">Short display text</span>
 
-Example:
-<span class="act" data-value="intimate: traces his fingers slowly down her spine, feeling each vertebra">Trace her spine</span>
-<span class="act" data-value="intimate: pulls back to look at her, letting the distance build tension">Pull back and watch</span>
-<span class="act" data-value="intimate: kisses the hollow of her throat where the pulse beats fastest">Kiss her throat</span>
-<span class="act" data-value="intimate: takes her wrists and pins them gently above her head">Pin her wrists</span>
-<span class="act" data-value="intimate: whispers what he wants to do next against her ear">Tell her what comes next</span>
+CHOICE PHILOSOPHY — the options must be UNEXPECTED. Not the obvious next move. Not what the reader would predict. Each option should make the player think "oh, I wouldn't have thought of that, but yes."
 
-CHOICE DESIGN — rotate frameworks based on scene phase:
-- By Sensation: Touch / Mouth / Visual / Denial
-- By Dynamic: He leads / She leads / Mutual / Vacuum (stillness)
-- By Register: Worship / Need / Play / Ruin
-- By Focus: Mouth / Chest / Hips and below / Somewhere unexpected
-Option 4-5 always pushes a boundary or escalates. Dominant and surprising, never degrading.
-The data-value must be a concrete first-person action, not a vague label. "intimate: cups her breast and runs his thumb across the nipple" not "touch her chest".
+Think about:
+- The OPPOSITE of escalation when escalation is expected (sudden gentleness after intensity)
+- Using the environment (the cold wall, the edge of the table, the window light)
+- Emotional pivots mid-act (laughter, vulnerability, confession, eye contact that stops everything)
+- Power reversals (the passive one takes control, the dominant one surrenders)
+- Sensory detours (ignore the obvious, focus on the collarbone, the inner wrist, behind the ear)
+- Denial and withholding (stop touching, pull back one inch, make them ask)
+- Breaking the rhythm (pause, speak, look, breathe, change speed dramatically)
+- The body's involuntary responses as actions (follow the goosebumps, trace the flush, feel where the heartbeat is loudest)
+
+BAD options: "Kiss her" "Touch her breast" "Go harder" — obvious, generic, predictable.
+GOOD options: "Stop moving entirely — make her feel the absence" "Press your mouth to the inside of her wrist where the veins show" "Laugh against her skin and see what it does" "Put your hand flat on her sternum and feel her breathing change"
+
+The data-value must be specific and visceral. The display text should be intriguing — a phrase that makes you want to click it.
+
+STRUCTURE:
+- Option 1: Continue the current energy, but with a twist
+- Option 2: Shift dynamic (power, pace, or emotional register)
+- Option 3: Sensory surprise — focus on an unexpected body part or sensation
+- Option 4: Emotional/psychological move — vulnerability, eye contact, words, laughter
+- Option 5: The bold one — boundary push, escalation, or dramatic reversal
 
 COLLISION CHECK: Each turn, check collision distances. If one reaches zero, it fires mid-scene. The world does not pause for intimacy.
 
