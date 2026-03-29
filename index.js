@@ -1066,12 +1066,23 @@ BODY DESCRIPTION — verbose, specific, present:
 
 PARTNER INTERIORITY: Every 2-3 turns, short italicized first-person block from partner's perspective. 2-4 sentences. Raw internal experience from dossier and constraints.
 
-CHOICE FRAMEWORKS (rotate based on scene phase):
+CLICKABLE CHOICES — after EVERY prose beat, generate 4-5 options using this EXACT HTML format:
+<span class="act" data-value="intimate: first-person action description">Short display text</span>
+
+Example:
+<span class="act" data-value="intimate: traces his fingers slowly down her spine, feeling each vertebra">Trace her spine</span>
+<span class="act" data-value="intimate: pulls back to look at her, letting the distance build tension">Pull back and watch</span>
+<span class="act" data-value="intimate: kisses the hollow of her throat where the pulse beats fastest">Kiss her throat</span>
+<span class="act" data-value="intimate: takes her wrists and pins them gently above her head">Pin her wrists</span>
+<span class="act" data-value="intimate: whispers what he wants to do next against her ear">Tell her what comes next</span>
+
+CHOICE DESIGN — rotate frameworks based on scene phase:
 - By Sensation: Touch / Mouth / Visual / Denial
 - By Dynamic: He leads / She leads / Mutual / Vacuum (stillness)
 - By Register: Worship / Need / Play / Ruin
 - By Focus: Mouth / Chest / Hips and below / Somewhere unexpected
-Option 4 always pushes a boundary. Dominant and surprising, never degrading.
+Option 4-5 always pushes a boundary or escalates. Dominant and surprising, never degrading.
+The data-value must be a concrete first-person action, not a vague label. "intimate: cups her breast and runs his thumb across the nipple" not "touch her chest".
 
 COLLISION CHECK: Each turn, check collision distances. If one reaches zero, it fires mid-scene. The world does not pause for intimacy.
 
@@ -1382,31 +1393,8 @@ async function handleImportData(data) {
     // Quick-access buttons above chat input
     createInputButtons();
 
-    // Intimacy choice buttons — delegated click handler on chat container
-    const chatContainer = document.getElementById('chat');
-    if (chatContainer) {
-        chatContainer.addEventListener('click', (e) => {
-            const act = e.target.closest('.act[data-value]');
-            if (!act) return;
-            e.preventDefault();
-            const value = act.dataset.value;
-            if (!value) return;
-
-            // Insert the action as user input and trigger send
-            const textarea = document.getElementById('send_textarea');
-            if (textarea) {
-                textarea.value = `*${value}*`;
-                textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                textarea.focus();
-
-                // Auto-send after a brief delay to let ST process the input
-                setTimeout(() => {
-                    const sendBtn = document.getElementById('send_but');
-                    if (sendBtn) sendBtn.click();
-                }, 100);
-            }
-        });
-    }
+    // Intimacy clickable actions handled by st-clickable-actions extension
+    // LLM outputs: <span class="act" data-value="intimate: action">Display</span>
 
     console.log(`${LOG_PREFIX} Extension registered.`);
     initialize().catch(err => console.error(`${LOG_PREFIX} Init error:`, err));
