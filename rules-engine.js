@@ -191,13 +191,17 @@ Beat: [ONE sensory beat.]
  * Get prose settings from chatMetadata.
  */
 function getProseSettings() {
-    const { chatMetadata } = SillyTavern.getContext();
-    return {
-        wordCount: chatMetadata?.['gravity_word_count'] || 'flexible',
-        voice: chatMetadata?.['gravity_voice'] || '',
-        tone: chatMetadata?.['gravity_tone'] || '',
-        toneRules: chatMetadata?.['gravity_tone_rules'] || '',
-    };
+    try {
+        const { chatMetadata } = SillyTavern.getContext();
+        return {
+            wordCount: chatMetadata?.['gravity_word_count'] || 'flexible',
+            voice: chatMetadata?.['gravity_voice'] || '',
+            tone: chatMetadata?.['gravity_tone'] || '',
+            toneRules: chatMetadata?.['gravity_tone_rules'] || '',
+        };
+    } catch (e) {
+        return { wordCount: 'flexible', voice: '', tone: '', toneRules: '' };
+    }
 }
 
 /**

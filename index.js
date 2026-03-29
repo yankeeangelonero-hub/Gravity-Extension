@@ -243,10 +243,15 @@ function injectPrompt(mode) {
 
     try {
         // Rules — turn-type-specific narrative rules (replaces preset L0-L3 + Anchor)
-        const rulesType = isIntegration ? 'integration'
-            : _pendingDeductionType !== 'regular' ? _pendingDeductionType
-            : 'normal';
-        setExtensionPrompt(`${MODULE_NAME}_rules`, buildRulesInjection(rulesType), PROMPT_IN_CHAT, 0);
+        try {
+            const rulesType = isIntegration ? 'integration'
+                : _pendingDeductionType !== 'regular' ? _pendingDeductionType
+                : 'normal';
+            setExtensionPrompt(`${MODULE_NAME}_rules`, buildRulesInjection(rulesType), PROMPT_IN_CHAT, 0);
+        } catch (rulesErr) {
+            console.warn(`${LOG_PREFIX} Rules injection failed:`, rulesErr);
+            setExtensionPrompt(`${MODULE_NAME}_rules`, '', PROMPT_NONE, 0);
+        }
 
         // State view — always full (LLM has only 3-5 messages of context)
         if (_currentState) {
