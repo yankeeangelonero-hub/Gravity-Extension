@@ -46,7 +46,7 @@ Style: Noir Realist. Present tense. Close-third rotating focus through the subje
 - Surface is substance: clothing, wear patterns, damage tell function and history. The observer's attention reveals the observer.
 - Physical response precedes conscious thought in emotional moments: somatic → awareness → interpretation → verbal (often contradicts the body).
 - Dialogue matches personality: anxious hedges, confident declares, guarded gives minimum. Not grammatically perfect unless that IS their voice.
-- Length: read from Constants. Ceiling, not target. One beat = one response.
+- Length: CEILING, not target. One beat = one response. Current setting injected below.
 - Concrete detail: every scene needs one detail that could only exist in this world, at this moment.
 - New location: 3-4 paragraphs of establishment. Returning location: the delta. Same location: nothing.
 - New character: physical impression first, name last.
@@ -184,6 +184,15 @@ Beat: [ONE sensory beat.]
 // ─── Build Function ──────────────────────────────────────────────────────
 
 /**
+ * Get the active word count setting.
+ * @returns {string}
+ */
+function getWordCount() {
+    const { chatMetadata } = SillyTavern.getContext();
+    return chatMetadata?.['gravity_word_count'] || 'flexible';
+}
+
+/**
  * Build the rules injection for the current turn type.
  * @param {'normal'|'advance'|'combat'|'intimacy'|'integration'} turnType
  * @returns {string}
@@ -196,13 +205,17 @@ function buildRulesInjection(turnType) {
         intimacy: INTIMACY_RULES,
     };
 
+    const wordCount = getWordCount();
+    const lengthLine = wordCount === 'flexible'
+        ? 'LENGTH: Flexible — match the scene. Dialogue-heavy: shorter. Action/establishment: longer.'
+        : `LENGTH: ${wordCount} words. This is a CEILING. Do not exceed. If past it, you wrote too many beats — cut the last ones.`;
+
     if (turnType === 'integration') {
-        // Integration turns get EVERYTHING
-        return `${SHARED_CORE}\n\n${NORMAL_RULES}\n\n${ADVANCE_RULES}\n\n${COMBAT_RULES}`;
+        return `${SHARED_CORE}\n\n${lengthLine}\n\n${NORMAL_RULES}\n\n${ADVANCE_RULES}\n\n${COMBAT_RULES}`;
     }
 
     const variant = variants[turnType] || variants.normal;
-    return `${SHARED_CORE}\n\n${variant}`;
+    return `${SHARED_CORE}\n\n${lengthLine}\n\n${variant}`;
 }
 
 export { buildRulesInjection };

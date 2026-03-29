@@ -28,8 +28,9 @@ let _onCombat = null;
 let _onCombatSetup = null;
 let _onDivinationChange = null;
 let _onIntimacy = null;
+let _onLengthChange = null;
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onCombatSetup, onDivinationChange, onIntimacy }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onCombatSetup, onDivinationChange, onIntimacy, onLengthChange }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
@@ -44,6 +45,7 @@ function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapte
     _onCombatSetup = onCombatSetup;
     _onDivinationChange = onDivinationChange;
     _onIntimacy = onIntimacy;
+    _onLengthChange = onLengthChange;
 }
 
 let _currentBookName = '';
@@ -259,6 +261,14 @@ function renderAllSections() {
     if (divSelect) {
         divSelect.addEventListener('change', () => {
             if (_onDivinationChange) _onDivinationChange(divSelect.value);
+        });
+    }
+
+    // Word count selector
+    const lenSelect = container.querySelector('#gl-length-select');
+    if (lenSelect) {
+        lenSelect.addEventListener('change', () => {
+            if (_onLengthChange) _onLengthChange(lenSelect.value);
         });
     }
 
@@ -853,12 +863,25 @@ function renderDivination(state) {
     const activeSystem = chatMetadata?.['gravity_divination_system'] || div.active_system || 'arcana';
     const parts = [];
 
-    // Dropdown selector
-    parts.push(`<div class="gl-d-row"><b>System:</b>
+    // Divination dropdown
+    parts.push(`<div class="gl-d-row"><b>Divination:</b>
         <select class="gl-div-select" id="gl-divination-select">
             <option value="arcana"${activeSystem === 'arcana' ? ' selected' : ''}>Major Arcana (d22)</option>
             <option value="iching"${activeSystem === 'iching' || activeSystem === 'i ching' ? ' selected' : ''}>易経 I Ching (d64)</option>
             <option value="classic"${activeSystem === 'classic' || activeSystem === '2d10' ? ' selected' : ''}>Classic Entropy (2d10)</option>
+        </select>
+    </div>`);
+
+    // Word count dropdown
+    const activeLength = chatMetadata?.['gravity_word_count'] || 'flexible';
+    parts.push(`<div class="gl-d-row"><b>Length:</b>
+        <select class="gl-div-select" id="gl-length-select">
+            <option value="under 150"${activeLength === 'under 150' ? ' selected' : ''}>Under 150 words</option>
+            <option value="150-300"${activeLength === '150-300' ? ' selected' : ''}>150-300 words</option>
+            <option value="300-600"${activeLength === '300-600' ? ' selected' : ''}>300-600 words</option>
+            <option value="600-1000"${activeLength === '600-1000' ? ' selected' : ''}>600-1000 words</option>
+            <option value="1000-1500"${activeLength === '1000-1500' ? ' selected' : ''}>1000-1500 words</option>
+            <option value="flexible"${activeLength === 'flexible' ? ' selected' : ''}>Flexible</option>
         </select>
     </div>`);
 

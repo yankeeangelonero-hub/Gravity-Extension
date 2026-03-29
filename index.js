@@ -1482,6 +1482,12 @@ async function handleImportData(data) {
             await setDivinationSystem(system);
             toastr.info(`Divination system: ${system}`);
         },
+        onLengthChange: async (length) => {
+            const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+            chatMetadata['gravity_word_count'] = length;
+            await saveMetadata();
+            toastr.info(`Word count: ${length}`);
+        },
     });
 
     // Setup wizard phase change callback
