@@ -514,7 +514,7 @@ Beat: [ONE sensory beat.]
 
         const nudgeText = `[SYSTEM: TURN FORMAT — you MUST follow this exact structure:
 
-IMPORTANT: Use the DEDUCTION block below as your reasoning. Do NOT think outside of it. All your analysis, planning, and assessment goes INSIDE the deduction markers. Keep each line to ONE sentence. The deduction IS your thinking — do not duplicate it with extended reasoning.
+IMPORTANT: Do ALL your thinking inside the ---DEDUCTION--- block. Do NOT produce a separate reasoning or thinking block before it. If you catch yourself reasoning before the deduction, STOP and put it inside the deduction instead. One reasoning pass, not two.
 
 1. DEDUCTION block (your ONLY reasoning space — compact, one line per item):
 ${deductionTemplate}
