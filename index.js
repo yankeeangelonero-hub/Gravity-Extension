@@ -73,6 +73,26 @@ const ARCANA_TABLE = [
     'The World — Completion. A cycle closes. The full picture visible.',
 ];
 
+// ─── Advance Focus Randomizer ──────────────────────────────────────────────
+
+const ADVANCE_FOCUS_TABLE = [
+    { key: 'scene',      weight: 30, label: 'Scene' },
+    { key: 'world',      weight: 20, label: 'World Politics' },
+    { key: 'offscreen',  weight: 20, label: 'Off-screen Character' },
+    { key: 'new_threat', weight: 15, label: 'New Threat/Event' },
+    { key: 'collision',  weight: 15, label: 'Collision Tightens' },
+];
+
+function pickAdvanceFocus() {
+    const totalWeight = ADVANCE_FOCUS_TABLE.reduce((sum, f) => sum + f.weight, 0);
+    let roll = Math.random() * totalWeight;
+    for (const focus of ADVANCE_FOCUS_TABLE) {
+        roll -= focus.weight;
+        if (roll <= 0) return focus;
+    }
+    return ADVANCE_FOCUS_TABLE[0]; // fallback
+}
+
 // ─── Divination System ─────────────────────────────────────────────────────
 
 const NARRATIVE_FORCING = 'NARRATIVE FORCING: The draw must visibly alter the scene — not just color the mood. Something HAPPENS because of this draw. A person appears, a plan fails, a door opens, a body drops, a truth surfaces. The draw is not a metaphor — it is an event. Find the coolest, most unexpected intersection with the current scene and MAKE IT HAPPEN in the prose.';
@@ -863,48 +883,68 @@ This collision is already spent — it MUST reach RESOLVED. Either the confronta
 Record the draw: SET divination field=last_draw value="[draw result]"
 Full turn: deduction + prose + ledger block.]`;
     } else {
-        // No ripe or in-progress collisions — normal world-advance with multi-beat structure
+        // No ripe or in-progress collisions — randomized focus advance
+        const focus = pickAdvanceFocus();
+
+        const ADVANCE_PROMPTS = {
+            scene: `FOCUS: THE SCENE
+Something happens in or near ${pcName}'s current location. This is local, intimate, character-driven.
+- An NPC in the scene acts on their own WANT — starts a conversation, makes a decision, reacts to something
+- The environment shifts — a sound, a change in light, something noticed for the first time
+- A detail the PC filed away comes back as a loaded gun
+- Someone arrives or leaves
+Write ONE focused beat. Deep, specific, sensory. The PC is present but the world is acting.`,
+
+            world: `FOCUS: THE WORLD MOVES
+Faction politics advance. Cut AWAY from ${pcName} to show what's happening in the larger world.
+- A faction leader makes a decision. Show the meeting, the order, the execution.
+- Alliances shift. A subordinate defies or obeys. Resources deploy.
+- The consequence will reach ${pcName} later — plant the seed now.
+Rewrite the acting faction's profile via SET faction:id field=profile.
+Use --- or a location header to cut to the faction scene. The PC does NOT appear in this beat.`,
+
+            offscreen: `FOCUS: OFF-SCREEN CHARACTER
+A TRACKED character the PC hasn't interacted with recently does something driven by their WANT.
+Cut to their location. Show what they're dealing with, what choice they face, how their constraints shape their action.
+- This character acts independently — the PC may never learn what happened here.
+- Or: the consequences arrive at the PC's doorstep next scene.
+- Update the character's DOING, location, and reads in the ledger.
+Use --- or a location/time header to cut to their scene. One deep beat from their perspective.`,
+
+            new_threat: `FOCUS: SOMETHING NEW
+Introduce a new element the story didn't have before this turn.
+- A new NPC appears (CREATE with tier, WANT, DOING)
+- A new event changes the landscape (environmental, political, personal)
+- A new complication makes an existing collision worse
+- Information surfaces that reframes something the PC thought they understood
+You have FULL LICENSE: create characters, trigger events, introduce threats.
+The new element should be COOL — not just tense, but interesting and unexpected.`,
+
+            collision: `FOCUS: COLLISION TIGHTENS
+An existing simmering or active collision compresses. Distance decreases.
+Pick the collision that would produce the most interesting pressure right now.
+- Show WHY it tightened — what moved, who acted, what changed
+- The pressure becomes harder for ${pcName} to ignore
+- SET the collision's distance closer. Update its details if the shape changed.
+If a pressure point in Gravity_State_View feeds this collision, activate it:
+REMOVE the pressure point, COMPRESS the collision distance, show the chain of causation.`,
+        };
+
+        const focusPrompt = ADVANCE_PROMPTS[focus.key];
+        const focusHints = {
+            scene: 'The scene shifts around you.',
+            world: 'Meanwhile, elsewhere...',
+            offscreen: 'Someone you know is busy.',
+            new_threat: 'Something new enters the story.',
+            collision: 'The pressure tightens.',
+        };
+
         _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
 
 ${draw.label}: ${draw.reading}${draw.html ? `\nRender this HTML card reveal before interpreting:\n${draw.html}` : ''}
 The draw colors the world's move — it does not prescribe it.
 
-This is the world's turn. You may write MULTIPLE BEATS and CUT between character angles:
-
-STRUCTURE: Write 2-4 short beats, each from a different angle. Use scene cuts:
-- Beat 1: What ${pcName} is doing (brief, maintaining vector)
-- Beat 2: An NPC in the scene acts on their own WANT — starts a conversation, reacts, decides
-- Beat 3: Cut to a different location — a faction leader issues an order, a subordinate executes, a patrol moves
-- Beat 4: Cut back — the consequence arrives where the PC is
-
-Use --- or a location/time header to cut between angles. Each beat can be 50-150 words. Not every beat needs the PC.
-
-PRESSURE POINT PROTOCOL — the Rule of Cool:
-Scan the pressure_points array in the state view. If any exist, pick the one that would
-produce the COOLEST moment right now — not the most dramatic or intense, but the most
-interesting, unexpected, or stylish intersection with the current scene.
-
-You have FULL LICENSE to make it happen: move NPCs into position, introduce new NPCs,
-spawn threats, have faction subordinates arrive with orders, trigger events, create new
-characters, use environmental disasters. Whatever it takes to force this pressure into
-the player's immediate reality. Show the chain of causation — which faction's action
-created this pressure, how it reaches the PC, what it forces.
-
-A pressure point DOES NOT detonate on its own. It feeds the collision engine:
-- If an existing collision is relevant: COMPRESS its distance (SET distance closer),
-  add to its forces, or shift its cost. The faction politics make a personal confrontation
-  worse, faster, or differently shaped.
-- If no existing collision fits: CREATE a new collision from the pressure point.
-  Give it forces, status=SIMMERING or ACTIVE, a distance, and a cost.
-  The pressure has crystallized into a proper confrontation.
-
-After activating a pressure point, REMOVE it from world.pressure_points. It has been
-converted into collision fuel — it is no longer a raw seam, it is now tracked momentum.
-
-If no pressure points exist or none fit, PICK from Gravity_State_View instead:
-- NPCs act on their WANT or DOING
-- A collision tightens because the world moved
-- A dormant character's WANT pulls them back
+${focusPrompt}
 
 Record the draw: SET divination field=last_draw value="[draw result]"
 Full turn: deduction + prose + ledger block.]`;
