@@ -267,6 +267,12 @@ function renderAllSections() {
         if (_onSettingsChange) _onSettingsChange();
     };
 
+    // Model tier selector
+    const tierSelect = container.querySelector('#gl-tier-select');
+    if (tierSelect) {
+        tierSelect.addEventListener('change', () => saveSetting('gravity_model_tier', tierSelect.value, 'Model tier'));
+    }
+
     // Divination system selector
     const divSelect = container.querySelector('#gl-divination-select');
     if (divSelect) {
@@ -898,6 +904,16 @@ function renderSettings(state) {
     const div = state.divination || {};
     const { chatMetadata } = SillyTavern.getContext();
     const parts = [];
+
+    // ── Model Tier ──
+    const activeTier = chatMetadata?.['gravity_model_tier'] || 'opus';
+    parts.push(`<div class="gl-d-section"><b>Model:</b></div>`);
+    parts.push(`<div class="gl-d-row">
+        <select class="gl-div-select" id="gl-tier-select">
+            <option value="opus"${activeTier === 'opus' ? ' selected' : ''}>Opus (principle-based)</option>
+            <option value="sonnet"${activeTier === 'sonnet' ? ' selected' : ''}>Sonnet (example-enforced)</option>
+        </select>
+    </div>`);
 
     // ── Prose Settings ──
     parts.push(`<div class="gl-d-section"><b>Prose Settings:</b></div>`);

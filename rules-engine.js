@@ -181,6 +181,14 @@ Draw: [how the INJECTED divination result shapes the sexual energy]
 Beat: [ONE sensory beat.]
 ---END DEDUCTION---`;
 
+const INTIMACY_CHOICES_SONNET = `CHOICES: 4-5 options after each beat. Rotate frameworks:
+- By Sensation: Touch / Mouth / Visual / Denial
+- By Dynamic: He leads / She leads / Mutual / Stillness
+- By Register: Worship / Need / Play / Ruin
+- By Focus: Mouth / Chest / Hips / Somewhere unexpected
+Option 5: always escalates or reverses power dynamic.
+<span class="act" data-value="intimate: [concrete action]">Display text</span>`;
+
 // ─── Build Function ──────────────────────────────────────────────────────
 
 /**
@@ -194,11 +202,63 @@ function getProseSettings() {
             proseStyle: chatMetadata?.['gravity_prose_style'] || 'noir-realist',
             tense: chatMetadata?.['gravity_tense'] || 'present',
             perspective: chatMetadata?.['gravity_perspective'] || 'close-third',
+            modelTier: chatMetadata?.['gravity_model_tier'] || 'opus',
         };
     } catch (e) {
-        return { wordCount: 'flexible', proseStyle: 'noir-realist', tense: 'present', perspective: 'close-third' };
+        return { wordCount: 'flexible', proseStyle: 'noir-realist', tense: 'present', perspective: 'close-third', modelTier: 'opus' };
     }
 }
+
+// ─── Model Tier Enforcement ──────────────────────────────────────────────────
+
+const SONNET_ENFORCEMENT = `
+═══ PROSE ENFORCEMENT (active — model tier: Sonnet) ═══
+
+SHOW, NEVER TELL. This is the most important rule.
+- NEVER write: "She felt sad" "He was angry" "The room was tense" "She was nervous"
+- INSTEAD write what the BODY does: "Her hand stopped on the mug handle." "His jaw set two degrees past comfortable."
+- If you catch yourself naming an emotion, DELETE IT. Replace with a physical action.
+
+EVERY PARAGRAPH must contain:
+1. One sensory detail that is NOT visual (smell, texture, temperature, sound, taste)
+2. One gesture or action that reveals character (not "she smiled" — WHAT kind of smile, what it costs her)
+3. Zero named emotions
+
+DO THIS:
+- "The coffee was cold. Had been cold for twenty minutes. She hadn't noticed because noticing would mean looking away from the door."
+- "He set the glass down with the care of someone who'd already broken one today."
+NOT THIS:
+- "She felt anxious waiting for him."
+- "He carefully set down his glass, feeling nervous."
+
+DIALOGUE RULES:
+- Characters do NOT speak in complete, grammatical sentences unless that IS their character.
+- Action beats between dialogue lines show what the body does while talking.
+- DO: '"I'm fine." She was pulling her sleeve over her knuckles again.'
+- NOT: '"I'm feeling quite anxious about the situation," she said nervously.'
+
+SENTENCE VARIETY:
+- No two consecutive paragraphs may start the same way.
+- Alternate: short punch sentences with longer flowing ones.
+
+BANNED → REPLACEMENT (use the replacement, not the original):
+- "couldn't help but [verb]" → just do the verb
+- "found themselves [verb]ing" → just verb directly
+- "something shifted/changed" → NAME what shifted: "His weight moved to the back foot."
+- "silence stretched" → describe what fills it: "The clock. The ice in the glass. Her breathing."
+- "shivers down spine" → specific location: "The hair on her forearms lifted."
+- "breath catching" → what breath DOES: "The inhale stopped halfway, held by the ribs."
+- "eyes meeting" → what the eyes DO: "She looked at him the way you look at a door you're deciding whether to open."
+- "heart pounding/racing" → physical consequence: "She could feel her pulse in her wrists."
+
+LEDGER EXAMPLE (follow this format exactly):
+---LEDGER---
+> [Day 3 — 14:00] SET pc field=current_scene value="Storage room. Tifa in doorway. Blue potion light. The sixth morning together."
+> [Day 3 — 14:00] SET pc field=location value="Seventh Heaven storage room"
+> [Day 3 — 14:00] SET pc field=condition value="Focused, hands steady. Lab work is where the laziness becomes precision."
+> [Day 3 — 14:00] SET char:tifa field=doing value="Watching from doorway | Cost: bar needs opening, hasn't moved"
+> [Day 3 — 14:00] APPEND summary value="[Day 3 — 14:00] Seventh Heaven storage room. Autumn and Tifa present. First potion batch complete — six bottles, luminous blue. Tifa watched from the doorway and said she was glad he was here. He replied with one word and cleaned the counter. Changed: C1 moved to STRESSED from proximity. Unresolved: twelve inches becoming precedent. Detail: the blue light made her shadow longer than she was."
+---END LEDGER---`;
 
 // ─── Prose Style Variants ───────────────────────────────────────────────────
 
@@ -271,12 +331,26 @@ function buildRulesInjection(turnType) {
         ? 'LENGTH: Flexible — match the scene. Dialogue-heavy: shorter. Action/establishment: longer.'
         : `LENGTH: ${settings.wordCount} words. This is a CEILING. Do not exceed. If past it, you wrote too many beats — cut the last ones.`;
 
+    const isSonnet = settings.modelTier === 'sonnet';
+
+    // Sonnet: swap intimacy choices to framework-based
+    if (isSonnet && turnType === 'intimacy') {
+        const intimacySonnet = INTIMACY_RULES.replace(
+            /CHOICES:[\s\S]*?relationship-changing story beat\./,
+            INTIMACY_CHOICES_SONNET
+        );
+        return `${SHARED_CORE}\n\n${lengthLine}\n\n${SONNET_ENFORCEMENT}\n\n${intimacySonnet}`;
+    }
+
+    // Sonnet: add enforcement layer to all other turn types
+    const enforcement = isSonnet ? `\n\n${SONNET_ENFORCEMENT}` : '';
+
     if (turnType === 'integration') {
-        return `${SHARED_CORE}\n\n${lengthLine}\n\n${NORMAL_RULES}\n\n${ADVANCE_RULES}\n\n${COMBAT_RULES}`;
+        return `${SHARED_CORE}\n\n${lengthLine}${enforcement}\n\n${NORMAL_RULES}\n\n${ADVANCE_RULES}\n\n${COMBAT_RULES}`;
     }
 
     const variant = variants[turnType] || variants.normal;
-    return `${SHARED_CORE}\n\n${lengthLine}\n\n${variant}`;
+    return `${SHARED_CORE}\n\n${lengthLine}${enforcement}\n\n${variant}`;
 }
 
 export { buildRulesInjection };
