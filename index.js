@@ -473,13 +473,27 @@ No collision survives detonation.`;
 
         // Nudge — full on regular turns, slim on advance/integration (those prompts already instruct on ledger)
         const nudgeText = isRegular
-            ? `[SYSTEM: ---LEDGER--- block after prose is MANDATORY.
+            ? `[SYSTEM: TURN FORMAT — you MUST follow this exact structure:
 
-You have ONLY 3-5 messages of chat context. Gravity_State_View is your COMPLETE memory.
-Record EVERYTHING — no line limit. ALWAYS update current_scene, location, condition.
-APPEND timeline (summary) for every significant beat — 2-4 sentences with timestamp and texture.
-CLEANUP (REMOVE/DESTROY): max 3 per regular turn. Save bulk cleanup for eval or chapter close.
-If nothing changed: (empty)]`
+1. ---DEDUCTION--- block (compact checklist, one line per item):
+---DEDUCTION---
+Intent: [what the player is trying to do — one line]
+Logic: [would this succeed? yes/no and why]
+Cost: [what this action costs or risks]
+Constraint: [which is pressured — or: none]
+Tone: [which tone rule applies]
+Scene: [who's present, atmosphere — for current_scene update]
+Plan: [ONE beat. Stop after the first shift.]
+---END DEDUCTION---
+
+2. Prose (one beat)
+
+3. ---LEDGER--- block (record EVERYTHING that changed, no line limit):
+ALWAYS update current_scene, location, condition.
+APPEND timeline (summary) for every significant beat.
+CLEANUP (REMOVE/DESTROY): max 3. Save bulk for eval or chapter close.
+
+You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memory.]`
             : `[SYSTEM: ---LEDGER--- block after response. No line limit. Full cleanup allowed this turn${_uncappedTurn ? ' (UNCAPPED)' : ''}.]`;
         setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
     } catch (err) {
