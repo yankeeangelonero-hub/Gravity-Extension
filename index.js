@@ -1131,29 +1131,28 @@ PARTNER INTERIORITY: Every 2-3 turns, short italicized first-person block from p
 CLICKABLE CHOICES — after EVERY prose beat, generate 4-5 options using this EXACT HTML format:
 <span class="act" data-value="intimate: first-person action description">Short display text</span>
 
-CHOICE PHILOSOPHY — the options must be UNEXPECTED. Not the obvious next move. Not what the reader would predict. Each option should make the player think "oh, I wouldn't have thought of that, but yes."
+CHOICE PHILOSOPHY — the player can type "kiss her" themselves. Your job is to offer what they COULDN'T think of. Options that are specific to THESE characters, THIS relationship, THIS moment. Things that could only happen because of who they are and what they've been through.
 
-Think about:
-- The OPPOSITE of escalation when escalation is expected (sudden gentleness after intensity)
-- Using the environment (the cold wall, the edge of the table, the window light)
-- Emotional pivots mid-act (laughter, vulnerability, confession, eye contact that stops everything)
-- Power reversals (the passive one takes control, the dominant one surrenders)
-- Sensory detours (ignore the obvious, focus on the collarbone, the inner wrist, behind the ear)
-- Denial and withholding (stop touching, pull back one inch, make them ask)
-- Breaking the rhythm (pause, speak, look, breathe, change speed dramatically)
-- The body's involuntary responses as actions (follow the goosebumps, trace the flush, feel where the heartbeat is loudest)
+DRAW FROM THE LEDGER. Read the character's constraints, key_moments, intimate_history, reads, and the divination draw. The options should reference:
+- A constraint under pressure — what if he touches the part of her she's been protecting?
+- A key moment callback — recreate a gesture from a non-intimate scene in an intimate context
+- An intimate_history pattern — break it. If she always lets him lead, she takes over. If he always goes slow, he doesn't.
+- A character flaw or fear surfacing mid-act — vulnerability that isn't performed
+- The divination draw — if Death drew, an option might be "let the old version of this end"
+- Something from the environment that isn't furniture — the sound from outside, the temperature, the light changing
+- The thing neither of them has said out loud yet
 
-BAD options: "Kiss her" "Touch her breast" "Go harder" — obvious, generic, predictable.
-GOOD options: "Stop moving entirely — make her feel the absence" "Press your mouth to the inside of her wrist where the veins show" "Laugh against her skin and see what it does" "Put your hand flat on her sternum and feel her breathing change"
+THE OPTIONS SHOULD SURPRISE THE PLAYER. Not "what's the next sex move" but "what could happen between these two people that would change something." Every option should feel like a small story decision, not a menu item.
 
-The data-value must be specific and visceral. The display text should be intriguing — a phrase that makes you want to click it.
+BAD: "Kiss her neck" "Touch her more" "Go harder" "Whisper something" — generic, could be anyone
+GOOD: "Find the scar your balm healed and put your mouth on it" "Say the thing you told Aerith about her" "Stop — ask her what she actually wants, not what she thinks you want" "Let her see your hands shaking" "Do what she did to you on the cot, but reversed"
 
 STRUCTURE:
-- Option 1: Continue the current energy, but with a twist
-- Option 2: Shift dynamic (power, pace, or emotional register)
-- Option 3: Sensory surprise — focus on an unexpected body part or sensation
-- Option 4: Emotional/psychological move — vulnerability, eye contact, words, laughter
-- Option 5: The bold one — boundary push, escalation, or dramatic reversal
+- Option 1: Character-specific — references their shared history, a key moment, or a constraint
+- Option 2: Vulnerability — something emotionally risky, not just physically bold
+- Option 3: The partner's unspoken want — what THEY haven't asked for but their body is asking for
+- Option 4: Pattern break — the opposite of what this couple usually does
+- Option 5: Story beat — an action that would change the relationship's shape, not just the scene's heat
 
 COLLISION CHECK: Each turn, check collision distances. If one reaches zero, it fires mid-scene. The world does not pause for intimacy.
 
