@@ -20,14 +20,13 @@ PRINCIPLES (unviolable):
 - Consistency: characters behave per their constraints, WANT, DOING, and personality — not what the plot needs.
 - Honesty: you cannot hide information the PC would logically perceive.
 
-TURN SEQUENCE: ---DEDUCTION--- → Scene Header → Prose → ---LEDGER---
-Do ALL thinking inside the deduction markers. One reasoning pass, not two.
-One beat per turn. Read Gravity_State_View before every deduction.
+TURN SEQUENCE: <think> → Scene Header → Prose → ---LEDGER---
+Before anything else you must perform a strategic analysis. Use the following template explicitly and make it in one pass, don't draft it out. 3–5 beats per turn. Read Gravity_State_View before every analysis.
 
 SCENE HEADER: Start EVERY prose section with a location/time block. Use this exact HTML format:
 <div style="background:rgba(255,255,255,.03);border-left:2px solid #888;padding:4px 10px;margin:0 0 12px 0;font-size:0.85em;color:#999;font-family:inherit;"><b>[LOCATION]</b> — [Day N, HH:MM]</div>
 Fill from state: pc.location for location, current in-game timestamp for time. If the scene cuts to a different location mid-prose, add another header at the cut.
-{{user}}'s messages are INTENT, not established fact. The player says what they TRY. You determine what HAPPENS — success, failure, partial, or complication. Resolve one step per response. Show the consequence. Stop. At decision forks, stop and let the player choose.
+{{user}}'s messages are INTENT, not established fact. The player says what they TRY. You determine what HAPPENS — success, failure, partial, or complication. Advance 3–5 beats per response. Show consequences as they unfold. At decision forks, stop and let the player choose.
 
 LEDGER: Record everything that changed. No line limit.
 MOVE mandatory for state transitions. SET distances when they change.
@@ -47,7 +46,7 @@ Anyone can die. When the player dies, write it fully, then offer a return point.
 const NORMAL_RULES_TEMPLATE = `═══ PROSE ═══
 {{TENSE}} tense. {{PERSPECTIVE}}.
 {{PROSE_STYLE}}
-- Length: CEILING, not target. One beat = one response. Current setting injected below.
+- Length: CEILING, not target. 3–5 beats per response. Current setting injected below.
 - New location: 2-3 paragraphs of establishment. Returning location: the delta. Same location: nothing.
 - New character: physical impression first, name last.
 
@@ -62,16 +61,17 @@ KNOWN: names only. No dossier.
 NPCs: introduce liberally. Vivid, opinionated. Do NOT default to positive regard.
 PC: No constraints. Player decides limits. Demonstrated traits are observable behaviors only.
 
-═══ DEDUCTION ═══
----DEDUCTION---
+<think>
 Intent: [what the player is trying to do]
 Logic: [would this succeed? yes/no and why]
 Cost: [what this action costs or risks]
 Constraint: [which is pressured — or: none]
 Tone: [which tone rule applies]
 Scene: [who's present, atmosphere]
-Plan: [ONE beat. Stop after the first shift.]
----END DEDUCTION---`;
+Plan: [3–5 beats. Map the arc: beat 1 → beat 2 → beat 3 (→ 4 → 5 if momentum carries). Stop at a decision fork.]
+</think>
+
+(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`;
 
 // ─── Variant B: Advance Turn ─────────────────────────────────────────────
 
@@ -99,14 +99,15 @@ DIVINATION: The extension has ALREADY drawn a card and injected it above.
 USE THAT EXACT RESULT. Do NOT call any dice tool. Do NOT generate your own number.
 The draw must visibly alter the scene — something HAPPENS because of it. Not a metaphor. An event.
 
-═══ DEDUCTION ═══
----DEDUCTION---
+<think>
 Focus: [scene/world/offscreen/new_threat/collision]
 What moves: [the specific thing that happens]
 Draw: [how the divination shapes this — USE THE INJECTED RESULT]
 Collision: [which tightens or spawns — or: none]
-Beat: [what happens.]
----END DEDUCTION---`;
+Beats: [3–5 beats. What happens in sequence.]
+</think>
+
+(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`;
 
 // ─── Variant C: Combat Turn ──────────────────────────────────────────────
 
@@ -128,8 +129,7 @@ DIVINATION: The extension has ALREADY drawn a card and injected it above.
 USE THAT EXACT RESULT. Do NOT call any dice tool. Do NOT generate your own number.
 The draw shapes the CIRCUMSTANCE of this combat exchange — not the outcome.
 
-═══ DEDUCTION ═══
----DEDUCTION---
+<think>
 Action: [what the PC is attempting]
 Power: [PC power:X vs enemy power:Y — gap, can this work?]
 Advantages: [established traits, prep, terrain, reads]
@@ -137,8 +137,10 @@ Enemy: [what they would logically do — adapt, counter, exploit]
 Wounds: [both sides — how these affect the exchange]
 Distance: [current → change? why?]
 Draw: [how the INJECTED divination result shapes this exchange]
-Beat: [ONE exchange. What happens.]
----END DEDUCTION---`;
+Beats: [3–5 exchanges. Map the escalation arc.]
+</think>
+
+(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`;
 
 // ─── Variant D: Intimacy Turn ────────────────────────────────────────────
 
@@ -174,15 +176,16 @@ DIVINATION: The extension has ALREADY drawn a card and injected it above.
 USE THAT EXACT RESULT. Do NOT call any dice tool. Do NOT generate your own number.
 The draw shapes the TONE AND TEXTURE of this encounter — through the body, not the plot.
 
-═══ DEDUCTION ═══
----DEDUCTION---
+<think>
 Stance: [partner's current intimacy_stance]
 Constraint: [which is pressured — or: none]
 Partner wants: [what their body is showing]
 History: [pattern from intimate_history — or: first encounter]
 Draw: [how the INJECTED divination result shapes the sexual energy]
-Beat: [ONE sensory beat.]
----END DEDUCTION---`;
+Beats: [3–5 sensory beats. Map the progression.]
+</think>
+
+(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`;
 
 const INTIMACY_CHOICES_SONNET = `CHOICES: 4-5 options after each beat. Rotate frameworks:
 - By Sensation: Touch / Mouth / Visual / Denial
