@@ -745,7 +745,8 @@ async function onUserMessage(messageId) {
         // Re-inject intimacy context so the LLM stays in intimate scene mode
         _pendingOOCInjection = `[GRAVITY INTIMACY — continuing intimate scene. The player chose an action.
 
-STAY IN INTIMATE SCENE MODE. Write the next prose beat (200-400 words) responding to the player's action.
+STAY IN INTIMATE SCENE MODE. Write the next prose beat responding to the player's action.
+Read the previous turn's INTIMACY DEDUCTION for scene continuity — setting, clothing, exposure, arousal, and position carry forward unless explicitly changed by the player's action.
 Then generate 4-5 new clickable choices at the end:
 <span class="act" data-value="intimate: [concrete first-person action]">Short display text</span>
 
@@ -757,8 +758,13 @@ RULES STILL ACTIVE:
 - Collision check: if any collision hits distance 0, it fires mid-scene.
 - "OOC: fade to black" → cut to afterglow.
 
-INTIMACY DEDUCTION (use this format, one line per item):
+INTIMACY DEDUCTION (use this format, one line per item — carry forward from previous turn, update what changed):
 ---DEDUCTION---
+Setting: [where — surface, lighting, temperature]
+Clothing: [each participant — what's on, off, displaced]
+Exposure: [each participant — what skin is visible/accessible]
+Arousal: [physical indicators — concrete, not numeric]
+Position: [who's where, what's touching what]
 Stance: [partner's current intimacy_stance]
 Constraint: [which is pressured — or: none]
 Partner wants: [what their body is showing]
@@ -1150,7 +1156,7 @@ CONSTRAINT CHECK: Read constraint integrity from Gravity_State_View. Intimacy ma
 
 ═══ THE EXPERIENCE ═══
 Multi-turn interactive scene. Each turn:
-1. One short, visceral prose beat (200-400 words)
+1. One short, visceral prose beat
 2. 3-4 clickable options for the player
 3. Player picks or writes their own
 
@@ -1222,6 +1228,11 @@ Each update should reference encounter NUMBER so the development arc is traceabl
 
 INTIMACY DEDUCTION (use this format, one line per item):
 ---DEDUCTION---
+Setting: [where — surface, lighting, temperature]
+Clothing: [each participant — what's on, off, displaced]
+Exposure: [each participant — what skin is visible/accessible]
+Arousal: [physical indicators — concrete, not numeric]
+Position: [who's where, what's touching what]
 Stance: [partner's current intimacy_stance — what they'd do right now]
 Constraint: [which constraint is pressured by this intimacy — or: none]
 Partner wants: [what they haven't asked for but their body is showing]

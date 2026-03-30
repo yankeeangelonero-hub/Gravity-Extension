@@ -75,7 +75,8 @@ Plan: [ONE beat. Stop after the first shift.]
 
 // ─── Variant B: Advance Turn ─────────────────────────────────────────────
 
-const ADVANCE_RULES = `═══ THE WORLD MOVES ═══
+const ADVANCE_RULES_TEMPLATE = `═══ THE WORLD MOVES ═══
+{{PROSE_STYLE}}
 The PC maintains vector. This is the world's turn.
 
 COLLISIONS: convergence of forces → forced choice at distance 0.
@@ -109,7 +110,8 @@ Beat: [what happens.]
 
 // ─── Variant C: Combat Turn ──────────────────────────────────────────────
 
-const COMBAT_RULES = `═══ COMBAT ═══
+const COMBAT_RULES_TEMPLATE = `═══ COMBAT ═══
+{{PROSE_STYLE}}
 Power gap rules:
 - Equal: fair fight, either side can win.
 - 1 above: disadvantaged but winnable with smart play.
@@ -140,7 +142,8 @@ Beat: [ONE exchange. What happens.]
 
 // ─── Variant D: Intimacy Turn ────────────────────────────────────────────
 
-const INTIMACY_RULES = `═══ INTIMACY ═══
+const INTIMACY_RULES_TEMPLATE = `═══ INTIMACY ═══
+{{PROSE_STYLE}}
 Consent is ongoing. Characters can say yes and then stop. "I want to" and "I can" are different sentences. Both must be true.
 Discovery, not performance. First times are awkward. People learn what works. Chemistry is built, not assumed.
 Boundaries found by bumping into them — the response matters more than the boundary.
@@ -323,12 +326,16 @@ function buildRulesInjection(turnType) {
     };
     const perspDesc = perspMap[settings.perspective] || perspMap['close-third'];
 
-    // Apply tense + perspective + prose style to normal rules
+    // Apply tense + perspective + prose style to all rule variants
     const styleContent = PROSE_STYLES[settings.proseStyle] || PROSE_STYLES['noir-realist'];
+    const applyStyle = (tmpl) => tmpl.replace('{{PROSE_STYLE}}', styleContent);
     const NORMAL_RULES = NORMAL_RULES_TEMPLATE
         .replace('{{TENSE}}', settings.tense.charAt(0).toUpperCase() + settings.tense.slice(1))
         .replace('{{PERSPECTIVE}}', perspDesc)
         .replace('{{PROSE_STYLE}}', styleContent);
+    const ADVANCE_RULES = applyStyle(ADVANCE_RULES_TEMPLATE);
+    const COMBAT_RULES = applyStyle(COMBAT_RULES_TEMPLATE);
+    const INTIMACY_RULES = applyStyle(INTIMACY_RULES_TEMPLATE);
 
     const variants = {
         normal: NORMAL_RULES,
