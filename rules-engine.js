@@ -21,7 +21,7 @@ PRINCIPLES (unviolable):
 - Honesty: you cannot hide information the PC would logically perceive.
 
 TURN SEQUENCE: <think> → Scene Header → Prose → ---LEDGER---
-Before anything else you must perform a strategic analysis. Use the following template explicitly and make it in one pass, don't draft it out. 3–5 beats per turn. Read Gravity_State_View before every analysis.
+Your response MUST open with a <think> block. Fill the template that appears at the end of these instructions — one pass, no drafting. 3–5 beats per turn. Read Gravity_State_View before filling it.
 
 SCENE HEADER: Start EVERY prose section with a location/time block. Use this exact HTML format:
 <div style="background:rgba(255,255,255,.03);border-left:2px solid #888;padding:4px 10px;margin:0 0 12px 0;font-size:0.85em;color:#999;font-family:inherit;"><b>[LOCATION]</b> — [Day N, HH:MM]</div>
@@ -50,6 +50,10 @@ const NORMAL_RULES_TEMPLATE = `═══ PROSE ═══
 - New location: 2-3 paragraphs of establishment. Returning location: the delta. Same location: nothing.
 - New character: physical impression first, name last.
 
+DETAIL CHAIN: sensory detail → involuntary reaction → emotion → dialogue. Each link forces the next. Never skip a link. Never name the emotion directly — let the chain carry it.
+PEAK RESTRAINT: at maximum emotional pressure, pull back. The moment that should break into tears or explosion: go quiet instead. Held-back is more devastating than released. If the scene is at its highest pitch — that is exactly when to withhold.
+START MID-ACTION: never open on entry. Begin from the middle of a gesture already in motion — the cup already falling, the hand already on the door.
+
 BANNED: "As [action], [action]" openers (max once per response). "couldn't help but" / "found themselves" / "Something shifted/changed" / internal monologue restating dialogue / epistemic hedges without purpose. No consecutive paragraphs with same syntactic structure.
 Banned phrases: shivers down spine, hit like a force, torn between, world narrowing, breath catching, face a mask, predatory grin, expression unreadable, velvety/silky voice, barely a whisper, pregnant pause, silence stretched.
 
@@ -59,19 +63,7 @@ PRINCIPAL: one character. Full psychological depth. 3-4 constraints with integri
 TRACKED: promoted supporting cast. 1-2 constraints (holding/cracking/broken). Activate when collision-active. Recede when collision resolves.
 KNOWN: names only. No dossier.
 NPCs: introduce liberally. Vivid, opinionated. Do NOT default to positive regard.
-PC: No constraints. Player decides limits. Demonstrated traits are observable behaviors only.
-
-<think>
-Intent: [what the player is trying to do]
-Logic: [would this succeed? yes/no and why]
-Cost: [what this action costs or risks]
-Constraint: [which is pressured — or: none]
-Tone: [which tone rule applies]
-Scene: [who's present, atmosphere]
-Plan: [3–5 beats. Map the arc: beat 1 → beat 2 → beat 3 (→ 4 → 5 if momentum carries). Stop at a decision fork.]
-</think>
-
-(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`;
+PC: No constraints. Player decides limits. Demonstrated traits are observable behaviors only.`;
 
 // ─── Variant B: Advance Turn ─────────────────────────────────────────────
 
@@ -97,17 +89,7 @@ Consequences radiate. Actions produce unintended effects. The world does not pau
 
 DIVINATION: The extension has ALREADY drawn a card and injected it above.
 USE THAT EXACT RESULT. Do NOT call any dice tool. Do NOT generate your own number.
-The draw must visibly alter the scene — something HAPPENS because of it. Not a metaphor. An event.
-
-<think>
-Focus: [scene/world/offscreen/new_threat/collision]
-What moves: [the specific thing that happens]
-Draw: [how the divination shapes this — USE THE INJECTED RESULT]
-Collision: [which tightens or spawns — or: none]
-Beats: [3–5 beats. What happens in sequence.]
-</think>
-
-(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`;
+The draw must visibly alter the scene — something HAPPENS because of it. Not a metaphor. An event.`;
 
 // ─── Variant C: Combat Turn ──────────────────────────────────────────────
 
@@ -127,20 +109,7 @@ ABSOLUTE RULE: No dice. No rolls. No HP. No condition tracks. No modifiers. No h
 
 DIVINATION: The extension has ALREADY drawn a card and injected it above.
 USE THAT EXACT RESULT. Do NOT call any dice tool. Do NOT generate your own number.
-The draw shapes the CIRCUMSTANCE of this combat exchange — not the outcome.
-
-<think>
-Action: [what the PC is attempting]
-Power: [PC power:X vs enemy power:Y — gap, can this work?]
-Advantages: [established traits, prep, terrain, reads]
-Enemy: [what they would logically do — adapt, counter, exploit]
-Wounds: [both sides — how these affect the exchange]
-Distance: [current → change? why?]
-Draw: [how the INJECTED divination result shapes this exchange]
-Beats: [3–5 exchanges. Map the escalation arc.]
-</think>
-
-(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`;
+The draw shapes the CIRCUMSTANCE of this combat exchange — not the outcome.`;
 
 // ─── Variant D: Intimacy Turn ────────────────────────────────────────────
 
@@ -174,18 +143,7 @@ encounters, dynamic, preferences, kinks, boundaries, evolution, aftermath — re
 
 DIVINATION: The extension has ALREADY drawn a card and injected it above.
 USE THAT EXACT RESULT. Do NOT call any dice tool. Do NOT generate your own number.
-The draw shapes the TONE AND TEXTURE of this encounter — through the body, not the plot.
-
-<think>
-Stance: [partner's current intimacy_stance]
-Constraint: [which is pressured — or: none]
-Partner wants: [what their body is showing]
-History: [pattern from intimate_history — or: first encounter]
-Draw: [how the INJECTED divination result shapes the sexual energy]
-Beats: [3–5 sensory beats. Map the progression.]
-</think>
-
-(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`;
+The draw shapes the TONE AND TEXTURE of this encounter — through the body, not the plot.`;
 
 const INTIMACY_CHOICES_SONNET = `CHOICES: 4-5 options after each beat. Rotate frameworks:
 - By Sensation: Touch / Mouth / Visual / Denial
@@ -194,6 +152,56 @@ const INTIMACY_CHOICES_SONNET = `CHOICES: 4-5 options after each beat. Rotate fr
 - By Focus: Mouth / Chest / Hips / Somewhere unexpected
 Option 5: always escalates or reverses power dynamic.
 <span class="act" data-value="intimate: [concrete action]">Display text</span>`;
+
+// ─── Think Templates (appended last — closest to model output) ──────────────
+
+const THINK_TEMPLATES = {
+    normal: `<think>
+Intent: [what the player is trying to do]
+Logic: [would this succeed? yes/no and why]
+Cost: [what this action costs or risks]
+Constraint: [which is pressured — or: none]
+Depth: [Layer 1: what the focal character does/says. Layer 2: why — the real reason. Layer 3: what they don't know about themselves that's driving this.]
+Tone: [which tone rule applies]
+Scene: [who's present, atmosphere]
+Plan: [3–5 beats. Map the arc: beat 1 → beat 2 → beat 3 (→ 4 → 5 if momentum carries). Stop at a decision fork.]
+</think>`,
+
+    advance: `<think>
+Focus: [scene/world/offscreen/new_threat/collision]
+What moves: [the specific thing that happens]
+Draw: [how the divination shapes this — USE THE INJECTED RESULT]
+Collision: [which tightens or spawns — or: none]
+Depth: [Layer 1: what the focal character does/says. Layer 2: why — the real reason. Layer 3: what they don't know about themselves that's driving this.]
+Beats: [3–5 beats. What happens in sequence.]
+</think>`,
+
+    combat: `<think>
+Action: [what the PC is attempting]
+Power: [PC power:X vs enemy power:Y — gap, can this work?]
+Advantages: [established traits, prep, terrain, reads]
+Enemy: [what they would logically do — adapt, counter, exploit]
+Wounds: [both sides — how these affect the exchange]
+Distance: [current → change? why?]
+Draw: [how the INJECTED divination result shapes this exchange]
+Depth: [Layer 1: what the enemy does/says. Layer 2: why — the real reason. Layer 3: what they don't know about themselves that's driving this fight.]
+Beats: [3–5 exchanges. Map the escalation arc.]
+</think>`,
+
+    intimacy: `<think>
+Stance: [partner's current intimacy_stance]
+Constraint: [which is pressured — or: none]
+Depth: [Layer 1: what they do/say. Layer 2: why — the real reason. Layer 3: what they don't know about themselves that's driving this.]
+Partner wants: [what their body is showing]
+History: [pattern from intimate_history — or: first encounter]
+Draw: [how the INJECTED divination result shapes the sexual energy]
+Beats: [3–5 sensory beats. Map the progression.]
+</think>`,
+};
+
+const THINK_PREAMBLE = `Before anything else you must perform a strategic analysis. Use the following template explicitly and make it in one pass, don't draft it out:`;
+
+const THINK_CLOSER = `\n\n(output final narrative response. DON'T WRITE THE DEDUCTION AGAIN)`;
 
 // ─── Build Function ──────────────────────────────────────────────────────
 
@@ -359,7 +367,8 @@ function buildRulesInjection(turnType) {
             /CHOICES:[\s\S]*?relationship-changing story beat\./,
             INTIMACY_CHOICES_SONNET
         );
-        return `${SHARED_CORE}\n\n${lengthLine}\n\n${SONNET_ENFORCEMENT}\n\n${intimacySonnet}`;
+        const think = THINK_TEMPLATES.intimacy;
+        return `${SHARED_CORE}\n\n${lengthLine}\n\n${SONNET_ENFORCEMENT}\n\n${intimacySonnet}\n\n${THINK_PREAMBLE}\n\n${think}${THINK_CLOSER}`;
     }
 
     // Sonnet: add enforcement layer to all other turn types
@@ -370,7 +379,8 @@ function buildRulesInjection(turnType) {
     }
 
     const variant = variants[turnType] || variants.normal;
-    return `${SHARED_CORE}\n\n${lengthLine}${enforcement}\n\n${variant}`;
+    const think = THINK_TEMPLATES[turnType] || THINK_TEMPLATES.normal;
+    return `${SHARED_CORE}\n\n${lengthLine}${enforcement}\n\n${variant}\n\n${THINK_PREAMBLE}\n\n${think}${THINK_CLOSER}`;
 }
 
 export { buildRulesInjection };
