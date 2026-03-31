@@ -1539,7 +1539,10 @@ async function handleRevertTurn(txIds) {
         const data = chatMetadata['gravity_ledger'];
         if (data && data.transactions) {
             data.transactions = data.transactions.filter(tx => !txIds.includes(tx.tx));
-            data.lastTxId = data.transactions.length > 0 ? Math.max(...data.transactions.map(t => t.tx || 0)) : 0;
+            // lastTxId is the NEXT free id, not the max existing id.
+            // Keep it at least 1 past the highest surviving tx to avoid reuse.
+            const maxSurviving = data.transactions.length > 0 ? Math.max(...data.transactions.map(t => t.tx || 0)) : 0;
+            data.lastTxId = maxSurviving + 1;
             await saveMetadata();
         }
 
@@ -1570,10 +1573,16 @@ function onMessageDeleted() {
 async function handleNewLedger() {
     const { chatMetadata, saveMetadata } = SillyTavern.getContext();
     delete chatMetadata['gravity_ledger'];
+    delete chatMetadata['gravity_cold'];
+    delete chatMetadata['gravity_cold_watermarks'];
+    delete chatMetadata['gravity_combat_rules'];
+    delete chatMetadata['gravity_exemplars'];
     await saveMetadata();
     resetLedger();
     _pendingCorrections = [];
     _pendingReinforcement = null;
+    _resolutionTracker = new Map();
+    _firedCollisionArrivals = new Set();
     await initialize(true);
 }
 
@@ -1582,9 +1591,15 @@ async function handleExportData() {
 }
 
 async function handleImportData(data) {
+    // Clear stale cold memory from previous dataset
+    const { chatMetadata } = SillyTavern.getContext();
+    delete chatMetadata['gravity_cold'];
+    delete chatMetadata['gravity_cold_watermarks'];
     await importData(data);
     _pendingCorrections = [];
     _pendingReinforcement = null;
+    _resolutionTracker = new Map();
+    _firedCollisionArrivals = new Set();
     await initialize(true);
 }
 

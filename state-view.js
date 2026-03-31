@@ -24,7 +24,7 @@ import { getHotView } from './memory-tier.js';
  */
 function formatStateView(state, mode = 'full') {
     const lines = [];
-    const slim = false; // Slim mode disabled — future: custom CoT per turn type will handle context trimming
+    const slim = (mode === 'slim');
     lines.push('═══ GRAVITY STATE VIEW ═══');
     lines.push('');
 

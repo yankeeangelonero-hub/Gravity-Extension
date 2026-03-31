@@ -140,16 +140,47 @@ function getTransactionsForEntity(entityId) {
 }
 
 /**
+ * Parse an in-game timestamp like "[Day 2 — 09:00]" into a numeric tuple
+ * for correct chronological comparison (lexicographic fails for multi-digit days).
+ * Returns [day, hours, minutes] or null if unparseable.
+ */
+function parseGameTimestamp(ts) {
+    if (!ts) return null;
+    const m = ts.match(/Day\s+(\d+)\s*[—–-]\s*(\d{1,2}):(\d{2})/i);
+    if (!m) return null;
+    return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+}
+
+/**
+ * Compare two parsed timestamp tuples. Returns -1, 0, or 1.
+ */
+function compareTimestamps(a, b) {
+    if (!a && !b) return 0;
+    if (!a) return -1;
+    if (!b) return 1;
+    for (let i = 0; i < 3; i++) {
+        if (a[i] < b[i]) return -1;
+        if (a[i] > b[i]) return 1;
+    }
+    return 0;
+}
+
+/**
  * Get transactions within a time range.
+ * Compares numerically by [Day N — HH:MM] format.
  * @param {string} fromTimestamp
  * @param {string} [toTimestamp]
  * @returns {Array}
  */
 function getTransactionsInRange(fromTimestamp, toTimestamp) {
+    const from = parseGameTimestamp(fromTimestamp);
+    const to = parseGameTimestamp(toTimestamp);
     return _transactions.filter(tx => {
         if (!tx.t) return false;
-        if (fromTimestamp && tx.t < fromTimestamp) return false;
-        if (toTimestamp && tx.t > toTimestamp) return false;
+        const txTime = parseGameTimestamp(tx.t);
+        if (!txTime) return false;
+        if (from && compareTimestamps(txTime, from) < 0) return false;
+        if (to && compareTimestamps(txTime, to) > 0) return false;
         return true;
     });
 }
