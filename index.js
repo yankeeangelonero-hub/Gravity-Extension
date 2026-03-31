@@ -441,6 +441,23 @@ No collision survives detonation.`;
                 setExtensionPrompt(`${MODULE_NAME}_stale`, '', PROMPT_NONE, 0);
             }
 
+            // CRASHED collision cleanup — instruct LLM to explain why and DESTROY
+            const crashedCollisions = [];
+            for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+                const status = (col.status || '').trim().toUpperCase();
+                if (status === 'CRASHED') {
+                    crashedCollisions.push({ id, col });
+                }
+            }
+            if (crashedCollisions.length > 0) {
+                const crashBlock = crashedCollisions.map(c =>
+                    `[CRASHED COLLISION — "${c.col.name || c.id}" has been marked CRASHED (no longer valid). In your deduction, explain WHY this collision is no longer valid (circumstances changed, forces dissolved, became irrelevant). Then DESTROY it in the ledger block this turn: DESTROY collision:${c.id}]`
+                ).join('\n');
+                setExtensionPrompt(`${MODULE_NAME}_crashed`, crashBlock, PROMPT_IN_CHAT, 0);
+            } else {
+                setExtensionPrompt(`${MODULE_NAME}_crashed`, '', PROMPT_NONE, 0);
+            }
+
             if (distWarnings.length > 0) {
                 setExtensionPrompt(`${MODULE_NAME}_dist_warn`,
                     `[COLLISION DISTANCE ERROR:\n${distWarnings.map(w => '  • ' + w).join('\n')}]`,
@@ -451,6 +468,7 @@ No collision survives detonation.`;
         } else {
             setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
             setExtensionPrompt(`${MODULE_NAME}_stale`, '', PROMPT_NONE, 0);
+            setExtensionPrompt(`${MODULE_NAME}_crashed`, '', PROMPT_NONE, 0);
             setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
         }
 
@@ -475,13 +493,26 @@ No collision survives detonation.`;
         // Nudge — full on regular turns, slim on advance/integration (those prompts already instruct on ledger)
         const DEDUCTION_TEMPLATES = {
             regular: `---DEDUCTION---
-Intent: [what the player is trying to do — one line]
-Logic: [would this succeed? yes/no and why]
-Cost: [what this action costs or risks]
-Constraint: [which is pressured — or: none]
-Tone: [which tone rule applies]
+Intent: [what the player is trying to do]
+Story: [1-2 lines — the dramatic situation, what's at stake]
+
+Collisions:
+- [name] | [distance] | [tightening / simmering / resolving] — [why this turn]
+New: [spawned — or: none]
+Resolving: [at zero — what's the forced choice?]
+
+Constraint: [which of the principal's constraints is pressured, why, integrity direction — or: none pressured]
+Factions: [which faction advanced or could advance — if none acted in 10+ turns, one MUST act now]
+Cost overlap: [whose costs are colliding — who's being forced to choose]
+
+Divination: [if drawn — result, reading. If not — skip]
+Tone check: [which tone rule applies — name it, one line]
+Contest: [resolve player actions through logic and established capabilities]
+
 Scene: [who's present, atmosphere — for current_scene update]
-Plan: [ONE beat. Stop after the first shift.]
+Plan: [ONE beat. What happens. What would each character logically do. Stop after the first shift.]
+Updates: [all state changes for ledger block — or: none]
+Chapter: [hold / propose "Title" / advance]
 ---END DEDUCTION---`,
             combat: `---DEDUCTION---
 Action: [what the PC is attempting]
@@ -526,7 +557,6 @@ ALWAYS update current_scene, location, condition.
 CLEANUP (REMOVE/DESTROY): max 3 per regular turn. Save bulk for eval or chapter close.
 
 You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memory.]`;
-        setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
         setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);

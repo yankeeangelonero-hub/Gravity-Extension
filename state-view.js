@@ -23,7 +23,7 @@ import { getPhonebook } from './state-compute.js';
  */
 function formatStateView(state, mode = 'full') {
     const lines = [];
-    const slim = false; // Always full — with 3-5 message context, the LLM needs everything
+    const slim = false; // Slim mode disabled — future: custom CoT per turn type will handle context trimming
     lines.push('═══ GRAVITY STATE VIEW ═══');
     lines.push('');
 
