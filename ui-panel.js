@@ -275,18 +275,6 @@ function renderAllSections() {
         tierSelect.addEventListener('change', () => saveSetting('gravity_model_tier', tierSelect.value, 'Model tier'));
     }
 
-    // Divination system selector
-    const divSelect = container.querySelector('#gl-divination-select');
-    if (divSelect) {
-        divSelect.addEventListener('change', () => saveSetting('gravity_divination_system', divSelect.value, 'Divination'));
-    }
-
-    // Word count selector
-    const lenSelect = container.querySelector('#gl-length-select');
-    if (lenSelect) {
-        lenSelect.addEventListener('change', () => saveSetting('gravity_word_count', lenSelect.value, 'Word count'));
-    }
-
     // Tense selector
     const tenseSelect = container.querySelector('#gl-tense-select');
     if (tenseSelect) {
@@ -297,12 +285,6 @@ function renderAllSections() {
     const perspSelect = container.querySelector('#gl-perspective-select');
     if (perspSelect) {
         perspSelect.addEventListener('change', () => saveSetting('gravity_perspective', perspSelect.value, 'Perspective'));
-    }
-
-    // Prose style selector
-    const styleSelect = container.querySelector('#gl-style-select');
-    if (styleSelect) {
-        styleSelect.addEventListener('change', () => saveSetting('gravity_prose_style', styleSelect.value, 'Prose style'));
     }
 
     // Ledger agent (OpenRouter) settings
@@ -978,6 +960,7 @@ function renderSettings(state) {
 
     // ── Prose Settings ──
     parts.push(`<div class="gl-d-section"><b>Prose Settings:</b></div>`);
+    parts.push(`<div class="gl-d-row" style="font-size:0.8em;color:#888;">Prose style, word count, and divination system are toggled directly in the SillyTavern prompt manager.</div>`);
 
     // Tense
     const activeTense = chatMetadata?.['gravity_tense'] || 'present';
@@ -996,43 +979,6 @@ function renderSettings(state) {
             <option value="first"${activePerspective === 'first' ? ' selected' : ''}>First-Person</option>
             <option value="second"${activePerspective === 'second' ? ' selected' : ''}>Second-Person</option>
             <option value="omniscient"${activePerspective === 'omniscient' ? ' selected' : ''}>Omniscient</option>
-        </select>
-    </div>`);
-
-    // Prose Style
-    const activeStyle = chatMetadata?.['gravity_prose_style'] || 'noir';
-    parts.push(`<div class="gl-d-row"><b>Prose Style:</b>
-        <select class="gl-div-select" id="gl-style-select">
-            <option value="noir"${activeStyle === 'noir' ? ' selected' : ''}>Noir Realist</option>
-            <option value="literary"${activeStyle === 'literary' ? ' selected' : ''}>Literary Fiction</option>
-            <option value="cinematic"${activeStyle === 'cinematic' ? ' selected' : ''}>Cinematic</option>
-            <option value="minimalist"${activeStyle === 'minimalist' ? ' selected' : ''}>Minimalist</option>
-            <option value="wuxia"${activeStyle === 'wuxia' ? ' selected' : ''}>Wuxia Chronicle</option>
-        </select>
-    </div>`);
-
-    // ── Word Count ──
-    parts.push(`<div class="gl-d-section"><b>Word Count:</b></div>`);
-    const activeLength = chatMetadata?.['gravity_word_count'] || 'flexible';
-    parts.push(`<div class="gl-d-row">
-        <select class="gl-div-select" id="gl-length-select">
-            <option value="under 150"${activeLength === 'under 150' ? ' selected' : ''}>Under 150 words</option>
-            <option value="150-300"${activeLength === '150-300' ? ' selected' : ''}>150-300 words</option>
-            <option value="300-600"${activeLength === '300-600' ? ' selected' : ''}>300-600 words</option>
-            <option value="600-1000"${activeLength === '600-1000' ? ' selected' : ''}>600-1000 words</option>
-            <option value="1000-1500"${activeLength === '1000-1500' ? ' selected' : ''}>1000-1500 words</option>
-            <option value="flexible"${activeLength === 'flexible' ? ' selected' : ''}>Flexible</option>
-        </select>
-    </div>`);
-
-    // ── Divination ──
-    parts.push(`<div class="gl-d-section"><b>Divination System:</b></div>`);
-    const activeSystem = chatMetadata?.['gravity_divination_system'] || div.active_system || 'arcana';
-    parts.push(`<div class="gl-d-row">
-        <select class="gl-div-select" id="gl-divination-select">
-            <option value="arcana"${activeSystem === 'arcana' ? ' selected' : ''}>Major Arcana (d22)</option>
-            <option value="iching"${activeSystem === 'iching' || activeSystem === 'i ching' ? ' selected' : ''}>易経 I Ching (d64)</option>
-            <option value="classic"${activeSystem === 'classic' || activeSystem === '2d10' ? ' selected' : ''}>Classic Entropy (2d10)</option>
         </select>
     </div>`);
 

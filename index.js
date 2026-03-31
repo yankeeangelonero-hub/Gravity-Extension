@@ -20,7 +20,7 @@ import { checkAndRotate, buildConsolidationPrompt } from './memory-tier.js';
 import { getProseSettings, buildSettingsLine } from './rules-engine.js';
 import { buildModuleMap, activateModules, writeModuleContent, disableAll } from './lorebook-manager.js';
 import { generateLedger, getDeepSeekSettings, summarizeTransactions } from './ledger-agent.js';
-import { applyAllPresetSettings, applyProseStyle, applyWordCount, applyDivination } from './preset-manager.js';
+import { applyAllPresetSettings } from './preset-manager.js';
 
 const MODULE_NAME = 'gravity-ledger';
 const LOG_PREFIX = '[GravityLedger]';
@@ -593,15 +593,9 @@ async function initialize(force = false) {
         // Build lorebook module map for this session
         buildModuleMap();
 
-        // Apply per-chat prose/word-count/divination settings to preset entries
+        // Apply sonnet tier to preset (prose style / word count / divination toggled directly in preset UI)
         const proseSettings = getProseSettings();
-        const { chatMetadata: cm } = SillyTavern.getContext();
-        applyAllPresetSettings({
-            proseStyle:  proseSettings.proseStyle,
-            wordCount:   proseSettings.wordCount,
-            divination:  cm?.['gravity_divination_system'] || 'arcana',
-            sonnetTier:  proseSettings.modelTier === 'sonnet',
-        });
+        applyAllPresetSettings({ sonnetTier: proseSettings.modelTier === 'sonnet' });
 
         const txCount = getAllTransactions().length;
         setBookName(chatId);
@@ -1534,20 +1528,8 @@ async function handleImportData(data) {
             toastr.info(`Word count: ${length}`);
         },
         onSettingsChange: (changedKey, newValue) => {
-            const { chatMetadata: cm } = SillyTavern.getContext();
-            if (changedKey === 'gravity_prose_style') {
-                const tier = cm?.['gravity_model_tier'] || 'opus';
-                applyProseStyle(newValue, tier === 'sonnet');
-            }
             if (changedKey === 'gravity_model_tier') {
-                const style = cm?.['gravity_prose_style'] || 'noir';
-                applyProseStyle(style, newValue === 'sonnet');
-            }
-            if (changedKey === 'gravity_word_count') {
-                applyWordCount(newValue);
-            }
-            if (changedKey === 'gravity_divination_system') {
-                applyDivination(newValue);
+                applyAllPresetSettings({ sonnetTier: newValue === 'sonnet' });
             }
             injectPrompt();
         },
