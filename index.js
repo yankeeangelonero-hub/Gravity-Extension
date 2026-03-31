@@ -411,9 +411,9 @@ The draw shapes the CIRCUMSTANCE of how this collision arrives — not the outco
 MOVE status to RESOLVING. The resolution clock is now ticking.
 
 Three outcomes are possible:
-• RESOLVED — the player engaged and shaped the result. Clean or costly.
+• RESOLVED — the player engaged and shaped the result. Clean or costly. RESOLVED includes retreat — if the player actively chooses to disengage and pays the cost, that's a resolution. They shaped the outcome.
 • EVOLUTION — resolution reveals a different tension. MOVE to RESOLVED, CREATE a new collision from what surfaced.
-• CRASHED — the player ignored it. Gravity resolves it for them. Worst outcome. No agency.
+• CRASHED — the player pretended it wasn't there. Not retreat — inaction. Gravity resolves it for them. Worst outcome. No agency.
 
 The player has ${RESOLUTION_CRASH_TURNS} turns to engage before the oracle decides for them.`);
                     continue;
@@ -997,9 +997,9 @@ Write the situation, not the resolution. The player must respond to it.
 MOVE this collision's status to RESOLVING. The resolution clock is now ticking — the player has ${RESOLUTION_CRASH_TURNS} turns to engage before gravity resolves it without them (CRASHED = worst outcome, no agency).
 
 Three outcomes are possible:
-• RESOLVED — the player engaged and shaped the result. Clean or costly.
+• RESOLVED — the player engaged and shaped the result. Clean or costly. RESOLVED includes retreat — if the player actively chooses to disengage and pays the cost, that's a resolution. They shaped the outcome.
 • EVOLUTION — resolution reveals a different tension. MOVE to RESOLVED, CREATE a new collision from what surfaced.
-• CRASHED — the player ignored it. Gravity resolves it for them. Worst outcome.
+• CRASHED — the player pretended it wasn't there. Not retreat — inaction. Gravity resolves it for them. Worst outcome.
 
 Record the draw: SET divination field=last_draw value="[draw result]"
 Full turn: deduction + prose + ledger block.]`;
