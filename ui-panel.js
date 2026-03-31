@@ -197,14 +197,16 @@ let _lastCommitTxIds = [];
 
 function renderAllSections() {
     const container = document.getElementById('gl-all-sections');
-    if (!container || !_lastState) return;
+    if (!container) return;
+
+    const state = _lastState || {};
 
     const sections = [
-        { id: 'characters', icon: 'fa-users', title: 'Cast', html: renderCharacters(_lastState) },
-        { id: 'world', icon: 'fa-globe', title: 'Factions & World', html: renderWorld(_lastState) },
-        { id: 'collisions', icon: 'fa-burst', title: 'Collisions', html: renderCollisions(_lastState) },
-        { id: 'arc', icon: 'fa-book-open', title: 'Arc & Chapters', html: renderArc(_lastState) },
-        { id: 'settings', icon: 'fa-gear', title: 'Settings', html: renderSettings(_lastState) },
+        { id: 'characters', icon: 'fa-users', title: 'Cast', html: renderCharacters(state) },
+        { id: 'world', icon: 'fa-globe', title: 'Factions & World', html: renderWorld(state) },
+        { id: 'collisions', icon: 'fa-burst', title: 'Collisions', html: renderCollisions(state) },
+        { id: 'arc', icon: 'fa-book-open', title: 'Arc & Chapters', html: renderArc(state) },
+        { id: 'settings', icon: 'fa-gear', title: 'Settings', html: renderSettings(state) },
         { id: 'deepseek', icon: 'fa-robot', title: 'DeepSeek', html: renderDeepSeek() },
         { id: 'exemplars', icon: 'fa-thumbs-up', title: 'Style Exemplars', html: renderExemplars() },
     ];
