@@ -10,6 +10,7 @@
  */
 
 import { getFieldHistory, getEntityHistory } from './state-compute.js';
+import { fetchOpenRouterModels } from './ledger-agent.js';
 
 const PANEL_ID = 'gravity-ledger-panel';
 const TOGGLE_ID = 'gravity-ledger-toggle';
@@ -304,27 +305,30 @@ function renderAllSections() {
         styleSelect.addEventListener('change', () => saveSetting('gravity_prose_style', styleSelect.value, 'Prose style'));
     }
 
-    // DeepSeek settings
+    // Ledger agent (OpenRouter) settings
     const dsEnabledCb = container.querySelector('#gl-ds-enabled');
     const dsApiKeyInput = container.querySelector('#gl-ds-apikey');
-    const dsModelSelect = container.querySelector('#gl-ds-model');
+    const dsModelEl = container.querySelector('#gl-ds-model');
     const dsKeyToggle = container.querySelector('#gl-ds-key-toggle');
+    const dsFetchBtn = container.querySelector('#gl-ds-fetch-models');
 
-    const saveDeepSeek = async () => {
+    const saveDeepSeek = async (label = 'Ledger agent saved') => {
         const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+        const existing = chatMetadata['gravity_deepseek'] || {};
         chatMetadata['gravity_deepseek'] = {
+            ...existing,
             enabled: dsEnabledCb?.checked === true,
             apiKey: dsApiKeyInput?.value?.trim() || '',
-            model: dsModelSelect?.value || 'deepseek-chat',
+            model: dsModelEl?.value || 'deepseek/deepseek-chat',
         };
         await saveMetadata();
         if (_onSettingsChange) _onSettingsChange('gravity_deepseek', chatMetadata['gravity_deepseek']);
-        toastr.info(`DeepSeek ledger agent: ${dsEnabledCb?.checked ? 'enabled' : 'disabled'}`);
+        toastr.info(label);
     };
 
-    if (dsEnabledCb) dsEnabledCb.addEventListener('change', saveDeepSeek);
-    if (dsApiKeyInput) dsApiKeyInput.addEventListener('blur', saveDeepSeek);
-    if (dsModelSelect) dsModelSelect.addEventListener('change', saveDeepSeek);
+    if (dsEnabledCb) dsEnabledCb.addEventListener('change', () => saveDeepSeek(`Ledger agent: ${dsEnabledCb.checked ? 'enabled' : 'disabled'}`));
+    if (dsApiKeyInput) dsApiKeyInput.addEventListener('blur', () => saveDeepSeek('API key saved'));
+    if (dsModelEl) dsModelEl.addEventListener('change', () => saveDeepSeek(`Model: ${dsModelEl.value}`));
     if (dsKeyToggle) {
         dsKeyToggle.addEventListener('click', () => {
             if (!dsApiKeyInput) return;
@@ -333,6 +337,30 @@ function renderAllSections() {
             dsKeyToggle.innerHTML = isHidden
                 ? '<i class="fa-solid fa-eye-slash"></i>'
                 : '<i class="fa-solid fa-eye"></i>';
+        });
+    }
+    if (dsFetchBtn) {
+        dsFetchBtn.addEventListener('click', async () => {
+            const apiKey = dsApiKeyInput?.value?.trim() || '';
+            if (!apiKey) { toastr.warning('Enter an OpenRouter API key first.'); return; }
+            dsFetchBtn.disabled = true;
+            dsFetchBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            try {
+                const models = await fetchOpenRouterModels(apiKey);
+                const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+                const existing = chatMetadata['gravity_deepseek'] || {};
+                chatMetadata['gravity_deepseek'] = { ...existing, apiKey, models };
+                await saveMetadata();
+                toastr.info(`Fetched ${models.length} models`);
+                // Re-render the DeepSeek section
+                const body = container.closest('[data-body="deepseek"]') || container.querySelector('[data-body="deepseek"]');
+                if (_lastState !== undefined) renderAllSections();
+            } catch (e) {
+                toastr.error(`Failed to fetch models: ${e.message}`);
+            } finally {
+                dsFetchBtn.disabled = false;
+                dsFetchBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Fetch models';
+            }
         });
     }
 
@@ -1034,26 +1062,27 @@ function renderDeepSeek() {
     const ds = chatMetadata?.['gravity_deepseek'] || {};
     const dsEnabled = ds.enabled === true;
     const dsApiKey = ds.apiKey || '';
-    const dsModel = ds.model || 'deepseek-chat';
+    const dsModel = ds.model || 'deepseek/deepseek-chat';
+    const dsModels = ds.models || [];
 
     const parts = [];
     parts.push(`<div class="gl-d-section" style="margin-top:0">
-        <span style="font-size:0.8em;color:#888;">Opus writes prose only — DeepSeek writes the ledger as a separate low-cost call.</span>
+        <span style="font-size:0.8em;color:#888;">Opus writes prose only — a cheap OpenRouter model writes the ledger as a separate call.</span>
     </div>`);
 
     // Enable toggle
     parts.push(`<div class="gl-d-row" style="display:flex;align-items:center;gap:8px;">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
             <input type="checkbox" id="gl-ds-enabled" ${dsEnabled ? 'checked' : ''} />
-            <span>Enable DeepSeek ledger agent</span>
+            <span>Enable ledger agent</span>
         </label>
     </div>`);
 
     // API key
-    parts.push(`<div class="gl-d-section"><b>API Key</b></div>`);
+    parts.push(`<div class="gl-d-section"><b>OpenRouter API Key</b></div>`);
     parts.push(`<div class="gl-d-row" style="display:flex;gap:6px;align-items:center;">
         <input type="password" id="gl-ds-apikey" class="gl-input-field"
-            placeholder="sk-..." value="${esc(dsApiKey)}"
+            placeholder="sk-or-..." value="${esc(dsApiKey)}"
             style="flex:1;font-family:monospace;font-size:0.85em;" />
         <button class="gl-btn" id="gl-ds-key-toggle" title="Show/hide key" style="flex-shrink:0;padding:2px 8px;">
             <i class="fa-solid fa-eye"></i>
@@ -1061,13 +1090,28 @@ function renderDeepSeek() {
     </div>`);
 
     // Model
-    parts.push(`<div class="gl-d-section"><b>Model</b></div>`);
-    parts.push(`<div class="gl-d-row">
-        <select class="gl-div-select" id="gl-ds-model">
-            <option value="deepseek-chat"${dsModel === 'deepseek-chat' ? ' selected' : ''}>deepseek-chat — DeepSeek-V3 (fast, cheap)</option>
-            <option value="deepseek-reasoner"${dsModel === 'deepseek-reasoner' ? ' selected' : ''}>deepseek-reasoner — R1 (thorough, slower)</option>
-        </select>
+    parts.push(`<div class="gl-d-section" style="display:flex;align-items:center;justify-content:space-between;">
+        <b>Model</b>
+        <button class="gl-btn" id="gl-ds-fetch-models" style="padding:2px 8px;font-size:0.8em;">
+            <i class="fa-solid fa-rotate"></i> Fetch models
+        </button>
     </div>`);
+
+    if (dsModels.length > 0) {
+        const options = dsModels.map(m =>
+            `<option value="${esc(m.id)}"${m.id === dsModel ? ' selected' : ''}>${esc(m.id)}</option>`
+        ).join('');
+        parts.push(`<div class="gl-d-row">
+            <select class="gl-div-select" id="gl-ds-model">${options}</select>
+        </div>`);
+    } else {
+        parts.push(`<div class="gl-d-row">
+            <input type="text" id="gl-ds-model" class="gl-input-field"
+                placeholder="deepseek/deepseek-chat" value="${esc(dsModel)}"
+                style="width:100%;font-family:monospace;font-size:0.85em;" />
+            <div style="font-size:0.75em;color:#666;margin-top:4px;">Enter a model ID or click Fetch models to browse.</div>
+        </div>`);
+    }
 
     // Status of last call
     const dsStatus = chatMetadata?.['gravity_deepseek_last'] || {};

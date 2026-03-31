@@ -104,16 +104,38 @@ function buildLedgerPrompt(prose, annotations, stateView, readme, extras = {}) {
 
 // ─── API Call ─────────────────────────────────────────────────────────────────
 
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-const DEFAULT_MODEL = 'deepseek-chat';
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
+const DEFAULT_MODEL = 'deepseek/deepseek-chat';
 const TIMEOUT_MS = 30000;
 
 /**
- * Call DeepSeek and return the raw response text.
+ * Fetch available models from OpenRouter.
+ *
+ * @param {string} apiKey - OpenRouter API key
+ * @returns {Promise<Array<{id: string, name: string}>>} Sorted model list
+ * @throws {Error} On network failure or API error
+ */
+async function fetchOpenRouterModels(apiKey) {
+    const response = await fetch(OPENROUTER_MODELS_URL, {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+    });
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`OpenRouter models API error ${response.status}: ${errorText.substring(0, 200)}`);
+    }
+    const data = await response.json();
+    return (data?.data || [])
+        .map(m => ({ id: m.id, name: m.name || m.id }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/**
+ * Call OpenRouter and return the raw response text.
  *
  * @param {Array} messages - Chat completions messages
- * @param {string} apiKey - DeepSeek API key
- * @param {string} [model] - Model ID ('deepseek-chat' or 'deepseek-reasoner')
+ * @param {string} apiKey - OpenRouter API key
+ * @param {string} [model] - Model ID
  * @returns {Promise<string>} Raw response text (contains ---LEDGER--- block)
  * @throws {Error} On network failure or API error
  */
@@ -122,7 +144,7 @@ async function callDeepSeek(messages, apiKey, model = DEFAULT_MODEL) {
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     try {
-        const response = await fetch(DEEPSEEK_API_URL, {
+        const response = await fetch(OPENROUTER_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -141,14 +163,12 @@ async function callDeepSeek(messages, apiKey, model = DEFAULT_MODEL) {
 
         if (!response.ok) {
             const errorText = await response.text().catch(() => '');
-            throw new Error(`DeepSeek API error ${response.status}: ${errorText.substring(0, 200)}`);
+            throw new Error(`OpenRouter API error ${response.status}: ${errorText.substring(0, 200)}`);
         }
 
         const data = await response.json();
         const content = data?.choices?.[0]?.message?.content || '';
 
-        // Ensure the block is properly terminated
-        // DeepSeek may stop at ---END LEDGER--- without including it
         if (content.includes('---LEDGER---') && !content.includes('---END LEDGER---')) {
             return content + '\n---END LEDGER---';
         }
@@ -157,7 +177,7 @@ async function callDeepSeek(messages, apiKey, model = DEFAULT_MODEL) {
     } catch (err) {
         clearTimeout(timeoutId);
         if (err.name === 'AbortError') {
-            throw new Error(`DeepSeek API timeout after ${TIMEOUT_MS / 1000}s`);
+            throw new Error(`OpenRouter API timeout after ${TIMEOUT_MS / 1000}s`);
         }
         throw err;
     }
@@ -185,7 +205,7 @@ async function generateLedger(prose, state, options) {
     const { apiKey, model, divinationDraw, setupContext, stateView, readme } = options;
 
     if (!apiKey) {
-        console.warn('[LedgerAgent] No DeepSeek API key configured.');
+        console.warn('[LedgerAgent] No OpenRouter API key configured.');
         return null;
     }
 
@@ -210,11 +230,11 @@ async function generateLedger(prose, state, options) {
         const ledgerText = await callDeepSeek(messages, apiKey, model || DEFAULT_MODEL);
         const elapsed = Date.now() - start;
 
-        console.log(`[LedgerAgent] DeepSeek responded in ${elapsed}ms. Annotations: ${annotations.length}. Block length: ${ledgerText.length} chars.`);
+        console.log(`[LedgerAgent] OpenRouter responded in ${elapsed}ms. Annotations: ${annotations.length}. Block length: ${ledgerText.length} chars.`);
 
         return { ledgerText, cleanedProse, annotations };
     } catch (err) {
-        console.error('[LedgerAgent] DeepSeek call failed:', err.message);
+        console.error('[LedgerAgent] OpenRouter call failed:', err.message);
         return null;
     }
 }
@@ -231,9 +251,10 @@ function getDeepSeekSettings() {
             enabled: ds.enabled === true,
             apiKey: ds.apiKey || '',
             model: ds.model || DEFAULT_MODEL,
+            models: ds.models || [],
         };
     } catch {
-        return { enabled: false, apiKey: '', model: DEFAULT_MODEL };
+        return { enabled: false, apiKey: '', model: DEFAULT_MODEL, models: [] };
     }
 }
 
@@ -318,6 +339,7 @@ export {
     extractAnnotations,
     buildLedgerPrompt,
     callDeepSeek,
+    fetchOpenRouterModels,
     generateLedger,
     getDeepSeekSettings,
     saveDeepSeekSettings,
