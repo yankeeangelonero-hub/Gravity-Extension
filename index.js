@@ -43,11 +43,17 @@ let _uncappedTurn = false;
 let _currentInjectMode = 'regular';
 let _pendingDeductionType = 'regular'; // regular, combat, advance, intimacy
 
-// ─── Collision Arrival Tracking ───────────────────────────────────────────────
+// ─── Collision Resolution Tracking ───────────────────────────────────────────
 
-// Set of collision IDs that have already had their arrival injection fired.
-// Cleared on chat change. Prevents re-firing every turn while at dist 0.
-let _firedCollisionArrivals = new Set();
+// Map of collision ID → { phase, arrivalTurn, arrivalDraw, lastEscalationDraw }
+// phase: 'arrived' → 'pressure' → 'intrusion' → 'crash'
+// Cleared on chat change.
+let _firedCollisionArrivals = new Set(); // legacy compat — still used for one-shot arrival detection
+let _resolutionTracker = new Map();      // collision id → resolution state
+
+const RESOLUTION_PRESSURE_TURNS = 2;  // turns 1-2: oracle bleeds into atmosphere
+const RESOLUTION_INTRUSION_TURNS = 4; // turns 3-4: oracle manifests, direct intrusion
+const RESOLUTION_CRASH_TURNS = 6;     // turn 5+: oracle decides, crash if unresolved
 
 const ARCANA_TABLE = [
     'The Fool — A leap into the unknown. Something begins that nobody planned.',
@@ -341,74 +347,60 @@ function injectPrompt(mode) {
             setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
         }
 
-        // Collision arrival — fires on next turn (regular or advance) when distance hits 0
+        // ── Collision Resolution System (oracle-driven escalation) ─────────────
         if (_currentState) {
-            const arrivals = [];
-            for (const [id, col] of Object.entries(_currentState.collisions || {})) {
-                if (_firedCollisionArrivals.has(id)) continue;
-                const dist = parseFloat(col.distance);
-                if (isNaN(dist)) continue;
-                const status = (col.status || '').trim().toUpperCase();
-                if (dist <= 0 && status !== 'RESOLVED') {
-                    const draw = drawDivination();
-                    const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
-                    arrivals.push({ id, col, draw, forces });
-                    _firedCollisionArrivals.add(id);
-                }
-            }
-
-            // Stale RESOLVING check — collisions stuck in RESOLVING too long
-            const staleResolving = [];
-            const totalTxCount = getAllTransactions().length;
-            for (const [id, col] of Object.entries(_currentState.collisions || {})) {
-                if ((col.status || '').trim().toUpperCase() !== 'RESOLVING') continue;
-                if (_firedCollisionArrivals.has(id + '_stale')) continue;
-                const statusHist = (_currentState._history || {})[`collision:${id}:status`] || [];
-                const lastMove = statusHist[statusHist.length - 1];
-                if (lastMove && lastMove.tx) {
-                    const txSince = totalTxCount - lastMove.tx;
-                    if (txSince >= 15) {
-                        staleResolving.push({ id, col, txSince });
-                        _firedCollisionArrivals.add(id + '_stale');
-                    }
-                }
-            }
-
-            // Distance-increase warning — distances are countdowns, they should not increase
+            const collisionBlocks = [];
             const distWarnings = [];
-            for (const [id, col] of Object.entries(_currentState.collisions || {})) {
-                const status = (col.status || '').trim().toUpperCase();
-                if (status === 'RESOLVED' || status === 'CRASHED') continue;
-                const distHist = (_currentState._history || {})[`collision:${id}:distance`] || [];
-                if (distHist.length > 0) {
-                    const last = distHist[distHist.length - 1];
-                    const fromDist = parseFloat(last.from);
-                    const toDist = parseFloat(last.to);
-                    if (!isNaN(fromDist) && !isNaN(toDist) && toDist > fromDist) {
-                        distWarnings.push(`"${col.name || id}" distance went ${last.from} → ${last.to} — collision distances are countdowns, they MUST NOT increase. SET it back to ${last.from} or lower.`);
-                    }
-                }
+            const totalTxCount = getAllTransactions().length;
+
+            // Clean up tracker for resolved/crashed collisions
+            for (const trackedId of _resolutionTracker.keys()) {
+                const col = (_currentState.collisions || {})[trackedId];
+                if (!col) { _resolutionTracker.delete(trackedId); continue; }
+                const st = (col.status || '').trim().toUpperCase();
+                if (st === 'RESOLVED' || st === 'CRASHED') _resolutionTracker.delete(trackedId);
             }
 
-            // Incoherent collision check — RESOLVING but distance > 0 means the confrontation
-            // can't actually be happening. Either it was avoided (CRASHED/RESOLVED) or it's not
-            // RESOLVING yet (revert to ACTIVE).
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
                 const status = (col.status || '').trim().toUpperCase();
-                if (status !== 'RESOLVING') continue;
+                if (status === 'RESOLVED') continue;
                 const dist = parseFloat(col.distance);
-                if (!isNaN(dist) && dist > 0) {
-                    distWarnings.push(`"${col.name || id}" is RESOLVING but distance is ${dist} — a collision cannot resolve at range. If the confrontation was avoided or is no longer possible, MOVE to RESOLVED. If it's still approaching, MOVE back to ACTIVE.`);
-                }
-            }
+                const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
+                const colDetails = col.details || `Forces: ${forces}\nCost: ${col.cost || 'unspecified'}${col.target_constraint ? `\nTarget constraint: ${col.target_constraint}` : ''}`;
 
-            if (arrivals.length > 0) {
-                const blocks = arrivals.map(a => {
-                    const colDetails = a.col.details || `Forces: ${a.forces}\nCost: ${a.col.cost || 'unspecified'}${a.col.target_constraint ? `\nTarget constraint: ${a.col.target_constraint}` : ''}`;
-                    return `═══ COLLISION ARRIVAL: "${a.col.name || a.id}" ═══
+                // ── CRASHED — oracle decides the wreckage ────────────────────────
+                if (status === 'CRASHED') {
+                    const crashDraw = drawDivination();
+                    collisionBlocks.push(`═══ COLLISION CRASHED: "${col.name || id}" ═══
 ${colDetails}
 
-${a.draw.label}: ${a.draw.reading}${a.draw.html ? `\nRender this HTML card reveal before interpreting:\n${a.draw.html}` : ''}
+${crashDraw.label}: ${crashDraw.reading}${crashDraw.html ? `\nRender this HTML card reveal before interpreting:\n${crashDraw.html}` : ''}
+
+This collision CRASHED — the player did not engage, and gravity resolved it without them.
+
+The oracle determines the shape of the wreckage. Write the WORST REASONABLE OUTCOME colored by this draw. The player had their chance. This is what inaction costs.
+
+Consequences are permanent. MOVE status to RESOLVED in the ledger. Record what was lost. If the aftermath seeds new tension, CREATE a new collision from the wreckage.
+
+Then DESTROY this collision: DESTROY collision:${id}`);
+                    _resolutionTracker.delete(id);
+                    continue;
+                }
+
+                // ── New arrival — distance ≤ 0 and not yet tracked ───────────────
+                if (!isNaN(dist) && dist <= 0 && !_firedCollisionArrivals.has(id)) {
+                    const arrivalDraw = drawDivination();
+                    _firedCollisionArrivals.add(id);
+                    _resolutionTracker.set(id, {
+                        phase: 'arrived',
+                        arrivalTurn: _turnCounter,
+                        arrivalDraw,
+                    });
+
+                    collisionBlocks.push(`═══ COLLISION ARRIVAL: "${col.name || id}" ═══
+${colDetails}
+
+${arrivalDraw.label}: ${arrivalDraw.reading}${arrivalDraw.html ? `\nRender this HTML card reveal before interpreting:\n${arrivalDraw.html}` : ''}
 
 This collision has reached distance 0. It detonates NOW.
 
@@ -416,46 +408,109 @@ You have FULL LICENSE to make this happen. Move NPCs into the scene. Spawn threa
 
 The draw shapes the CIRCUMSTANCE of how this collision arrives — not the outcome. Write the situation, not the resolution. The player must respond to it.
 
-THIS COLLISION IS NOW SPENT. After this scene, MOVE its status to RESOLVED.
+MOVE status to RESOLVING. The resolution clock is now ticking.
 
-WHAT HAPPENS NEXT depends on what the confrontation produces:
-• CLEAN — tension dissolves. MOVE to RESOLVED.
-• COSTLY — someone paid. MOVE to RESOLVED. Record the cost.
-• EVOLUTION — reveals a different tension. MOVE to RESOLVED, CREATE a new collision from what surfaced.
+Three outcomes are possible:
+• RESOLVED — the player engaged and shaped the result. Clean or costly.
+• EVOLUTION — resolution reveals a different tension. MOVE to RESOLVED, CREATE a new collision from what surfaced.
+• CRASHED — the player ignored it. Gravity resolves it for them. Worst outcome. No agency.
 
-No collision survives detonation.`;
-                }).join('\n\n');
+The player has ${RESOLUTION_CRASH_TURNS} turns to engage before the oracle decides for them.`);
+                    continue;
+                }
 
-                setExtensionPrompt(`${MODULE_NAME}_arrival`, blocks, PROMPT_IN_CHAT, 0);
-                console.log(`${LOG_PREFIX} Collision arrival fired for: ${arrivals.map(a => a.id).join(', ')}`);
-            } else {
-                setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
-            }
+                // ── Resolution escalation — already tracked, RESOLVING ───────────
+                if (status === 'RESOLVING' && _resolutionTracker.has(id)) {
+                    const tracker = _resolutionTracker.get(id);
+                    const turnsSince = _turnCounter - tracker.arrivalTurn;
 
-            if (staleResolving.length > 0) {
-                const staleBlock = staleResolving.map(s =>
-                    `[STALE COLLISION — "${s.col.name || s.id}" has been RESOLVING for ${s.txSince}+ transactions. MOVE it to RESOLVED now. If the tension persists in a new form, CREATE a new collision to track it.]`
-                ).join('\n');
-                setExtensionPrompt(`${MODULE_NAME}_stale`, staleBlock, PROMPT_IN_CHAT, 0);
-            } else {
-                setExtensionPrompt(`${MODULE_NAME}_stale`, '', PROMPT_NONE, 0);
-            }
+                    if (turnsSince <= RESOLUTION_PRESSURE_TURNS) {
+                        // Phase 1: The Oracle Bleeds In — atmosphere, subtext
+                        const arrDraw = tracker.arrivalDraw;
+                        collisionBlocks.push(`═══ COLLISION RESOLVING: "${col.name || id}" — THE ORACLE BLEEDS IN (${turnsSince}/${RESOLUTION_CRASH_TURNS}) ═══
+${colDetails}
 
-            // CRASHED collision cleanup — instruct LLM to explain why and DESTROY
-            const crashedCollisions = [];
-            for (const [id, col] of Object.entries(_currentState.collisions || {})) {
-                const status = (col.status || '').trim().toUpperCase();
-                if (status === 'CRASHED') {
-                    crashedCollisions.push({ id, col });
+Arrival draw: ${arrDraw.label}: ${arrDraw.reading}
+
+The collision is RESOLVING. Its presence permeates the current scene as atmosphere and subtext. The draw's themes color every interaction — tension in the air, loaded silences, environmental details that echo the collision's forces.
+
+DO NOT let the player ignore this. The collision's weight is in the room even if its forces aren't. Subtext in dialogue. Physical tension in body language. Environmental details that mirror the approaching confrontation.
+
+Your deduction MUST name how this collision is affecting the current scene. If the player's action doesn't engage the collision, show how the collision's pressure bleeds into whatever they're doing instead.`);
+
+                    } else if (turnsSince <= RESOLUTION_INTRUSION_TURNS) {
+                        // Phase 2: The Oracle Manifests — direct intrusion with fresh draw
+                        const intrusionDraw = drawDivination();
+                        tracker.lastEscalationDraw = intrusionDraw;
+                        collisionBlocks.push(`═══ COLLISION RESOLVING: "${col.name || id}" — THE ORACLE MANIFESTS (${turnsSince}/${RESOLUTION_CRASH_TURNS}) ═══
+${colDetails}
+
+${intrusionDraw.label}: ${intrusionDraw.reading}${intrusionDraw.html ? `\nRender this HTML card reveal before interpreting:\n${intrusionDraw.html}` : ''}
+
+The collision is done waiting. It PHYSICALLY INTRUDES on the player's current scene THIS TURN.
+
+The oracle determines HOW it arrives. Use this draw to shape the method of intrusion — not a generic interruption, but a specific, vivid, dramatically inevitable manifestation of the collision's forces crashing into the player's reality.
+
+This is not subtext anymore. An NPC arrives. A consequence detonates. A choice is forced. The collision's forces are IN THE ROOM and they are not leaving until the player responds.
+
+You have FULL LICENSE: move NPCs, trigger events, create witnesses, use the environment. The draw is the shape. The collision is the force. Write the most dramatically honest intrusion this draw suggests.
+
+The player has ${RESOLUTION_CRASH_TURNS - turnsSince} turns before gravity resolves this without them.`);
+
+                    } else {
+                        // Phase 3: Crash threshold — final warning or auto-crash
+                        const crashDraw = drawDivination();
+                        collisionBlocks.push(`═══ COLLISION RESOLVING: "${col.name || id}" — THE ORACLE DECIDES (${turnsSince}/${RESOLUTION_CRASH_TURNS}) ═══
+${colDetails}
+
+${crashDraw.label}: ${crashDraw.reading}${crashDraw.html ? `\nRender this HTML card reveal before interpreting:\n${crashDraw.html}` : ''}
+
+TIME IS UP. The player has not engaged this collision for ${turnsSince} turns. Gravity will no longer wait.
+
+MOVE this collision to CRASHED in the ledger block. The oracle determines the shape of the uncontrolled outcome. Write the WORST REASONABLE OUTCOME colored by this draw.
+
+This is what ignoring a collision costs. The player had their chance — every turn for ${turnsSince} turns, the collision pushed toward them. They chose not to engage. Now gravity chooses for them.
+
+Write the crash as a scene that interrupts whatever the player is doing. It is dramatic, consequential, and permanent. Record what was lost. If the aftermath seeds new tension, CREATE a new collision from the wreckage.`);
+                    }
+                    continue;
+                }
+
+                // ── RESOLVING but not in tracker (e.g., LLM moved to RESOLVING manually) ──
+                if (status === 'RESOLVING' && !_resolutionTracker.has(id)) {
+                    _resolutionTracker.set(id, {
+                        phase: 'arrived',
+                        arrivalTurn: _turnCounter,
+                        arrivalDraw: drawDivination(),
+                    });
+                    // Will pick up escalation next turn
+                }
+
+                // ── Distance warnings (non-terminal collisions only) ─────────────
+                if (status !== 'CRASHED') {
+                    const distHist = (_currentState._history || {})[`collision:${id}:distance`] || [];
+                    if (distHist.length > 0) {
+                        const last = distHist[distHist.length - 1];
+                        const fromDist = parseFloat(last.from);
+                        const toDist = parseFloat(last.to);
+                        if (!isNaN(fromDist) && !isNaN(toDist) && toDist > fromDist) {
+                            distWarnings.push(`"${col.name || id}" distance went ${last.from} → ${last.to} — collision distances are countdowns, they MUST NOT increase. SET it back to ${last.from} or lower.`);
+                        }
+                    }
+                    // Incoherent state: RESOLVING but distance > 0
+                    if (status === 'RESOLVING') {
+                        if (!isNaN(dist) && dist > 0) {
+                            distWarnings.push(`"${col.name || id}" is RESOLVING but distance is ${dist} — a collision cannot resolve at range. If avoided, MOVE to CRASHED. If still approaching, MOVE back to ACTIVE.`);
+                        }
+                    }
                 }
             }
-            if (crashedCollisions.length > 0) {
-                const crashBlock = crashedCollisions.map(c =>
-                    `[CRASHED COLLISION — "${c.col.name || c.id}" has been marked CRASHED (no longer valid). In your deduction, explain WHY this collision is no longer valid (circumstances changed, forces dissolved, became irrelevant). Then DESTROY it in the ledger block this turn: DESTROY collision:${c.id}]`
-                ).join('\n');
-                setExtensionPrompt(`${MODULE_NAME}_crashed`, crashBlock, PROMPT_IN_CHAT, 0);
+
+            if (collisionBlocks.length > 0) {
+                setExtensionPrompt(`${MODULE_NAME}_arrival`, collisionBlocks.join('\n\n'), PROMPT_IN_CHAT, 0);
+                console.log(`${LOG_PREFIX} Collision resolution injection: ${collisionBlocks.length} block(s)`);
             } else {
-                setExtensionPrompt(`${MODULE_NAME}_crashed`, '', PROMPT_NONE, 0);
+                setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
             }
 
             if (distWarnings.length > 0) {
@@ -467,8 +522,6 @@ No collision survives detonation.`;
             }
         } else {
             setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
-            setExtensionPrompt(`${MODULE_NAME}_stale`, '', PROMPT_NONE, 0);
-            setExtensionPrompt(`${MODULE_NAME}_crashed`, '', PROMPT_NONE, 0);
             setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
         }
 
@@ -613,6 +666,7 @@ async function initialize(force = false) {
     _pendingOOCInjection = null;
     _uncappedTurn = false;
     _firedCollisionArrivals = new Set();
+    _resolutionTracker = new Map();
 
     if (!chatId) {
         console.log(`${LOG_PREFIX} No active chat.`);
@@ -895,10 +949,16 @@ function handleAdvanceButton() {
             const status = (col.status || '').trim().toUpperCase();
 
             // Fresh arrival — distance 0, hasn't fired yet
-            if (!isNaN(dist) && dist <= 0 && status !== 'RESOLVED' && !_firedCollisionArrivals.has(id)) {
+            if (!isNaN(dist) && dist <= 0 && status !== 'RESOLVED' && status !== 'CRASHED' && !_firedCollisionArrivals.has(id)) {
                 const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
                 ripeCollisions.push({ id, col, forces });
                 _firedCollisionArrivals.add(id);
+                // Start resolution tracking
+                _resolutionTracker.set(id, {
+                    phase: 'arrived',
+                    arrivalTurn: _turnCounter,
+                    arrivalDraw: drawDivination(),
+                });
             }
             // Already detonated — fired but still ACTIVE, or RESOLVING
             else if (
@@ -934,14 +994,12 @@ This is the world's turn and this collision detonates NOW. You have FULL LICENSE
 
 Write the situation, not the resolution. The player must respond to it.
 
-THIS COLLISION IS NOW SPENT. After this scene, MOVE its status to RESOLVED. There is no going back — it detonated.
+MOVE this collision's status to RESOLVING. The resolution clock is now ticking — the player has ${RESOLUTION_CRASH_TURNS} turns to engage before gravity resolves it without them (CRASHED = worst outcome, no agency).
 
-WHAT HAPPENS NEXT depends on what the confrontation produces:
-• CLEAN — the tension dissolves. No scar. MOVE to RESOLVED.
-• COSTLY — someone paid. MOVE to RESOLVED. Record the cost.
-• EVOLUTION — the confrontation reveals a different tension. MOVE to RESOLVED, then CREATE a new collision from what surfaced.
-
-No collision survives detonation. If the tension persists in a new shape, CREATE a fresh collision.
+Three outcomes are possible:
+• RESOLVED — the player engaged and shaped the result. Clean or costly.
+• EVOLUTION — resolution reveals a different tension. MOVE to RESOLVED, CREATE a new collision from what surfaced.
+• CRASHED — the player ignored it. Gravity resolves it for them. Worst outcome.
 
 Record the draw: SET divination field=last_draw value="[draw result]"
 Full turn: deduction + prose + ledger block.]`;

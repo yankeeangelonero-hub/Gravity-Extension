@@ -51,9 +51,7 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_nudge`** — Turn format with deduction template (regular/combat/advance/intimacy)
 - **`_setup`** — Setup wizard phase prompts (when active)
 - **`_ooc`** — OOC command injection (from buttons)
-- **`_arrival`** — Collision arrival notification (distance 0)
-- **`_stale`** — Stale collision warnings (RESOLVING 15+ transactions)
-- **`_crashed`** — CRASHED collision cleanup instructions
+- **`_arrival`** — Oracle-driven collision resolution (arrival, escalation, crash — all phases)
 - **`_dist_warn`** — Distance-increase error corrections
 - **`_intimacy`** — Intimacy stance boundary enforcement
 - **`_faction`** — Faction heartbeat (every 10 regular turns)
@@ -79,7 +77,8 @@ The extension injects turn-specific deduction templates via the `_nudge` slot:
 - **Operations**: `CR` (create), `S` (set), `TR` (transition/move), `A` (append), `R` (remove), `MS` (map_set/read), `MR` (map_del), `D` (destroy), `SNAP`, `ROLL`, `AMEND`
 - **Entity types**: `char`, `constraint`, `collision`, `chapter`, `faction`, `world`, `pc`, `divination`, `summary`
 - **State machines** (char tiers, constraint integrity, collision status, chapter status) are documented in `state-machine.js` and the v11 preset but not enforced by code — the LLM follows and self-audits via `OOC: eval`
-- **Collision status**: `SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED` or `ACTIVE/RESOLVING → CRASHED` (invalidated — extension instructs LLM to explain and DESTROY)
+- **Collision status**: `SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED` or `→ CRASHED` (player ignored it, gravity resolved it — worst outcome)
+- **Oracle-driven resolution**: When a collision hits distance 0, the extension starts a resolution clock with divination draws at each phase: atmosphere (turns 1-2), direct intrusion with fresh draw (turns 3-4), crash with final draw (turn 5+). Tracked via `_resolutionTracker` Map in index.js.
 - **Format validation only**: `consistency.js` checks structure, not gameplay rules
 - **OOC commands** in `ooc-handler.js`: `combat setup`, `snapshot`, `rollback`, `eval`, `history`, `consolidate`, etc. — these inject contextual prompts, they don't modify state directly
 - **Storage**: All state lives in `chatMetadata` (persisted per chat by SillyTavern). No external files, APIs, or lorebook entries. The extension is the sole source of truth — the preset references `Gravity_State_View` for all configuration (role, voice, tone, tone_rules, guidelines, motivation, objective) rather than lorebook entries.
