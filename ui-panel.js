@@ -195,11 +195,27 @@ let _changedKeys = new Set();
 let _staleWarning = false;
 let _lastCommitTxIds = [];
 
+function normalizePanelState(state) {
+    const base = state || {};
+    return {
+        ...base,
+        pc: base.pc || {},
+        characters: base.characters || {},
+        constraints: base.constraints || {},
+        world: base.world || {},
+        factions: base.factions || {},
+        collisions: base.collisions || {},
+        chapters: base.chapters || {},
+        story_summary: Array.isArray(base.story_summary) ? base.story_summary : (base.story_summary ? [base.story_summary] : []),
+        divination: base.divination || {},
+    };
+}
+
 function renderAllSections() {
     const container = document.getElementById('gl-all-sections');
     if (!container) return;
 
-    const state = _lastState || {};
+    const state = normalizePanelState(_lastState);
 
     const sections = [
         { id: 'characters', icon: 'fa-users', title: 'Cast', html: renderCharacters(state) },
@@ -436,6 +452,8 @@ function updatePanel(state, turn, committedTxIds) {
         return;
     }
 
+    state = normalizePanelState(state);
+
     // Compute changed keys by comparing prev and current state
     _changedKeys = new Set();
     if (_prevState && _lastTurn !== turn) {
@@ -443,13 +461,13 @@ function updatePanel(state, turn, committedTxIds) {
     }
 
     _prevState = _lastState ? structuredClone(_lastState) : null;
-    _lastState = state;
+    _lastState = normalizePanelState(state);
     _lastTurn = turn;
     if (committedTxIds) _lastCommitTxIds = committedTxIds;
 
     if (statusEl) statusEl.textContent = _staleWarning ? 'stale — eval recommended' : 'active';
     if (turnEl) turnEl.textContent = `Turn ${turn}`;
-    if (txEl) txEl.textContent = `TX ${state.lastTxId ?? 0}`;
+    if (txEl) txEl.textContent = `TX ${_lastState.lastTxId ?? 0}`;
 
     const container = document.getElementById('gl-all-sections');
     console.log('[GravityPanel] updatePanel — container:', !!container, 'lastTxId:', state.lastTxId, 'chars:', Object.keys(state.characters || {}).length);
@@ -623,7 +641,7 @@ function renderPCDossier(state) {
     const pcReads = [];
     for (const char of Object.values(state.characters)) {
         if (char.tier === 'UNKNOWN') continue;
-        const readOfPc = char.reads?.pc || char.reads?.[pc.name] || char.stance_toward_pc;
+        const readOfPc = char.reads?.pc || (pc.name ? char.reads?.[pc.name] : undefined) || char.stance_toward_pc;
         if (readOfPc) pcReads.push({ who: char.name || char.id, read: readOfPc, id: char.id });
     }
     const legacyRep = toObj(pc.reputation);
