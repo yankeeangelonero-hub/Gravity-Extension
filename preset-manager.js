@@ -63,13 +63,17 @@ function togglePresetEntry(identifier, enabled) {
 // ─── Apply Functions ──────────────────────────────────────────────────────────
 
 /**
- * Toggle gravity_prose_sonnet based on model tier.
- * Prose style, word count, and divination are toggled directly in the preset UI.
+ * Toggle preset entries that depend on runtime mode.
+ * - sonnetTier: enables gravity_prose_sonnet
+ * - deepseekEnabled: swaps jailbreak ↔ gravity_anchor_ds so Opus writes prose-only
  *
  * @param {boolean} sonnetTier
+ * @param {boolean} deepseekEnabled
  */
-function applyAllPresetSettings({ sonnetTier = false } = {}) {
+function applyAllPresetSettings({ sonnetTier = false, deepseekEnabled = false } = {}) {
     togglePresetEntry('gravity_prose_sonnet', sonnetTier);
+    togglePresetEntry('jailbreak', !deepseekEnabled);
+    togglePresetEntry('gravity_anchor_ds', deepseekEnabled);
 }
 
 // Kept for external callers (e.g. if invoked by index.js settings change handler).

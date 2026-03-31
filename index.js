@@ -593,9 +593,13 @@ async function initialize(force = false) {
         // Build lorebook module map for this session
         buildModuleMap();
 
-        // Apply sonnet tier to preset (prose style / word count / divination toggled directly in preset UI)
+        // Apply mode-dependent preset toggles (sonnet tier, DS anchor swap)
         const proseSettings = getProseSettings();
-        applyAllPresetSettings({ sonnetTier: proseSettings.modelTier === 'sonnet' });
+        const dsInitSettings = getDeepSeekSettings();
+        applyAllPresetSettings({
+            sonnetTier: proseSettings.modelTier === 'sonnet',
+            deepseekEnabled: dsInitSettings.enabled,
+        });
 
         const txCount = getAllTransactions().length;
         setBookName(chatId);
@@ -648,10 +652,14 @@ async function onMessageReceived(messageId) {
         });
 
         if (result) {
-            // Clean prose: strip annotations, replace displayed message
-            message.mes = result.cleanedProse;
-            // Feed DeepSeek's ledger block through the existing parse pipeline
             var extraction = extractLedgerBlock(result.ledgerText);
+            // Display cleanedProse, but also strip any inline ledger block Opus may have written
+            let displayProse = result.cleanedProse;
+            if (displayProse.includes('---LEDGER---')) {
+                const inlineExtraction = extractLedgerBlock(displayProse);
+                if (inlineExtraction.found) displayProse = inlineExtraction.cleanedMessage;
+            }
+            message.mes = displayProse;
         } else {
             // DeepSeek failed — request ledger from prose model next turn
             _pendingReinforcement = '[LEDGER: Auto-extraction unavailable this turn. Include ---LEDGER--- block in your next response.]';
@@ -1528,8 +1536,13 @@ async function handleImportData(data) {
             toastr.info(`Word count: ${length}`);
         },
         onSettingsChange: (changedKey, newValue) => {
-            if (changedKey === 'gravity_model_tier') {
-                applyAllPresetSettings({ sonnetTier: newValue === 'sonnet' });
+            if (changedKey === 'gravity_model_tier' || changedKey === 'gravity_deepseek') {
+                const proseSettings = getProseSettings();
+                const dsSettings = getDeepSeekSettings();
+                applyAllPresetSettings({
+                    sonnetTier: proseSettings.modelTier === 'sonnet',
+                    deepseekEnabled: dsSettings.enabled,
+                });
             }
             injectPrompt();
         },

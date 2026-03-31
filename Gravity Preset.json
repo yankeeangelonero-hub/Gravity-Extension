@@ -62,6 +62,18 @@
             "forbid_overrides": false
         },
         {
+            "name": "Gravity — Anchor (Ledger Agent)",
+            "system_prompt": true,
+            "role": "system",
+            "content": "TURN SEQUENCE: Scene Header → Prose.\nDo NOT write ---DEDUCTION--- or ---LEDGER--- blocks. State tracking is handled automatically.\nOne beat per turn.\nMark state changes inline with GRAVITY annotations: <!-- GRAVITY: key=value, key=value -->\n\nSCENE HEADER: Start EVERY prose section with a location/time block:\n<div style=\"background:rgba(255,255,255,.03);border-left:2px solid #888;padding:4px 10px;margin:0 0 12px 0;font-size:0.85em;color:#999;font-family:inherit;\"><b>[LOCATION]</b> — [Day N, HH:MM]</div>\nFill from state: pc.location for location, current in-game timestamp for time.",
+            "identifier": "gravity_anchor_ds",
+            "injection_position": 0,
+            "injection_depth": 4,
+            "injection_order": 100,
+            "injection_trigger": [],
+            "forbid_overrides": false
+        },
+        {
             "identifier": "chatHistory",
             "name": "Chat History",
             "system_prompt": true,
@@ -301,6 +313,7 @@
             "character_id": 100000,
             "order": [
                 { "identifier": "main", "enabled": true },
+                { "identifier": "gravity_anchor_ds", "enabled": false },
                 { "identifier": "worldInfoBefore", "enabled": true },
                 { "identifier": "charDescription", "enabled": true },
                 { "identifier": "charPersonality", "enabled": true },
