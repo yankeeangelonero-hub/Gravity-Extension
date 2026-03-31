@@ -20,7 +20,7 @@ import { checkAndRotate, buildConsolidationPrompt } from './memory-tier.js';
 import { getProseSettings, buildSettingsLine } from './rules-engine.js';
 import { buildModuleMap, activateModules, writeModuleContent, disableAll } from './lorebook-manager.js';
 import { generateLedger, getDeepSeekSettings, summarizeTransactions } from './ledger-agent.js';
-import { applyAllPresetSettings } from './preset-manager.js';
+import { applyAllPresetSettings, applyProseStyle, applyWordCount, applyDivination } from './preset-manager.js';
 
 const MODULE_NAME = 'gravity-ledger';
 const LOG_PREFIX = '[GravityLedger]';
@@ -560,6 +560,32 @@ function getChatId() {
     return SillyTavern.getContext().chatId || null;
 }
 
+function syncPresetSettings() {
+    const proseSettings = getProseSettings();
+    const dsSettings = getDeepSeekSettings();
+
+    applyProseStyle(proseSettings.proseStyle, proseSettings.modelTier === 'sonnet');
+    applyWordCount(proseSettings.wordCount);
+    applyDivination(getCurrentDivinationSystem());
+    applyAllPresetSettings({
+        sonnetTier: proseSettings.modelTier === 'sonnet',
+        deepseekEnabled: dsSettings.enabled,
+    });
+}
+
+async function writeDeepSeekLastCall(status) {
+    try {
+        const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+        chatMetadata['gravity_deepseek_last'] = {
+            ...status,
+            ts: new Date().toLocaleTimeString(),
+        };
+        await saveMetadata();
+    } catch (err) {
+        console.warn(`${LOG_PREFIX} Failed to save DeepSeek call status:`, err);
+    }
+}
+
 // ─── Initialization ────────────────────────────────────────────────────────────
 
 async function initialize(force = false) {
@@ -594,12 +620,7 @@ async function initialize(force = false) {
         buildModuleMap();
 
         // Apply mode-dependent preset toggles (sonnet tier, DS anchor swap)
-        const proseSettings = getProseSettings();
-        const dsInitSettings = getDeepSeekSettings();
-        applyAllPresetSettings({
-            sonnetTier: proseSettings.modelTier === 'sonnet',
-            deepseekEnabled: dsInitSettings.enabled,
-        });
+        syncPresetSettings();
 
         const txCount = getAllTransactions().length;
         setBookName(chatId);
@@ -640,16 +661,19 @@ async function onMessageReceived(messageId) {
     // DeepSeek split: if enabled, Opus wrote prose+annotations only.
     // Call DeepSeek post-generation to produce the ledger block.
     const dsSettings = getDeepSeekSettings();
+    let dsCallMeta = null;
     if (dsSettings.enabled && dsSettings.apiKey) {
         showLedgerStatus(messageId, 'pending');
         const stateView = _currentState ? formatStateView(_currentState, 'full') : '';
         const readme = formatReadme('core');
+        const dsStartedAt = Date.now();
         const result = await generateLedger(message.mes, _currentState, {
             apiKey: dsSettings.apiKey,
             model: dsSettings.model,
             stateView,
             readme,
         });
+        dsCallMeta = { ms: Date.now() - dsStartedAt };
 
         if (result) {
             var extraction = extractLedgerBlock(result.ledgerText);
@@ -663,6 +687,12 @@ async function onMessageReceived(messageId) {
         } else {
             // DeepSeek failed — request ledger from prose model next turn
             _pendingReinforcement = '[LEDGER: Auto-extraction unavailable this turn. Include ---LEDGER--- block in your next response.]';
+            await writeDeepSeekLastCall({
+                ok: false,
+                tx: 0,
+                ms: dsCallMeta.ms,
+                err: 'call failed',
+            });
             showLedgerStatus(messageId, 'failed');
             injectPrompt();
             return;
@@ -767,6 +797,14 @@ async function onMessageReceived(messageId) {
             updatePanel(_currentState, _turnCounter, commitIds);
             console.log(`${LOG_PREFIX} updatePanel called. lastTxId=${_currentState?.lastTxId} state keys:`, Object.keys(_currentState || {}));
             showLedgerStatus(messageId, 'done', summarizeTransactions(committed));
+            if (dsCallMeta) {
+                await writeDeepSeekLastCall({
+                    ok: true,
+                    tx: committed.length,
+                    ms: dsCallMeta.ms,
+                    err: null,
+                });
+            }
 
             if (_turnCounter % _autoSnapshotInterval === 0) {
                 await createSnapshot(_currentState, `Auto-snapshot turn ${_turnCounter}`);
@@ -1471,7 +1509,7 @@ async function handleRevertTurn(txIds) {
         toastr.success(`Reverted ${txIds.length} transactions.`);
     } catch (err) {
         console.error(`${LOG_PREFIX} Revert failed:`, err);
-        toastr.error('Revert failed: ' + err.message);
+        toastr.error(`Revert failed: ${err.message}`);
     }
 }
 
@@ -1533,28 +1571,30 @@ async function handleImportData(data) {
         onIntimacy: handleIntimacyButton,
         onDivinationChange: async (system) => {
             await setDivinationSystem(system);
+            applyDivination(system);
             toastr.info(`Divination system: ${system}`);
         },
         onLengthChange: async (length) => {
             const { chatMetadata, saveMetadata } = SillyTavern.getContext();
             chatMetadata['gravity_word_count'] = length;
             await saveMetadata();
+            applyWordCount(length);
             toastr.info(`Word count: ${length}`);
         },
         onSettingsChange: (changedKey, newValue) => {
-            if (changedKey === 'gravity_model_tier' || changedKey === 'gravity_deepseek') {
-                const proseSettings = getProseSettings();
-                const dsSettings = getDeepSeekSettings();
-                applyAllPresetSettings({
-                    sonnetTier: proseSettings.modelTier === 'sonnet',
-                    deepseekEnabled: dsSettings.enabled,
-                });
+            if (changedKey === 'gravity_model_tier'
+                || changedKey === 'gravity_deepseek'
+                || changedKey === 'gravity_prose_style'
+                || changedKey === 'gravity_word_count'
+                || changedKey === 'gravity_divination_system') {
+                syncPresetSettings();
             }
             injectPrompt();
         },
     });
 
     // Setup wizard phase change callback
+    let _lastPhase = 0;
     setPhaseCallback((phase) => {
         showSetupPhase(phase > 0 ? getPhaseLabel() : null);
         injectPrompt(phase > 0 ? 'integration' : 'regular');
@@ -1564,7 +1604,6 @@ async function handleImportData(data) {
         }
         _lastPhase = phase;
     });
-    let _lastPhase = 0;
 
     eventSource.on(event_types.CHAT_CHANGED, onChatChanged);
     eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
