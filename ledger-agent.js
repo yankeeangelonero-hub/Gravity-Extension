@@ -255,6 +255,7 @@ async function generateLedger(prose, state, options) {
         const elapsed = Date.now() - start;
 
         console.log(`[LedgerAgent] OpenRouter responded in ${elapsed}ms. Annotations: ${annotations.length}. Block length: ${ledgerText.length} chars.`);
+        console.log('[LedgerAgent] Raw ledger text:\n' + ledgerText);
 
         return { ledgerText, cleanedProse, annotations };
     } catch (err) {

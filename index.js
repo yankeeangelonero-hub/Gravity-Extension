@@ -761,7 +761,7 @@ async function onMessageReceived(messageId) {
             console.log(`${LOG_PREFIX} Committed ${committed.length} TX, ${allErrors.length} errors. Turn ${_turnCounter}.`);
             committed.forEach((tx, i) => {
                 const d = tx.d || {};
-                console.log(`  [${i}] op=${tx.op} entity=${tx.entity} id=${tx.id ?? '-'} field=${d.field ?? '-'} value=${JSON.stringify(d.value ?? d.to ?? d.name ?? null)}`);
+                console.log(`  [${i}] op=${tx.op} e=${tx.e} id=${tx.id || '-'} f=${d.f || '-'} v=${JSON.stringify(d.v ?? d.to ?? null)}`);
             });
 
             updatePanel(_currentState, _turnCounter, commitIds);
