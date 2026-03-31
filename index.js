@@ -268,6 +268,15 @@ function compileStateEntries(stateEntries, currentState) {
             continue;
         } else {
             const target = getStateTarget(workingState, entry.entityType, entry.entityId);
+            const requiresExistingTarget = !['world', 'pc', 'divination', 'summary'].includes(entry.entityType);
+            if (requiresExistingTarget && !target) {
+                errors.push({
+                    lineNum: i + 1,
+                    error: `STATE target ${entry.entityType}:${entry.entityId} not found. Use the exact id from Gravity_State_View or CREATE it first.`,
+                    raw: entry.raw || `[state ${i + 1}]`,
+                });
+                continue;
+            }
             const currentValue = entry.key != null ? target?.[entry.field]?.[entry.key] : target?.[entry.field];
             const machineField = getStateMachineField(entry.entityType);
 

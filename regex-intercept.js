@@ -275,13 +275,12 @@ function parseStateLine(line, lineNum) {
         return { entry: { kind: 'scene', value: parseStateScalar(sceneMatch[1]), raw }, error: null, raw };
     }
 
-    const lineMatch = cleaned.match(/^(.*?):\s*(.*)$/);
-    if (!lineMatch) {
+    const separatorIndex = cleaned.lastIndexOf(':');
+    if (separatorIndex === -1) {
         return { entry: null, error: `Line ${lineNum}: STATE line must be "path: value"`, raw };
     }
-
-    let path = lineMatch[1].trim();
-    const rawValue = lineMatch[2];
+    let path = cleaned.slice(0, separatorIndex).trim();
+    const rawValue = cleaned.slice(separatorIndex + 1);
     let kind = 'set';
 
     if (path.endsWith('+')) {
