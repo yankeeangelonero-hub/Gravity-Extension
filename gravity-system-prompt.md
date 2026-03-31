@@ -1,13 +1,13 @@
-# Gravity v10 — System Prompt
+# Gravity v11 — Ledger Command Reference
 
-Paste this into your character card's System Prompt (or use it as a preset system prompt in SillyTavern).
+This is a reference document for the ledger command format. In v11, the actual system prompts live in the preset (`Gravity_v11.json`) as prompt layers L0–L3 + Anchor. The extension injects all runtime instructions (state view, deduction templates, corrections) via `setExtensionPrompt()`.
 
 ---
 
-## System Prompt Text
+## Ledger Command Format
 
 ```
-You are an immersive narrative collaborator running the Gravity v10 story engine. You write vivid, literary fiction while maintaining a hidden state machine that tracks characters, constraints, collisions, and world state through an append-only ledger.
+The Gravity Ledger extension tracks characters, constraints, collisions, chapters, factions, and world state through an append-only ledger.
 
 ═══ CORE PRINCIPLES ═══
 
@@ -60,6 +60,7 @@ State machines (MOVE between adjacent only):
   Character tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
   Constraint integrity: STABLE → STRESSED → CRITICAL → BREACHED
   Collision status:     SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED
+                        ACTIVE/RESOLVING → CRASHED (invalidated — explain why, then DESTROY)
   Chapter status:       PLANNED → OPEN → CLOSING → CLOSED
 
 Volume guide:
@@ -114,22 +115,32 @@ Combat rules for this story (power scale, tone, capabilities) are defined by the
 
 ---
 
-## How to Use
+## How to Use (v11)
 
-1. Copy the text between the ``` markers above
-2. Paste into your AI preset's **System Prompt** or character card system prompt
-3. The Gravity Ledger extension handles everything else:
+1. Import `Gravity_v11.json` as a SillyTavern preset — it contains all system prompts (L0–L3 + Anchor)
+2. Install the Gravity Ledger extension — it handles everything else:
    - Parses command lines from the ledger block
    - Validates and commits valid transactions
    - Flags errors and asks for corrections on next turn
-   - Injects state view and format reference into prompt at depth 0
+   - Injects state view (`Gravity_State_View`) and format reference at depth 0
+   - Injects turn-specific deduction templates (regular/combat/advance/intimacy)
    - Saves all data in chatMetadata (persistent per chat)
-4. Start chatting — the LLM will output ledger blocks and the extension processes them
+   - All configuration (role, voice, tone, guidelines, etc.) lives in the extension's world entity — no lorebook entries needed
+3. Start chatting — the LLM outputs ledger blocks and the extension processes them
 
-## Tips
+## OOC Commands
 
-- Use "OOC: eval" to have the LLM audit its own continuity
-- Use "OOC: snapshot" before risky story moments
+- `OOC: eval` — LLM audits its own continuity (uncapped ledger turn)
+- `OOC: snapshot` — Manual snapshot of current state
+- `OOC: rollback` / `OOC: rollback to #N` — List or restore snapshots
+- `OOC: history [entity]` — Show all transactions for an entity
+- `OOC: timeline [from] to [to]` — Show transactions in time range
+- `OOC: combat setup` — Define combat power scale and rules
+- `OOC: combat rules` — Display current combat rules
+- `OOC: power [entity] [N]` — Set power on an entity
+- `OOC: wound [entity] [key] "description"` — Add a wound
+- `OOC: heal [entity] [key]` — Remove a wound
+- `OOC: consolidate` / `OOC: archive` — Create consolidation checkpoint
 - The extension auto-snapshots every 15 turns
 - If the LLM drifts, the extension auto-injects correction requests
 - Export/Import buttons in the panel let you save and restore ledger data
