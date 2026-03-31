@@ -10,13 +10,14 @@
 import { init as initLedger, reset as resetLedger, append, getAllTransactions, getTransactionsForEntity, exportData, importData } from './ledger-store.js';
 import { initSnapshots, computeCurrentState, createSnapshot } from './snapshot-mgr.js';
 import { validateBatch, formatErrors } from './consistency.js';
-import { computeState } from './state-compute.js';
+import { computeState, applyTransaction, createEmptyState } from './state-compute.js';
 import { formatStateView, formatReadme } from './state-view.js';
-import { extractLedgerBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
+import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
 import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
 import { checkAndRotate, buildConsolidationPrompt } from './memory-tier.js';
+import { getStateMachineField } from './state-machine.js';
 
 const MODULE_NAME = 'gravity-ledger';
 const LOG_PREFIX = '[GravityLedger]';
@@ -223,6 +224,102 @@ function clearMatchedCorrections(committedTxns) {
 }
 
 // ─── Prompt Injection ──────────────────────────────────────────────────────────
+
+function getStateTarget(state, entityType, entityId) {
+    if (!state) return null;
+    if (entityType === 'world') return state.world || null;
+    if (entityType === 'pc') return state.pc || null;
+    if (entityType === 'divination') return state.divination || null;
+    if (entityType === 'summary') return state.story_summary || null;
+
+    const collections = {
+        char: state.characters,
+        constraint: state.constraints,
+        collision: state.collisions,
+        chapter: state.chapters,
+        faction: state.factions,
+    };
+    return collections[entityType]?.[entityId] || null;
+}
+
+function compileStateEntries(stateEntries, currentState) {
+    const workingState = currentState ? structuredClone(currentState) : createEmptyState();
+    let activeTimestamp = '';
+    const transactions = [];
+    const errors = [];
+
+    for (let i = 0; i < stateEntries.length; i++) {
+        const entry = stateEntries[i];
+        if (entry.kind === 'timestamp') {
+            activeTimestamp = entry.timestamp || '';
+            continue;
+        }
+
+        let tx = null;
+
+        if (entry.kind === 'directTx') {
+            tx = { ...entry.tx };
+        } else if (entry.kind === 'scene') {
+            tx = { op: 'S', e: 'pc', id: '', d: { f: 'current_scene', v: entry.value } };
+        } else if (entry.kind === 'summary') {
+            tx = { op: 'A', e: 'summary', id: '', d: { f: '', v: entry.value } };
+        } else if (entry.kind === 'removeSummary') {
+            errors.push({ lineNum: i + 1, error: 'STATE summary- is not supported. Use a full LEDGER block for destructive timeline cleanup.', raw: entry.raw || '[summary-]' });
+            continue;
+        } else {
+            const target = getStateTarget(workingState, entry.entityType, entry.entityId);
+            const currentValue = entry.key != null ? target?.[entry.field]?.[entry.key] : target?.[entry.field];
+            const machineField = getStateMachineField(entry.entityType);
+
+            if (entry.kind === 'append') {
+                tx = { op: 'A', e: entry.entityType, id: entry.entityId, d: { f: entry.field, v: entry.value } };
+            } else if (entry.kind === 'remove') {
+                if (entry.key != null) {
+                    tx = { op: 'MR', e: entry.entityType, id: entry.entityId, d: { f: entry.field, k: entry.key } };
+                } else {
+                    tx = { op: 'R', e: entry.entityType, id: entry.entityId, d: { f: entry.field, v: entry.value } };
+                }
+            } else if (entry.kind === 'set') {
+                if (entry.key != null) {
+                    if (entry.value === null) {
+                        tx = { op: 'MR', e: entry.entityType, id: entry.entityId, d: { f: entry.field, k: entry.key } };
+                    } else {
+                        tx = { op: 'MS', e: entry.entityType, id: entry.entityId, d: { f: entry.field, k: entry.key, v: entry.value } };
+                    }
+                } else if (machineField === entry.field && target && currentValue != null && String(currentValue) !== String(entry.value) && entry.value !== '') {
+                    tx = { op: 'TR', e: entry.entityType, id: entry.entityId, d: { f: entry.field, from: currentValue, to: entry.value } };
+                } else {
+                    tx = { op: 'S', e: entry.entityType, id: entry.entityId, d: { f: entry.field, v: entry.value } };
+                }
+            }
+        }
+
+        if (!tx) {
+            errors.push({ lineNum: i + 1, error: 'Unsupported STATE line', raw: entry.raw || `[state ${i + 1}]` });
+            continue;
+        }
+
+        if (!tx.t && activeTimestamp) tx.t = activeTimestamp;
+        transactions.push(tx);
+
+        try {
+            applyTransaction(workingState, {
+                tx: -(i + 1),
+                t: tx.t || '',
+                _ts: '',
+                op: tx.op,
+                e: tx.e,
+                id: tx.id || '',
+                d: tx.d || {},
+                r: tx.r || '',
+            });
+        } catch (err) {
+            console.warn(`${LOG_PREFIX} Working-state apply failed for compiled STATE entry:`, err);
+        }
+    }
+
+    return { transactions, errors };
+}
 
 /**
  * Inject prompts based on turn mode.
@@ -467,7 +564,7 @@ ${crashDraw.label}: ${crashDraw.reading}${crashDraw.html ? `\nRender this HTML c
 
 TIME IS UP. The player has not engaged this collision for ${turnsSince} turns. Gravity will no longer wait.
 
-MOVE this collision to CRASHED in the ledger block. The oracle determines the shape of the uncontrolled outcome. Write the WORST REASONABLE OUTCOME colored by this draw.
+MOVE this collision to CRASHED in the update block. The oracle determines the shape of the uncontrolled outcome. Write the WORST REASONABLE OUTCOME colored by this draw.
 
 This is what ignoring a collision costs. The player had their chance — every turn for ${turnsSince} turns, the collision pushed toward them. They chose not to engage. Now gravity chooses for them.
 
@@ -564,7 +661,7 @@ Contest: [resolve player actions through logic and established capabilities]
 
 Scene: [who's present, atmosphere — for current_scene update]
 Plan: [ONE beat. What happens. What would each character logically do. Stop after the first shift.]
-Updates: [all state changes for ledger block — or: none]
+Updates: [all material state changes for the STATE block — or: none]
 Chapter: [hold / propose "Title" / advance]
 ---END DEDUCTION---`,
             combat: `---DEDUCTION---
@@ -605,8 +702,10 @@ ${deductionTemplate}
 
 2. Prose
 
-3. ---LEDGER--- block (record EVERYTHING that changed, no line limit)${_uncappedTurn ? ' (UNCAPPED — full cleanup allowed)' : ''}
-ALWAYS update current_scene, location, condition.
+3. UPDATE block:
+- Normal turns: ---STATE--- (compact delta, only material changes)
+- Structural turns or explicit cleanup/setup instructions: ---LEDGER--- (full command block, no line limit)${_uncappedTurn ? ' (UNCAPPED — full cleanup allowed)' : ''}
+Update current_scene, location, and condition when they materially change or the scene would be hard to reconstruct without them.
 CLEANUP (REMOVE/DESTROY): max 3 per regular turn. Save bulk for eval or chapter close.
 
 You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memory.]`;
@@ -715,8 +814,8 @@ async function onMessageReceived(messageId) {
 
     _turnCounter++;
 
-    // Extract ledger block (command-style or legacy JSON)
-    const extraction = extractLedgerBlock(message.mes);
+    // Extract update block (compact STATE or canonical LEDGER)
+    const extraction = extractUpdateBlock(message.mes);
 
     // Strip block from displayed message
     if (extraction.found) {
@@ -730,11 +829,17 @@ async function onMessageReceived(messageId) {
         return;
     }
 
-    // Extraction-level errors (failed lines from command parser)
-    const extractionErrors = extraction.errors || [];
+    let extractedTransactions = extraction.transactions || [];
+    const extractionErrors = [...(extraction.errors || [])];
+
+    if (extraction.format === 'state') {
+        const compiled = compileStateEntries(extraction.stateEntries || [], _currentState);
+        extractedTransactions = compiled.transactions;
+        extractionErrors.push(...compiled.errors);
+    }
 
     // No transactions at all (empty block or all lines failed)
-    if (extraction.transactions.length === 0 && extractionErrors.length === 0) {
+    if (extractedTransactions.length === 0 && extractionErrors.length === 0) {
         _pendingReinforcement = getReinforcement(extraction, _turnCounter);
         injectPrompt();
         return;
@@ -747,7 +852,7 @@ async function onMessageReceived(messageId) {
     let cleanupDropped = 0;
     if (!_uncappedTurn) {
         let cleanupCount = 0;
-        extraction.transactions = extraction.transactions.filter(tx => {
+        extractedTransactions = extractedTransactions.filter(tx => {
             if (CLEANUP_OPS.includes(tx.op)) {
                 cleanupCount++;
                 if (cleanupCount > CLEANUP_CAP) {
@@ -766,10 +871,10 @@ async function onMessageReceived(messageId) {
     // Validate each transaction individually
     const validTxns = [];
     const validationErrors = [];
-    for (let i = 0; i < extraction.transactions.length; i++) {
-        const result = validateBatch([extraction.transactions[i]]);
+    for (let i = 0; i < extractedTransactions.length; i++) {
+        const result = validateBatch([extractedTransactions[i]]);
         if (result.valid) {
-            validTxns.push(extraction.transactions[i]);
+            validTxns.push(extractedTransactions[i]);
         } else {
             validationErrors.push({
                 lineNum: i,
@@ -883,7 +988,7 @@ Partner wants: [what their body is showing]
 History: [pattern from intimate_history — or: first encounter]
 Beat: [ONE sensory beat.]
 ---END DEDUCTION---
-Then prose, then choices, then ledger block.]`;
+Then prose, then choices, then compact STATE block.]`;
         injectPrompt('advance');
         return;
     }
@@ -1001,8 +1106,8 @@ Three outcomes are possible:
 • EVOLUTION — resolution reveals a different tension. MOVE to RESOLVED, CREATE a new collision from what surfaced.
 • CRASHED — the player pretended it wasn't there. Not retreat — inaction. Gravity resolves it for them. Worst outcome.
 
-Record the draw: SET divination field=last_draw value="[draw result]"
-Full turn: deduction + prose + ledger block.]`;
+Record the draw in the update block: divination.last_draw: "[draw result]"
+Full turn: deduction + prose + compact STATE block.]`;
     } else if (inProgressCollisions.length > 0) {
         // Collision already detonated but not resolved — player is yielding, push it forward
         const collisionBlocks = inProgressCollisions.map(a => {
@@ -1025,8 +1130,8 @@ This collision is already spent — it MUST reach RESOLVED. Either the confronta
 • COSTLY — someone paid. MOVE to RESOLVED. Record the cost.
 • EVOLUTION — MOVE to RESOLVED, CREATE a new collision from what surfaced.
 
-Record the draw: SET divination field=last_draw value="[draw result]"
-Full turn: deduction + prose + ledger block.]`;
+Record the draw in the update block: divination.last_draw: "[draw result]"
+Full turn: deduction + prose + compact STATE block.]`;
     } else {
         // No ripe or in-progress collisions — randomized focus advance
         const focus = pickAdvanceFocus();
@@ -1091,7 +1196,7 @@ The draw colors the world's move — it does not prescribe it.
 
 ${focusPrompt}
 
-Record the draw: SET divination field=last_draw value="[draw result]"
+Record the draw in the update block: divination.last_draw: "[draw result]"
 
 ADVANCE DEDUCTION (use this format, one line per item):
 ---DEDUCTION---
@@ -1101,7 +1206,7 @@ Draw: [how the divination shapes this]
 Collision: [which tightens or spawns — or: none]
 Beat: [what happens.]
 ---END DEDUCTION---
-Then prose, then ledger block.]`;
+Then prose, then compact STATE block.]`;
     }
 
     injectPrompt('advance');
@@ -1202,7 +1307,7 @@ SETUP TURN: No combat collision exists yet. This turn is SETUP:
 2. SET power on any new enemy characters based on the combat rules above.
 3. Describe the threat and the opening situation.
 4. Do NOT resolve a combat exchange yet — setup is the beat.` : ''}
-Record the draw: SET divination field=last_draw value="[draw result]"
+Record the draw in the update block: divination.last_draw: "[draw result]"
 
 COMBAT DEDUCTION (use this format, one line per item):
 ---DEDUCTION---
@@ -1214,7 +1319,7 @@ Wounds: [PC wounds, enemy wounds — how these affect this exchange]
 Distance: [current → change? why?]
 Beat: [ONE exchange. What happens.]
 ---END DEDUCTION---
-Then prose, then ledger block.]`;
+Then prose, then compact STATE block.]`;
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} ${isSetup ? 'prepares to fight.' : 'engages in combat.'}*`);
@@ -1325,7 +1430,7 @@ COLLISION CHECK: Each turn, check collision distances. If one reaches zero, it f
 
 EARLY EXIT: "OOC: fade to black" → cut to afterglow. No judgment.
 
-AFTER THE SCENE: Resume full deduction + prose + ledger. Post-intimacy ledger must include:
+AFTER THE SCENE: Resume full deduction + prose + compact STATE updates. Post-intimacy update block must include:
 - READ updates (how characters see each other now)
 - MOVE constraint if intimacy pressured one
 - APPEND key_moments (intimate scene recorded — permanent)
@@ -1351,7 +1456,7 @@ History: [what pattern from intimate_history applies — or: first encounter]
 Draw: [how divination shapes the sexual energy]
 Beat: [ONE sensory beat.]
 ---END DEDUCTION---
-Then prose, then choices, then ledger block.]`;
+Then prose, then choices, then compact STATE block.]`;
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} moves closer.*`);
@@ -1494,7 +1599,7 @@ This draw shapes the TONE AND DIRECTION of the next chapter — not specific eve
 - How faction dynamics shift during the transition
 - What collisions tighten or emerge
 - The emotional register of the opening scene
-Record the draw: SET divination field=last_draw value="[draw result]"
+Record the draw in the update block: divination.last_draw: "[draw result]"
 
 A. SANITY CHECK the player's requested starting point:
    - Is it reachable given current world state, character positions, and timeline?
@@ -1684,3 +1789,5 @@ function createInputButtons() {
     document.getElementById('gl-input-skip').addEventListener('click', handleTimeskipButton);
     document.getElementById('gl-input-good').addEventListener('click', handleGoodTurnButton);
 }
+
+

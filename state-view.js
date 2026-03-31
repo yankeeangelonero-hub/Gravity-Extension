@@ -361,66 +361,73 @@ function formatReadme(mode = 'full') {
  * Used on regular and advance turns to save ~2000 tokens.
  */
 function formatReadmeCore() {
-    return `═══ GRAVITY LEDGER — QUICK REFERENCE ═══
+    return `=== GRAVITY STATE DELTA - QUICK REFERENCE ===
 
----LEDGER--- block after EVERY response. One command per line.
-SYNTAX: > [Day N — HH:MM] OPERATION entity:id key=value key="multi word" -- reason
-Entity types: char, constraint, collision, chapter, faction, world, pc, divination, summary
-Singletons (no :id): world, pc, divination, summary. IDs: kebab-case, stable.
+Normal prose turns use a compact ---STATE--- block.
+Structural turns (setup, timeskip, chapter close, heavy cleanup) may still use full ---LEDGER--- syntax.
 
-OPERATIONS:
-  CREATE  > CREATE char:elena name="Elena" tier=KNOWN -- New entity
-  MOVE    > MOVE constraint:c1 field=integrity STABLE->STRESSED -- State transition (adjacent only)
-  SET     > SET char:elena field=doing value="Watching from the bar | Cost: missing her shift" -- Overwrite field
-  APPEND  > APPEND char:elena field=key_moments value="[Day 1] Noticed the scar" -- Add to array
-  REMOVE  > REMOVE char:elena field=noticed_details value="Old detail" -- Remove from array
-  READ    > READ char:elena target=cloud "Doesn't trust him" -- Character read (shorthand MAP_SET on reads)
-  MAP_SET > MAP_SET char:elena field=reads key=pc value="Cautious ally" -- Set map key
-  MAP_DEL > MAP_DEL char:elena field=reads key=old-npc -- Delete map key
-  DESTROY > DESTROY char:minor-npc -- Remove entity
+STANDARD SHAPE:
+---STATE---
+at: [Day N - HH:MM]
+scene: "Where. Who's present. What's happening. Emotional atmosphere."
+pc.location: "where the PC is now"
+pc.condition: "physical and emotional state"
+char:elena.condition: "steady, watchful"
+collision:trust-vs-duty.distance: 4
+constraint:c1.integrity: STRESSED
+char:elena.reads.pc: "Cautious ally"
+world.pressure_points+: "A new seam in the world"
+summary+: "What happened and what changed"
+---END STATE---
 
-FIELD MERGES — use these combined fields:
-  doing: includes cost. Format: "action | Cost: what this neglects/risks"
-  reads: includes stance toward PC. Use READ char:id target=pc for PC stance.
-  faction profile: single paragraph. SET faction:id field=profile value="[full description]"
-    Include: objective, power, resources, momentum, leverage, vulnerability, stance toward PC.
-    Rewrite WHOLE paragraph during chapter close or advance. One SET, not seven.
-    relations{} stays separate (MAP_SET for inter-faction stances).
-  collision details: single paragraph. SET collision:id field=details value="[full description]"
-    Include: name, forces, cost/stakes, target constraint, mode (combat/narrative), upper hand.
-    status and distance stay separate (extension reads them mechanically).
-  constraint profile: single paragraph. SET constraint:id field=profile value="[full description]"
-    Include: prevents, threshold, replacement, replacement_type, current_pressure.
-    integrity, owner_id, shedding_order stay separate (extension reads them mechanically).
-  chapter profile: single paragraph. SET chapter:id field=profile value="[full description]"
-    Include: number, title, arc, central_tension.
-    status stays separate (extension reads it mechanically).
-  divination: active_system stays separate. last_draw as simple string. readings[] → drop, not referenced.
-  Do NOT use separate cost, stance_toward_pc, last_move, forces, target_constraint, or pc.reputation fields.
+PATH RULES:
+  path: value              -> set field
+  path+: value             -> append to array
+  path-: value             -> remove from array
+  entity.field.key: value  -> map set
+  entity.field.key: delete -> map delete
+  scene: "..."             -> shorthand for pc.current_scene
+  at: [Day N - HH:MM]      -> block timestamp for every line below it
 
-STATE MACHINES (adjacent only, no skipping):
-  Tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
-  Integrity:  STABLE → STRESSED → CRITICAL → BREACHED | Relief: CRITICAL → STRESSED → STABLE
-  Collision:  SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED
-  Chapter:    PLANNED → OPEN → CLOSING → CLOSED
+COMMON PATHS:
+  pc.location
+  pc.condition
+  pc.current_scene (or scene)
+  pc.equipment
+  char:id.location
+  char:id.condition
+  char:id.doing
+  char:id.reads.pc
+  collision:id.distance
+  collision:id.status
+  constraint:id.integrity
+  world.world_state
+  world.pressure_points+
+  world.pressure_points-
+  world.constants.tone
+  divination.last_draw
+  summary+
 
-NO LINE LIMIT on updates. Record EVERYTHING that changed. Completeness over brevity.
-intimacy_stance: check BEFORE intimate scenes. Shifts when the narrative earns it — accumulated trust, vulnerability, constraint changes. Never on player demand. The character decides.
-CLEANUP: Do NOT use REMOVE/DESTROY during regular turns (max 3 allowed). Save bulk cleanup for OOC: eval or CHAPTER CLOSE (both uncapped).
+STATE MACHINES:
+  char tier: UNKNOWN -> KNOWN -> TRACKED -> PRINCIPAL
+  constraint integrity: STABLE -> STRESSED -> CRITICAL -> BREACHED
+  collision status: SEEDED -> SIMMERING -> ACTIVE -> RESOLVING -> RESOLVED
+  chapter status: PLANNED -> OPEN -> CLOSING -> CLOSED
+For these fields, write the NEW state only. The extension will compile the transition.
 
-BOOKKEEPING — update these EVERY turn:
-  SET pc field=current_scene value="[Where. Who's present. What's happening. Emotional atmosphere. 2-3 sentences that let you reconstruct the moment.]"
-  SET pc field=location value="[where the PC is now]"
-  SET pc field=condition value="[physical AND emotional state — the LLM has only 3-5 messages of context]"
-  SET pc field=equipment value="[current gear, weapons, consumables with counts]"
-  SET char:id field=location value="[where this NPC is]" -- for TRACKED+ in scene
-  SET char:id field=condition value="[physical + emotional state]" -- for scene-active characters
-  MAP_SET world field=constants key=active_mission value="[objective, assignments, phase]" -- when on mission
-key_moments are PERMANENT. NEVER remove them. They are the character's lived history.
-KNOWLEDGE FIREWALL: Before any NPC acts, confirm what they could plausibly know. The PC is player-controlled — the player decides what they know.
-noticed_details are TEMPORARY. Fire them in scenes, then REMOVE.
+RARE OPS INSIDE STATE BLOCK:
+  create char:dak name="Dak" tier=KNOWN location="The Stray Dog"
+  destroy char:minor-npc
+If a turn gets structurally complicated, switch to a full ---LEDGER--- block instead.
 
-═══ END QUICK REFERENCE ═══`;
+DISCIPLINE:
+  Only write what changed materially.
+  Keep doing as "action | Cost: what this neglects or risks".
+  key_moments are permanent; do not remove them.
+  summary+ should capture what happened and what changed. If at: is set, do not repeat the timestamp inside the text unless it matters stylistically.
+  Cleanup is still capped on normal turns; save bulk pruning for eval or chapter close.
+
+=== END QUICK REFERENCE ===`;
 }
 
 /**

@@ -26,6 +26,13 @@ const LEDGER_BLOCK_FALLBACKS = [
     /<!--\s*LEDGER\s*-->([\s\S]*?)<!--\s*END\s*LEDGER\s*-->/i,
 ];
 
+const STATE_BLOCK_PATTERN = /[-\u2014\u2013]{2,3}\s*STATE\s*(?:DELTA)?\s*[-\u2014\u2013]{2,3}([\s\S]*?)[-\u2014\u2013]{2,3}\s*END\s*STATE\s*[-\u2014\u2013]{2,3}/i;
+const STATE_BLOCK_FALLBACKS = [
+    /```state\s*\n?([\s\S]*?)```/i,
+    /\[STATE\]([\s\S]*?)\[\/STATE\]/i,
+    /<!--\s*STATE\s*-->([\s\S]*?)<!--\s*END\s*STATE\s*-->/i,
+];
+
 // ─── Compliance Tracking ────────────────────────────────────────────────────────
 
 const COMPLIANCE_WINDOW = 10;
@@ -230,12 +237,131 @@ function parseKeyValues(str) {
     return result;
 }
 
+function parseStateScalar(raw) {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return '';
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith('\'') && trimmed.endsWith('\''))) {
+        return trimmed.substring(1, trimmed.length - 1);
+    }
+    if (/^(null|\(delete\)|delete)$/i.test(trimmed)) return null;
+    if (/^\(empty\)$/i.test(trimmed)) return '';
+    if (/^(true|false)$/i.test(trimmed)) return trimmed.toLowerCase() === 'true';
+    if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
+    return trimmed;
+}
+
+function parseStateLine(line, lineNum) {
+    const raw = line.trim();
+    let cleaned = raw.replace(/^[>\-\*]\s*/, '').trim();
+    if (!cleaned) return { entry: null, error: null, raw };
+
+    if (/^(create|set|move|append|remove|read|map_set|map_del|destroy|amend|new|update|add|delete_from|unread|kill|remove_entity|correct|fix)\b/i.test(cleaned)) {
+        const { tx, error } = parseLine(cleaned, lineNum);
+        if (tx) return { entry: { kind: 'directTx', tx, raw }, error: null, raw };
+        return { entry: null, error, raw };
+    }
+
+    const timestampMatch = cleaned.match(/^at\s*:\s*(.+)$/i);
+    if (timestampMatch) {
+        const value = parseStateScalar(timestampMatch[1]);
+        if (typeof value !== 'string' || !value.trim()) {
+            return { entry: null, error: `Line ${lineNum}: Invalid block timestamp`, raw };
+        }
+        return { entry: { kind: 'timestamp', timestamp: value.trim(), raw }, error: null, raw };
+    }
+
+    const sceneMatch = cleaned.match(/^scene\s*:\s*(.+)$/i);
+    if (sceneMatch) {
+        return { entry: { kind: 'scene', value: parseStateScalar(sceneMatch[1]), raw }, error: null, raw };
+    }
+
+    const lineMatch = cleaned.match(/^(.*?):\s*(.*)$/);
+    if (!lineMatch) {
+        return { entry: null, error: `Line ${lineNum}: STATE line must be "path: value"`, raw };
+    }
+
+    let path = lineMatch[1].trim();
+    const rawValue = lineMatch[2];
+    let kind = 'set';
+
+    if (path.endsWith('+')) {
+        kind = 'append';
+        path = path.slice(0, -1).trim();
+    } else if (path.endsWith('-')) {
+        kind = 'remove';
+        path = path.slice(0, -1).trim();
+    }
+
+    if (!path) {
+        return { entry: null, error: `Line ${lineNum}: Missing STATE path before ":"`, raw };
+    }
+
+    if (path.toLowerCase() === 'summary') {
+        return { entry: { kind: kind === 'remove' ? 'removeSummary' : 'summary', value: parseStateScalar(rawValue), raw }, error: null, raw };
+    }
+
+    const parts = path.split('.').map(p => p.trim()).filter(Boolean);
+    if (parts.length === 0) {
+        return { entry: null, error: `Line ${lineNum}: Invalid STATE path "${path}"`, raw };
+    }
+
+    const entityToken = parts[0];
+    const entityMatch = entityToken.match(/^(\w+)(?::(.+))?$/);
+    if (!entityMatch) {
+        return { entry: null, error: `Line ${lineNum}: Invalid entity token "${entityToken}"`, raw };
+    }
+
+    const entityType = entityMatch[1].toLowerCase();
+    const entityId = entityMatch[2] || '';
+    const field = parts[1] || '';
+    const key = parts[2] || '';
+
+    if (!field) {
+        return { entry: null, error: `Line ${lineNum}: STATE path "${path}" is missing a field`, raw };
+    }
+    if (parts.length > 3) {
+        return { entry: null, error: `Line ${lineNum}: STATE path "${path}" is too deep`, raw };
+    }
+
+    return {
+        entry: {
+            kind,
+            entityType,
+            entityId,
+            field,
+            key: key || null,
+            value: parseStateScalar(rawValue),
+            raw,
+        },
+        error: null,
+        raw,
+    };
+}
+
+function findBlockCandidate(message, primary, fallbacks, format) {
+    let match = message.match(primary);
+    let drifted = false;
+    if (!match) {
+        for (const pattern of fallbacks) {
+            match = message.match(pattern);
+            if (match) {
+                drifted = true;
+                break;
+            }
+        }
+    }
+    if (!match) return null;
+    return { format, match, drifted, index: match.index ?? 0 };
+}
+
 // ─── Block Parser ───────────────────────────────────────────────────────────────
 
 /**
  * @typedef {Object} ExtractionResult
  * @property {boolean} found
+ * @property {'ledger'|'state'|null} format
  * @property {Array} transactions - Successfully parsed transactions
+ * @property {Array} stateEntries - Parsed compact STATE entries
  * @property {Array} errors - { lineNum, error, raw } for failed lines
  * @property {boolean} drifted
  * @property {string} cleanedMessage
@@ -246,51 +372,24 @@ function parseKeyValues(str) {
  * @param {string} message
  * @returns {ExtractionResult}
  */
-function extractLedgerBlock(message) {
-    if (!message) {
-        return { found: false, transactions: [], errors: [], drifted: false, cleanedMessage: message || '' };
-    }
-
-    // Try primary pattern
-    let match = message.match(LEDGER_BLOCK_PATTERN);
-    let drifted = false;
-
-    // Try fallbacks
-    if (!match) {
-        for (const pattern of LEDGER_BLOCK_FALLBACKS) {
-            match = message.match(pattern);
-            if (match) { drifted = true; break; }
-        }
-    }
-
-    if (!match) {
-        // Still strip deduction block even if no ledger block found
-        const cleanedMsg = message.replace(DEDUCTION_BLOCK_PATTERN, '').trim();
-        return { found: false, transactions: [], errors: [], drifted: false, cleanedMessage: cleanedMsg };
-    }
-
+function extractLedgerBlockFromMatch(message, match, drifted) {
     const rawContent = match[1].trim();
-    // Strip both ledger block and deduction block from displayed message
     let cleanedMessage = message.replace(match[0], '').trim();
     cleanedMessage = cleanedMessage.replace(DEDUCTION_BLOCK_PATTERN, '').trim();
 
-    // Check for format drift
     if (!drifted && match[0]) {
         const standard = /^---LEDGER---[\s\S]*---END LEDGER---$/;
         if (!standard.test(match[0].trim())) drifted = true;
     }
 
-    // Empty block
     if (!rawContent || rawContent === '[]' || rawContent === '(empty)' || rawContent === 'none') {
-        return { found: true, transactions: [], errors: [], drifted, cleanedMessage };
+        return { found: true, format: 'ledger', transactions: [], stateEntries: [], errors: [], drifted, cleanedMessage };
     }
 
-    // Check if it's JSON (legacy format) — try to handle gracefully
     if (rawContent.trimStart().startsWith('[') || rawContent.trimStart().startsWith('{')) {
         return parseLegacyJSON(rawContent, drifted, cleanedMessage);
     }
 
-    // Parse command lines
     const lines = rawContent.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
     const transactions = [];
     const errors = [];
@@ -302,11 +401,77 @@ function extractLedgerBlock(message) {
         } else if (error) {
             errors.push({ lineNum: i + 1, error, raw });
         }
-        // null tx + null error = blank line, skip silently
     }
 
-    return { found: true, transactions, errors, drifted, cleanedMessage };
+    return { found: true, format: 'ledger', transactions, stateEntries: [], errors, drifted, cleanedMessage };
 }
+
+function extractStateBlockFromMatch(message, match, drifted) {
+    const rawContent = match[1].trim();
+    let cleanedMessage = message.replace(match[0], '').trim();
+    cleanedMessage = cleanedMessage.replace(DEDUCTION_BLOCK_PATTERN, '').trim();
+
+    if (!drifted && match[0]) {
+        const standard = /^---STATE---[\s\S]*---END STATE---$/;
+        if (!standard.test(match[0].trim())) drifted = true;
+    }
+
+    if (!rawContent || rawContent === '[]' || rawContent === '(empty)' || rawContent === 'none') {
+        return { found: true, format: 'state', transactions: [], stateEntries: [], errors: [], drifted, cleanedMessage };
+    }
+
+    const lines = rawContent.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+    const stateEntries = [];
+    const errors = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const { entry, error, raw } = parseStateLine(lines[i], i + 1);
+        if (entry) {
+            stateEntries.push(entry);
+        } else if (error) {
+            errors.push({ lineNum: i + 1, error, raw });
+        }
+    }
+
+    return { found: true, format: 'state', transactions: [], stateEntries, errors, drifted, cleanedMessage };
+}
+
+function extractUpdateBlock(message) {
+    if (!message) {
+        return { found: false, format: null, transactions: [], stateEntries: [], errors: [], drifted: false, cleanedMessage: message || '' };
+    }
+
+    const ledger = findBlockCandidate(message, LEDGER_BLOCK_PATTERN, LEDGER_BLOCK_FALLBACKS, 'ledger');
+    const state = findBlockCandidate(message, STATE_BLOCK_PATTERN, STATE_BLOCK_FALLBACKS, 'state');
+    const block = (!ledger && !state)
+        ? null
+        : (!state || (ledger && ledger.index <= state.index) ? ledger : state);
+
+    if (!block) {
+        const cleanedMsg = message.replace(DEDUCTION_BLOCK_PATTERN, '').trim();
+        return { found: false, format: null, transactions: [], stateEntries: [], errors: [], drifted: false, cleanedMessage: cleanedMsg };
+    }
+
+    if (block.format === 'state') {
+        return extractStateBlockFromMatch(message, block.match, block.drifted);
+    }
+    return extractLedgerBlockFromMatch(message, block.match, block.drifted);
+}
+
+function extractLedgerBlock(message) {
+    if (!message) {
+        return { found: false, format: null, transactions: [], stateEntries: [], errors: [], drifted: false, cleanedMessage: message || '' };
+    }
+
+    const block = findBlockCandidate(message, LEDGER_BLOCK_PATTERN, LEDGER_BLOCK_FALLBACKS, 'ledger');
+    if (!block) {
+        const cleanedMsg = message.replace(DEDUCTION_BLOCK_PATTERN, '').trim();
+        return { found: false, format: null, transactions: [], stateEntries: [], errors: [], drifted: false, cleanedMessage: cleanedMsg };
+    }
+
+    return extractLedgerBlockFromMatch(message, block.match, block.drifted);
+}
+
 
 /**
  * Handle legacy JSON format for backwards compatibility.
@@ -321,10 +486,10 @@ function parseLegacyJSON(rawContent, drifted, cleanedMessage) {
 
         const parsed = JSON.parse(cleaned);
         const transactions = Array.isArray(parsed) ? parsed : [parsed];
-        return { found: true, transactions, errors: [], drifted: true, cleanedMessage };
+        return { found: true, format: 'ledger', transactions, stateEntries: [], errors: [], drifted: true, cleanedMessage };
     } catch (e) {
         return {
-            found: true, transactions: [], drifted: true, cleanedMessage,
+            found: true, format: 'ledger', transactions: [], stateEntries: [], drifted: true, cleanedMessage,
             errors: [{ lineNum: 0, error: `Legacy JSON parse failed: ${e.message}`, raw: rawContent.substring(0, 100) }],
         };
     }
@@ -344,22 +509,25 @@ function getReinforcement(result, turn) {
         const score = getComplianceScore();
 
         if (score < 0.5) {
-            return `[LEDGER: Block missing. REQUIRED after every response.\n` +
-                `Format: ---LEDGER---\n> CREATE char:name key=value -- reason\n> SET entity:id field=X value=Y -- reason\n---END LEDGER---\n` +
-                `Empty turn: ---LEDGER---\n(empty)\n---END LEDGER---]`;
+            return `[STATE/LEDGER: Update block missing. REQUIRED after every response.\n` +
+                `Normal prose turns (preferred): ---STATE---\nat: [Day N - HH:MM]\nscene: "Where. Who. Atmosphere."\npc.location: "..."\nsummary+: "What changed"\n---END STATE---\n` +
+                `Structural turns may still use full ---LEDGER--- ... ---END LEDGER---.]`;
         }
-        return `[LEDGER: Block missing. Append ---LEDGER--- ... ---END LEDGER--- after every response.]`;
+        return `[STATE/LEDGER: Update block missing. Append ---STATE--- ... ---END STATE--- after normal turns, or ---LEDGER--- ... ---END LEDGER--- for structural turns.]`;
     }
 
     if (result.drifted) {
         recordCompliance(turn, 'drifted');
+        if (result.format === 'state') {
+            return `[STATE: Processed. Use standard format: ---STATE--- (three dashes, caps).]`;
+        }
         return `[LEDGER: Processed. Use standard format: ---LEDGER--- (three dashes, caps).]`;
     }
 
     recordCompliance(turn, 'clean');
     const score = getComplianceScore();
     if (score < 0.8 && _complianceHistory.length > 3) {
-        return `[LEDGER: OK.]`;
+        return `[STATE/LEDGER: OK.]`;
     }
 
     return null;
@@ -373,13 +541,13 @@ function getReinforcement(result, turn) {
 function buildCorrectionInjection(failedLines) {
     if (!failedLines || failedLines.length === 0) return null;
 
-    const lines = [`[LEDGER CORRECTIONS NEEDED — resubmit these lines fixed:`];
+    const lines = [`[STATE/LEDGER CORRECTIONS NEEDED — resubmit these lines fixed:`];
     for (const fl of failedLines) {
         lines.push(`  Original: ${fl.raw}`);
         lines.push(`  Error: ${fl.error}`);
         lines.push('');
     }
-    lines.push(`Include corrected lines in your next ---LEDGER--- block along with new transactions.]`);
+    lines.push(`Include corrected information in your next ---STATE--- or ---LEDGER--- block along with new updates.]`);
     return lines.join('\n');
 }
 
@@ -398,9 +566,12 @@ function stripLedgerBlock(message) {
 }
 
 export {
+    extractUpdateBlock,
     extractLedgerBlock,
     parseLine,
     parseKeyValues,
+    parseStateLine,
+    parseStateScalar,
     getReinforcement,
     buildCorrectionInjection,
     stripLedgerBlock,
