@@ -7,6 +7,11 @@
  *
  * The ledger and computed state remain complete — tiering only affects
  * what's DISPLAYED in the state view injection.
+ *
+ * Persistence: a coldWatermark in chatMetadata tracks how many entries
+ * per field have been archived. On reload, computeCurrentState() rebuilds
+ * the full arrays from ledger, and the watermark tells us where "hot" starts.
+ * No mutation of computed state — the watermark is the source of truth.
  */
 
 const LOG_PREFIX = '[GravityLedger:Memory]';
@@ -19,24 +24,23 @@ const TIER_CONFIG = {
         batchSize: 20,
         getArray: (state) => state.story_summary || [],
         label: 'story_summary',
+        coldKey: 'summaries',
     },
     pc_timeline: {
         hotCap: 30,
         batchSize: 15,
         getArray: (state) => state.pc?.timeline || [],
         label: 'pc.timeline',
+        coldKey: 'timeline',
     },
     pc_traits: {
         hotCap: 20,
         batchSize: 10,
         getArray: (state) => state.pc?.demonstrated_traits || [],
         label: 'pc.demonstrated_traits',
+        coldKey: 'traits',
     },
 };
-
-// ─── Condensation ───────────────────────────────────────────────────────────
-// No auto-condensation. The main LLM writes consolidated summaries as part
-// of its normal response when prompted by buildConsolidationPrompt().
 
 // ─── Cold Storage ───────────────────────────────────────────────────────────
 
@@ -55,34 +59,52 @@ function getColdStorage() {
 }
 
 /**
+ * Get or initialize the cold watermarks.
+ * Each key tracks how many entries from the start of the array are "cold"
+ * (already archived). On reload, the full array is recomputed from ledger,
+ * and entries before the watermark are known-archived.
+ */
+function getWatermarks() {
+    const { chatMetadata } = SillyTavern.getContext();
+    if (!chatMetadata['gravity_cold_watermarks']) {
+        chatMetadata['gravity_cold_watermarks'] = {};
+    }
+    return chatMetadata['gravity_cold_watermarks'];
+}
+
+/**
  * Check if any tiered array exceeds its hot cap.
- * If so, move the oldest batch to cold storage and flag for consolidation.
+ * If so, archive the overflow to cold storage and advance the watermark.
+ * Does NOT mutate computed state — only updates cold storage and watermarks.
  * @param {Object} state - current computed state
  * @returns {{ needsConsolidation: boolean, pendingBatches: Array }}
  */
 function checkAndRotate(state) {
     const cold = getColdStorage();
+    const watermarks = getWatermarks();
     const pendingBatches = [];
 
     for (const [key, cfg] of Object.entries(TIER_CONFIG)) {
         const arr = cfg.getArray(state);
-        if (arr.length <= cfg.hotCap) continue;
+        const currentWatermark = watermarks[key] || 0;
 
-        const overflow = arr.length - cfg.hotCap;
+        // Hot entries = everything from watermark onward
+        const hotCount = arr.length - currentWatermark;
+        if (hotCount <= cfg.hotCap) continue;
 
-        // Slice the oldest entries (everything before the hot cap)
-        const batch = arr.slice(0, overflow);
+        // How many entries to archive this cycle
+        const overflow = hotCount - cfg.hotCap;
+        const archiveStart = currentWatermark;
+        const archiveEnd = currentWatermark + overflow;
+
+        const batch = arr.slice(archiveStart, archiveEnd);
         if (batch.length === 0) continue;
 
         // Copy to cold storage
-        const coldKey = key === 'story_summary' ? 'summaries'
-            : key === 'pc_timeline' ? 'timeline'
-            : key === 'pc_traits' ? 'traits'
-            : 'summaries';
-        cold[coldKey].push(...batch);
+        cold[cfg.coldKey].push(...batch);
 
-        // REMOVE from hot — splice the oldest entries out of the source array
-        arr.splice(0, overflow);
+        // Advance watermark — these entries are now "cold"
+        watermarks[key] = archiveEnd;
 
         pendingBatches.push({
             key,
@@ -91,7 +113,7 @@ function checkAndRotate(state) {
             count: batch.length,
         });
 
-        console.log(`${LOG_PREFIX} Rotated ${overflow} entries from ${cfg.label} to cold. Hot now: ${arr.length}`);
+        console.log(`${LOG_PREFIX} Rotated ${overflow} entries from ${cfg.label} to cold. Watermark: ${archiveEnd}, hot: ${arr.length - archiveEnd}`);
     }
 
     // key_moments are PERMANENT — never rotated, never trimmed.
@@ -146,6 +168,7 @@ This arc summary is the ONLY record of these events the LLM will see. Make it co
 
 /**
  * Get the hot (visible) portion of a tiered array.
+ * Uses the watermark to determine where hot starts — no mutation needed.
  * Returns: { hot: Array, arcs: Array }
  * @param {string} key - tier config key
  * @param {Object} state - current state
@@ -156,15 +179,19 @@ function getHotView(key, state) {
     if (!cfg) return { hot: [], arcs: [] };
 
     const arr = cfg.getArray(state);
-    const hot = arr.slice(-cfg.hotCap);
+    const watermarks = getWatermarks();
+    const watermark = watermarks[key] || 0;
+
+    // Hot = everything from watermark onward (already archived entries excluded)
+    const hot = arr.slice(watermark);
 
     // Find arc summary entries (tagged with [ARC:] or legacy [CONSOLIDATED:])
-    const consolidated = hot.filter(e => {
+    const arcs = hot.filter(e => {
         const text = typeof e === 'object' ? (e.text || '') : String(e);
         return text.includes('[ARC:') || text.includes('[CONSOLIDATED:');
     });
 
-    return { hot, arcs: consolidated };
+    return { hot, arcs };
 }
 
 /**

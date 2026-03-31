@@ -9,6 +9,7 @@
  */
 
 import { getPhonebook } from './state-compute.js';
+import { getHotView } from './memory-tier.js';
 
 /**
  * Render the full state view into the always-on lorebook entry.
@@ -310,13 +311,14 @@ function formatStateView(state, mode = 'full') {
     }
 
     // Timeline — single chronological record, strict temporal order
-    // Replaces both story_summary and pc.timeline as one unified log
-    const timeline = Array.isArray(state.story_summary) ? state.story_summary : [];
-    if (timeline.length) {
-        // Separate consolidated entries from regular
+    // Uses hot view (watermark-based) so archived entries are excluded
+    const fullTimeline = Array.isArray(state.story_summary) ? state.story_summary : [];
+    const { hot: hotTimeline, arcs } = getHotView('story_summary', state);
+    if (hotTimeline.length) {
+        // Separate consolidated entries from regular in hot view
         const consolidated = [];
         const regular = [];
-        for (const s of timeline) {
+        for (const s of hotTimeline) {
             const text = typeof s === 'object' ? (s.text || '') : String(s);
             if (text.includes('[ARC:')) {
                 consolidated.push(s);
@@ -329,8 +331,10 @@ function formatStateView(state, mode = 'full') {
             ? [...consolidated, ...regular.slice(-10)]
             : [...consolidated, ...regular];
 
+        const archivedCount = fullTimeline.length - hotTimeline.length;
+        const archiveNote = archivedCount > 0 ? `, ${archivedCount} archived` : '';
         lines.push('');
-        lines.push(slim ? `TIMELINE (${timeline.length} total, showing ${displayEntries.length})` : `TIMELINE (${timeline.length})`);
+        lines.push(slim ? `TIMELINE (${hotTimeline.length} hot${archiveNote}, showing ${displayEntries.length})` : `TIMELINE (${hotTimeline.length} hot${archiveNote})`);
         for (const s of displayEntries) {
             const text = typeof s === 'object' ? s.text : s;
             const time = typeof s === 'object' ? (s.t || '') : '';

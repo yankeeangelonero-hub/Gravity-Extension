@@ -815,6 +815,9 @@ async function onMessageReceived(messageId) {
         }
     }
 
+    // Build reinforcement FIRST — then append tiering/size warnings on top
+    _pendingReinforcement = getReinforcement(extraction, _turnCounter);
+
     // Memory tiering — check if hot arrays exceeded caps, rotate to cold
     const rotation = checkAndRotate(_currentState);
     if (rotation.needsConsolidation) {
@@ -825,9 +828,6 @@ async function onMessageReceived(messageId) {
 
     // Check array sizes and warn if bloated
     const sizeWarnings = checkArraySizes(_currentState);
-
-    // Build reinforcement
-    _pendingReinforcement = getReinforcement(extraction, _turnCounter);
     if (sizeWarnings) {
         _pendingReinforcement = (_pendingReinforcement || '') + '\n' + sizeWarnings;
     }

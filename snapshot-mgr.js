@@ -101,19 +101,51 @@ async function rollback(targetSnapshotId) {
 }
 
 /**
- * Compute current state: from latest snapshot + subsequent transactions.
+ * Compute current state: respects rollback, then replays from the effective
+ * base (rollback target or latest snapshot) + subsequent transactions.
+ *
+ * Logic:
+ * 1. Find the most recent ROLL transaction in the ledger.
+ * 2. If found, use its target snapshot as the base. Only replay transactions
+ *    that came AFTER the ROLL (new work since rollback).
+ * 3. If no ROLL, use the latest snapshot + transactions since it.
+ * 4. If no snapshots at all, replay everything from scratch.
  * @returns {Object}
  */
 function computeCurrentState() {
-    const latest = getLatestSnapshot();
+    const allTxns = getAllTransactions();
 
+    // Find the most recent ROLL transaction
+    let lastRoll = null;
+    for (let i = allTxns.length - 1; i >= 0; i--) {
+        if (allTxns[i].op === 'ROLL') {
+            lastRoll = allTxns[i];
+            break;
+        }
+    }
+
+    if (lastRoll) {
+        // Rollback active — use the target snapshot as base
+        const targetId = lastRoll.d?.target_snapshot_id;
+        const targetSnapshot = targetId != null ? getSnapshot(targetId) : null;
+
+        if (targetSnapshot) {
+            // Replay only transactions that came AFTER the ROLL
+            const txnsAfterRoll = allTxns.filter(tx => tx.tx > lastRoll.tx);
+            return computeState(targetSnapshot.state, txnsAfterRoll);
+        }
+        // Target snapshot missing — fall through to normal computation
+        console.warn('[GravityLedger:Snapshot] ROLL target snapshot not found, computing from scratch');
+    }
+
+    // Normal path — latest snapshot + subsequent transactions
+    const latest = getLatestSnapshot();
     if (latest) {
         const txnsSince = getTransactionsSince(latest.lastTxId);
         return computeState(latest.state, txnsSince);
-    } else {
-        const allTxns = getAllTransactions();
-        return computeState(null, allTxns);
     }
+
+    return computeState(null, allTxns);
 }
 
 export {
