@@ -250,6 +250,22 @@ function parseStateScalar(raw) {
     return trimmed;
 }
 
+function findStateSeparatorIndex(text) {
+    let quote = null;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if ((ch === '"' || ch === '\'') && text[i - 1] !== '\\') {
+            quote = quote === ch ? null : (quote || ch);
+            continue;
+        }
+        if (ch === ':' && !quote) {
+            const next = text[i + 1];
+            if (next === undefined || /\s/.test(next)) return i;
+        }
+    }
+    return -1;
+}
+
 function parseStateLine(line, lineNum) {
     const raw = line.trim();
     let cleaned = raw.replace(/^[>\-\*]\s*/, '').trim();
@@ -275,7 +291,7 @@ function parseStateLine(line, lineNum) {
         return { entry: { kind: 'scene', value: parseStateScalar(sceneMatch[1]), raw }, error: null, raw };
     }
 
-    const separatorIndex = cleaned.lastIndexOf(':');
+    const separatorIndex = findStateSeparatorIndex(cleaned);
     if (separatorIndex === -1) {
         return { entry: null, error: `Line ${lineNum}: STATE line must be "path: value"`, raw };
     }
