@@ -10,7 +10,7 @@
  */
 
 import { getFieldHistory, getEntityHistory } from './state-compute.js';
-import { fetchOpenRouterModels } from './ledger-agent.js';
+import { fetchOpenRouterModels, testOpenRouterKey } from './ledger-agent.js';
 
 const PANEL_ID = 'gravity-ledger-panel';
 const TOGGLE_ID = 'gravity-ledger-toggle';
@@ -294,6 +294,8 @@ function renderAllSections() {
     const dsApiKeyInput = container.querySelector('#gl-ds-apikey');
     const dsModelEl = container.querySelector('#gl-ds-model');
     const dsKeyToggle = container.querySelector('#gl-ds-key-toggle');
+    const dsKeyTest = container.querySelector('#gl-ds-key-test');
+    const dsKeyStatus = container.querySelector('#gl-ds-key-status');
     const dsFetchBtn = container.querySelector('#gl-ds-fetch-models');
 
     const saveDeepSeek = async (label = 'Ledger agent saved') => {
@@ -321,6 +323,30 @@ function renderAllSections() {
             dsKeyToggle.innerHTML = isHidden
                 ? '<i class="fa-solid fa-eye-slash"></i>'
                 : '<i class="fa-solid fa-eye"></i>';
+        });
+    }
+    if (dsKeyTest) {
+        dsKeyTest.addEventListener('click', async () => {
+            const apiKey = dsApiKeyInput?.value?.trim() || '';
+            if (!apiKey) { toastr.warning('Enter an OpenRouter API key first.'); return; }
+            dsKeyTest.disabled = true;
+            dsKeyTest.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            if (dsKeyStatus) dsKeyStatus.textContent = 'Testing…';
+            try {
+                const result = await testOpenRouterKey(apiKey);
+                if (dsKeyStatus) {
+                    dsKeyStatus.style.color = '#4caf50';
+                    dsKeyStatus.textContent = `✓ ${result.label} — ${result.usage}`;
+                }
+            } catch (e) {
+                if (dsKeyStatus) {
+                    dsKeyStatus.style.color = '#f44336';
+                    dsKeyStatus.textContent = `✗ ${e.message}`;
+                }
+            } finally {
+                dsKeyTest.disabled = false;
+                dsKeyTest.innerHTML = '<i class="fa-solid fa-plug"></i>';
+            }
         });
     }
     if (dsFetchBtn) {
@@ -1035,7 +1061,11 @@ function renderDeepSeek() {
         <button class="gl-btn" id="gl-ds-key-toggle" title="Show/hide key" style="flex-shrink:0;padding:2px 8px;">
             <i class="fa-solid fa-eye"></i>
         </button>
-    </div>`);
+        <button class="gl-btn" id="gl-ds-key-test" title="Test key" style="flex-shrink:0;padding:2px 8px;">
+            <i class="fa-solid fa-plug"></i>
+        </button>
+    </div>
+    <div id="gl-ds-key-status" style="font-size:0.78em;margin-top:3px;min-height:1em;"></div>`);
 
     // Model
     parts.push(`<div class="gl-d-section" style="display:flex;align-items:center;justify-content:space-between;">

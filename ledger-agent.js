@@ -110,6 +110,30 @@ const DEFAULT_MODEL = 'deepseek/deepseek-chat';
 const TIMEOUT_MS = 30000;
 
 /**
+ * Test an OpenRouter API key by hitting the /auth/key endpoint.
+ * Returns { ok: true, label, usage } on success, throws on failure.
+ *
+ * @param {string} apiKey
+ * @returns {Promise<{ ok: true, label: string, usage: string }>}
+ */
+async function testOpenRouterKey(apiKey) {
+    const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+    });
+    if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status}${text ? ': ' + text.substring(0, 120) : ''}`);
+    }
+    const data = await response.json();
+    const info = data?.data || data || {};
+    const label = info.label || info.name || 'unnamed key';
+    const limit = info.limit != null ? `$${info.limit} limit` : '';
+    const used = info.usage != null ? `$${Number(info.usage).toFixed(4)} used` : '';
+    const usage = [limit, used].filter(Boolean).join(' · ') || 'no usage info';
+    return { ok: true, label, usage };
+}
+
+/**
  * Fetch available models from OpenRouter.
  *
  * @param {string} apiKey - OpenRouter API key
@@ -339,6 +363,7 @@ export {
     extractAnnotations,
     buildLedgerPrompt,
     callDeepSeek,
+    testOpenRouterKey,
     fetchOpenRouterModels,
     generateLedger,
     getDeepSeekSettings,
