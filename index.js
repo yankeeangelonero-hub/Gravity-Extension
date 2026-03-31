@@ -757,14 +757,20 @@ async function onMessageReceived(messageId) {
             }
 
             const commitIds = committed.map(tx => tx.tx);
+
+            console.log(`${LOG_PREFIX} Committed ${committed.length} TX, ${allErrors.length} errors. Turn ${_turnCounter}.`);
+            committed.forEach((tx, i) => {
+                const d = tx.d || {};
+                console.log(`  [${i}] op=${tx.op} entity=${tx.entity} id=${tx.id ?? '-'} field=${d.field ?? '-'} value=${JSON.stringify(d.value ?? d.to ?? d.name ?? null)}`);
+            });
+
             updatePanel(_currentState, _turnCounter, commitIds);
+            console.log(`${LOG_PREFIX} updatePanel called. lastTxId=${_currentState?.lastTxId} state keys:`, Object.keys(_currentState || {}));
             showLedgerStatus(messageId, 'done', summarizeTransactions(committed));
 
             if (_turnCounter % _autoSnapshotInterval === 0) {
                 await createSnapshot(_currentState, `Auto-snapshot turn ${_turnCounter}`);
             }
-
-            console.log(`${LOG_PREFIX} Committed ${committed.length} TX, ${allErrors.length} errors. Turn ${_turnCounter}.`);
         } catch (err) {
             console.error(`${LOG_PREFIX} Commit failed:`, err);
         }

@@ -451,6 +451,8 @@ function updatePanel(state, turn, committedTxIds) {
     if (turnEl) turnEl.textContent = `Turn ${turn}`;
     if (txEl) txEl.textContent = `TX ${state.lastTxId ?? 0}`;
 
+    const container = document.getElementById('gl-all-sections');
+    console.log('[GravityPanel] updatePanel — container:', !!container, 'lastTxId:', state.lastTxId, 'chars:', Object.keys(state.characters || {}).length);
     renderAllSections();
 
     // Apply change highlights after render
