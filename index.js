@@ -709,6 +709,14 @@ async function onMessageReceived(messageId) {
 
     // No block found
     if (!extraction.found) {
+        if (dsCallMeta) {
+            await writeDeepSeekLastCall({
+                ok: false,
+                tx: 0,
+                ms: dsCallMeta.ms,
+                err: 'no ledger block returned',
+            });
+        }
         _pendingReinforcement = getReinforcement(extraction, _turnCounter);
         injectPrompt();
         return;
@@ -719,6 +727,14 @@ async function onMessageReceived(messageId) {
 
     // No transactions at all (empty block or all lines failed)
     if (extraction.transactions.length === 0 && extractionErrors.length === 0) {
+        if (dsCallMeta) {
+            await writeDeepSeekLastCall({
+                ok: true,
+                tx: 0,
+                ms: dsCallMeta.ms,
+                err: null,
+            });
+        }
         _pendingReinforcement = getReinforcement(extraction, _turnCounter);
         injectPrompt();
         return;
@@ -838,6 +854,14 @@ async function onMessageReceived(messageId) {
         _pendingReinforcement = (_pendingReinforcement || '') +
             `\n[LEDGER: ${validTxns.length} TX committed, ${allErrors.length} failed.]`;
     } else if (validTxns.length === 0 && allErrors.length > 0) {
+        if (dsCallMeta) {
+            await writeDeepSeekLastCall({
+                ok: false,
+                tx: 0,
+                ms: dsCallMeta.ms,
+                err: `${allErrors.length} ledger errors`,
+            });
+        }
         _pendingReinforcement = formatErrors(allErrors.map(e => ({
             field: `line ${e.lineNum}`,
             message: e.error,

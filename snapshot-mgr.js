@@ -93,7 +93,7 @@ async function rollback(targetSnapshotId) {
         op: 'ROLL',
         e: 'system',
         id: `rollback-to-${targetSnapshotId}`,
-        d: { target_snapshot_id: targetSnapshotId },
+        d: { target_snapshot_id: targetSnapshotId, target_last_tx_id: snapshot.lastTxId },
         r: `Rolled back to snapshot ${targetSnapshotId}: ${snapshot.label}`,
     }]);
 
@@ -105,13 +105,23 @@ async function rollback(targetSnapshotId) {
  * @returns {Object}
  */
 function computeCurrentState() {
+    const allTxns = getAllTransactions();
+    const latestRollback = [...allTxns].reverse().find(tx => tx.op === 'ROLL' && tx.d?.target_snapshot_id != null);
+
+    if (latestRollback) {
+        const targetSnapshot = getSnapshot(latestRollback.d.target_snapshot_id);
+        if (targetSnapshot) {
+            const txnsAfterRollback = allTxns.filter(tx => tx.tx > latestRollback.tx);
+            return computeState(targetSnapshot.state, txnsAfterRollback);
+        }
+    }
+
     const latest = getLatestSnapshot();
 
     if (latest) {
         const txnsSince = getTransactionsSince(latest.lastTxId);
         return computeState(latest.state, txnsSince);
     } else {
-        const allTxns = getAllTransactions();
         return computeState(null, allTxns);
     }
 }
