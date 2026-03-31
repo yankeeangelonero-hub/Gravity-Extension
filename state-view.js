@@ -23,12 +23,14 @@ import { getPhonebook } from './state-compute.js';
  */
 function formatStateView(state, mode = 'full') {
     const lines = [];
-    const slim = (mode === 'slim');
+    // prose mode = no entity IDs, no ledger field hints — Opus doesn't write ledger when DeepSeek active
+    const slim = (mode === 'slim' || mode === 'prose');
+    const prose = (mode === 'prose');
     lines.push('═══ GRAVITY STATE VIEW ═══');
     lines.push('');
 
     // ── Entity Registry (what to write to) ─────────────────────────────
-    lines.push('ENTITY REGISTRY — use these IDs in ledger transactions');
+    if (!prose) lines.push('ENTITY REGISTRY — use these IDs in ledger transactions');
 
     // Characters
     const phonebook = getPhonebook(state);
@@ -38,7 +40,7 @@ function formatStateView(state, mode = 'full') {
         if (char.tier === 'UNKNOWN') continue;
         let charLine = `  ${char.tier} "${char.name || char.id}"`;
         if (char.power != null) charLine += ` [power:${char.power}]`;
-        charLine += ` → id: ${char.id}`;
+        if (!prose) charLine += ` → id: ${char.id}`;
         lines.push(charLine);
         if (char.location) lines.push(`    Location: ${char.location}`);
         if (!slim && char.condition) lines.push(`    Condition: ${char.condition}`);
@@ -68,7 +70,7 @@ function formatStateView(state, mode = 'full') {
             const ownerName = owner?.name || c.owner_id;
             let cLine = `  ${c.name} [${c.integrity}] (${ownerName})`;
             if (c.shedding_order) cLine += ` shed:${c.shedding_order}`;
-            cLine += ` → id: ${c.id}`;
+            if (!prose) cLine += ` → id: ${c.id}`;
             lines.push(cLine);
             if (!slim && c.profile) {
                 lines.push(`    ${c.profile}`);
@@ -86,7 +88,7 @@ function formatStateView(state, mode = 'full') {
         for (const col of allCollisions) {
             let colLine = `  ${col.name || col.id} [${col.status}] dist:${col.distance || '?'}`;
             if (col.mode === 'combat') colLine += ' ⚔';
-            colLine += ` → id: ${col.id}`;
+            if (!prose) colLine += ` → id: ${col.id}`;
             lines.push(colLine);
         }
     }
@@ -97,14 +99,18 @@ function formatStateView(state, mode = 'full') {
         lines.push('');
         lines.push('Chapters:');
         for (const ch of activeChapters) {
-            lines.push(`  Ch${ch.number || '?'} "${ch.title || ch.focus || '?'}" [${ch.status}] → id: ${ch.id}`);
+            lines.push(`  Ch${ch.number || '?'} "${ch.title || ch.focus || '?'}" [${ch.status}]${prose ? '' : ` → id: ${ch.id}`}`);
         }
     }
 
     // Singletons
+    if (!prose) {
+        lines.push('');
+        lines.push('Singletons (no id needed):');
+        lines.push('  world — constants, pressure_points, world_state');
+    }
+
     lines.push('');
-    lines.push('Singletons (no id needed):');
-    lines.push('  world — constants, pressure_points, world_state');
     if (state.pc.name) {
         let pcSingleton = `  pc — "${state.pc.name}"`;
         if (state.pc.location) pcSingleton += ` @ ${state.pc.location}`;
@@ -137,7 +143,7 @@ function formatStateView(state, mode = 'full') {
                 // Slim: just name + power + stance
                 const slimStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
                 const slimPower = f.power ? ` [${f.power}]` : '';
-                lines.push(`  ${f.name || f.id}${slimPower} | Stance: ${slimStance} → id: ${f.id}`);
+                lines.push(`  ${f.name || f.id}${slimPower} | Stance: ${slimStance}${prose ? '' : ` → id: ${f.id}`}`);
             } else {
                 // shown in detail section below
                 lines.push(`  ${f.name || f.id} → id: ${f.id}`);

@@ -14,10 +14,13 @@ import { computeState } from './state-compute.js';
 import { formatStateView, formatReadme } from './state-view.js';
 import { extractLedgerBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
-import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
+import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning, showLedgerStatus } from './ui-panel.js';
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
 import { checkAndRotate, buildConsolidationPrompt } from './memory-tier.js';
-import { buildRulesInjection } from './rules-engine.js';
+import { getProseSettings, buildSettingsLine } from './rules-engine.js';
+import { buildModuleMap, activateModules, writeModuleContent, disableAll } from './lorebook-manager.js';
+import { generateLedger, getDeepSeekSettings, summarizeTransactions } from './ledger-agent.js';
+import { applyAllPresetSettings, applyProseStyle, applyWordCount, applyDivination } from './preset-manager.js';
 
 const MODULE_NAME = 'gravity-ledger';
 const LOG_PREFIX = '[GravityLedger]';
@@ -242,26 +245,37 @@ function injectPrompt(mode) {
     const isIntegration = activeMode === 'integration';
 
     try {
-        // Rules — turn-type-specific narrative rules (replaces preset L0-L3 + Anchor)
+        // Rules — activate lorebook modules for this turn mode.
+        // Lorebook entries are toggled by the extension, not keyword-driven.
         try {
-            const rulesType = isIntegration ? 'integration'
+            const lorebookMode = isIntegration ? 'integration'
                 : _pendingDeductionType !== 'regular' ? _pendingDeductionType
-                : 'normal';
-            setExtensionPrompt(`${MODULE_NAME}_rules`, buildRulesInjection(rulesType), PROMPT_IN_CHAT, 0);
-        } catch (rulesErr) {
-            console.warn(`${LOG_PREFIX} Rules injection failed:`, rulesErr);
-            setExtensionPrompt(`${MODULE_NAME}_rules`, '', PROMPT_NONE, 0);
+                : 'regular';
+            const dsSettings = getDeepSeekSettings();
+            const proseSettings = getProseSettings();
+            activateModules(lorebookMode, {
+                deepseekEnabled: dsSettings.enabled,
+                sonnetTier: proseSettings.modelTier === 'sonnet',
+            });
+        } catch (lorebookErr) {
+            console.warn(`${LOG_PREFIX} Lorebook activation failed:`, lorebookErr);
         }
 
-        // State view — always full (LLM has only 3-5 messages of context)
+        // _rules slot no longer used — lorebook handles all static rule content
+        setExtensionPrompt(`${MODULE_NAME}_rules`, '', PROMPT_NONE, 0);
+        // _readme slot no longer used — lorebook entry gravity_ledger-core handles this
+        setExtensionPrompt(`${MODULE_NAME}_readme`, '', PROMPT_NONE, 0);
+
+        // State view — computed every turn from ledger transactions
         if (_currentState) {
-            const stateView = formatStateView(_currentState, isRegular ? 'slim' : 'full');
+            const dsSettings = getDeepSeekSettings();
+            // prose mode = no entity IDs (Opus doesn't write ledger when DS active)
+            const viewMode = dsSettings.enabled ? 'prose'
+                : isRegular ? 'slim'
+                : 'full';
+            const stateView = formatStateView(_currentState, viewMode);
             setExtensionPrompt(`${MODULE_NAME}_state`, stateView, PROMPT_IN_CHAT, 0);
         }
-
-        // Format readme — core on regular/advance, full on integration
-        const readme = formatReadme(isIntegration ? 'full' : 'core');
-        setExtensionPrompt(`${MODULE_NAME}_readme`, readme, PROMPT_IN_CHAT, 0);
 
         // Setup wizard phase prompt (overrides corrections when active)
         const setupPrompt = getPhasePrompt();
@@ -484,13 +498,27 @@ No collision survives detonation.`;
             setExtensionPrompt(`${MODULE_NAME}_intimacy`, '', PROMPT_NONE, 0);
         }
 
-        // Nudge — minimal reminder (rules + deduction template are in _rules now)
+        // Nudge — per-session settings + mode reminder.
+        // Includes tense/perspective (session-specific, can't live in preset).
         // _pendingDeductionType is reset in onMessageReceived, NOT here —
         // GENERATION_STARTED re-fires injectPrompt() and must see the correct type.
-        const nudgeText = `[SYSTEM: ---DEDUCTION--- → Prose → ---LEDGER---
+        {
+            const dsSettings = getDeepSeekSettings();
+            const settingsLine = buildSettingsLine();
+            let nudgeText;
+            if (dsSettings.enabled) {
+                nudgeText = `[SYSTEM: ${settingsLine}
+Write prose only. Mark state changes with annotations:
+<!-- GRAVITY: constraint:id STATE, collision:id distance=N, char:id TIER -->
+Do NOT write a ---DEDUCTION--- or ---LEDGER--- block.]`;
+            } else {
+                nudgeText = `[SYSTEM: ${settingsLine}
+---DEDUCTION--- → Prose → ---LEDGER---
 Do ALL thinking inside deduction markers. One pass, not two.
 Record all changes in ledger. Update current_scene every turn.${_uncappedTurn ? ' UNCAPPED — full cleanup allowed.' : ''}]`;
-        setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
+            }
+            setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
+        }
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
     }
@@ -562,6 +590,19 @@ async function initialize(force = false) {
         _currentState = computeCurrentState();
         _initialized = true;
 
+        // Build lorebook module map for this session
+        buildModuleMap();
+
+        // Apply per-chat prose/word-count/divination settings to preset entries
+        const proseSettings = getProseSettings();
+        const { chatMetadata: cm } = SillyTavern.getContext();
+        applyAllPresetSettings({
+            proseStyle:  proseSettings.proseStyle,
+            wordCount:   proseSettings.wordCount,
+            divination:  cm?.['gravity_divination_system'] || 'arcana',
+            sonnetTier:  proseSettings.modelTier === 'sonnet',
+        });
+
         const txCount = getAllTransactions().length;
         setBookName(chatId);
         injectPrompt();
@@ -576,6 +617,7 @@ async function initialize(force = false) {
 async function onChatChanged() {
     const newChatId = getChatId();
     console.log(`${LOG_PREFIX} Chat changed → ${newChatId || '(none)'}`);
+    disableAll(); // Disable all lorebook entries before reinitializing
     resetLedger();
     await initialize(true);
 }
@@ -597,12 +639,40 @@ async function onMessageReceived(messageId) {
 
     _turnCounter++;
 
-    // Extract ledger block (command-style or legacy JSON)
-    const extraction = extractLedgerBlock(message.mes);
+    // DeepSeek split: if enabled, Opus wrote prose+annotations only.
+    // Call DeepSeek post-generation to produce the ledger block.
+    const dsSettings = getDeepSeekSettings();
+    if (dsSettings.enabled && dsSettings.apiKey) {
+        showLedgerStatus(messageId, 'pending');
+        const stateView = _currentState ? formatStateView(_currentState, 'full') : '';
+        const readme = formatReadme('core');
+        const result = await generateLedger(message.mes, _currentState, {
+            apiKey: dsSettings.apiKey,
+            model: dsSettings.model,
+            stateView,
+            readme,
+        });
 
-    // Strip block from displayed message
-    if (extraction.found) {
-        message.mes = extraction.cleanedMessage;
+        if (result) {
+            // Clean prose: strip annotations, replace displayed message
+            message.mes = result.cleanedProse;
+            // Feed DeepSeek's ledger block through the existing parse pipeline
+            var extraction = extractLedgerBlock(result.ledgerText);
+        } else {
+            // DeepSeek failed — request ledger from prose model next turn
+            _pendingReinforcement = '[LEDGER: Auto-extraction unavailable this turn. Include ---LEDGER--- block in your next response.]';
+            showLedgerStatus(messageId, 'failed');
+            injectPrompt();
+            return;
+        }
+    } else {
+        // Legacy mode: Opus writes ledger inline
+        var extraction = extractLedgerBlock(message.mes);
+
+        // Strip block from displayed message
+        if (extraction.found) {
+            message.mes = extraction.cleanedMessage;
+        }
     }
 
     // No block found
@@ -686,6 +756,7 @@ async function onMessageReceived(messageId) {
 
             const commitIds = committed.map(tx => tx.tx);
             updatePanel(_currentState, _turnCounter, commitIds);
+            showLedgerStatus(messageId, 'done', summarizeTransactions(committed));
 
             if (_turnCounter % _autoSnapshotInterval === 0) {
                 await createSnapshot(_currentState, `Auto-snapshot turn ${_turnCounter}`);
@@ -726,6 +797,9 @@ async function onMessageReceived(messageId) {
             message: e.error,
             fix: 'Resubmit corrected line',
         })));
+        showLedgerStatus(messageId, 'error', `${allErrors.length} ledger errors — retrying`);
+    } else if (validTxns.length === 0) {
+        showLedgerStatus(messageId, 'empty');
     }
 
     injectPrompt();
@@ -746,7 +820,7 @@ async function onUserMessage(messageId) {
         _pendingOOCInjection = `[GRAVITY INTIMACY — continuing intimate scene. The player chose an action.
 
 STAY IN INTIMATE SCENE MODE. Write the next prose beat responding to the player's action.
-Read the previous turn's INTIMACY DEDUCTION for scene continuity — setting, clothing, exposure, arousal, and position carry forward unless explicitly changed by the player's action.
+Carry forward scene continuity from the previous deduction — setting, clothing, exposure, arousal, and position persist unless the player's action explicitly changes them.
 Then generate 4-5 new clickable choices at the end:
 <span class="act" data-value="intimate: [concrete first-person action]">Short display text</span>
 
@@ -757,21 +831,7 @@ RULES STILL ACTIVE:
 - Partner interiority flash every 2-3 turns (italicized first-person, 2-4 sentences).
 - Collision check: if any collision hits distance 0, it fires mid-scene.
 - "OOC: fade to black" → cut to afterglow.
-
-INTIMACY DEDUCTION (use this format, one line per item — carry forward from previous turn, update what changed):
----DEDUCTION---
-Setting: [where — surface, lighting, temperature]
-Clothing: [each participant — what's on, off, displaced]
-Exposure: [each participant — what skin is visible/accessible]
-Arousal: [physical indicators — concrete, not numeric]
-Position: [who's where, what's touching what]
-Stance: [partner's current intimacy_stance]
-Constraint: [which is pressured — or: none]
-Partner wants: [what their body is showing]
-History: [pattern from intimate_history — or: first encounter]
-Beat: [ONE sensory beat.]
----END DEDUCTION---
-Then prose, then choices, then ledger block.]`;
+The deduction template is injected separately via the lorebook.]`;
         injectPrompt('advance');
         return;
     }
@@ -808,11 +868,12 @@ async function handleSetupButton() {
     const answers = await showSetupPopup();
     if (!answers) return; // User cancelled
 
-    // Store combat rules if provided
+    // Store combat rules if provided — also write into lorebook combat_scale entry
     if (answers.combat_rules) {
         const { chatMetadata, saveMetadata } = SillyTavern.getContext();
         chatMetadata['gravity_combat_rules'] = answers.combat_rules;
         await saveMetadata();
+        writeModuleContent('combat_scale', `COMBAT SCALE (this story):\n${answers.combat_rules}`);
     }
 
     startSetup();
@@ -975,17 +1036,7 @@ The draw colors the world's move — it does not prescribe it.
 
 ${focusPrompt}
 
-Record the draw: SET divination field=last_draw value="[draw result]"
-
-ADVANCE DEDUCTION (use this format, one line per item):
----DEDUCTION---
-Focus: [scene/world/offscreen/new_threat/collision]
-What moves: [the specific thing that happens]
-Draw: [how the divination shapes this]
-Collision: [which tightens or spawns — or: none]
-Beat: [what happens.]
----END DEDUCTION---
-Then prose, then ledger block.]`;
+Record the draw: SET divination field=last_draw value="[draw result]"]`;
     }
 
     injectPrompt('advance');
@@ -1086,19 +1137,7 @@ SETUP TURN: No combat collision exists yet. This turn is SETUP:
 2. SET power on any new enemy characters based on the combat rules above.
 3. Describe the threat and the opening situation.
 4. Do NOT resolve a combat exchange yet — setup is the beat.` : ''}
-Record the draw: SET divination field=last_draw value="[draw result]"
-
-COMBAT DEDUCTION (use this format, one line per item):
----DEDUCTION---
-Action: [what the PC is attempting]
-Power: [PC power:X vs enemy power:Y — gap, can this work?]
-Advantages: [what PC has established — traits, prep, terrain, reads]
-Enemy: [what the enemy would logically do — adapt, counter, exploit weakness]
-Wounds: [PC wounds, enemy wounds — how these affect this exchange]
-Distance: [current → change? why?]
-Beat: [ONE exchange. What happens.]
----END DEDUCTION---
-Then prose, then ledger block.]`;
+Record the draw: SET divination field=last_draw value="[draw result]"]`;
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} ${isSetup ? 'prepares to fight.' : 'engages in combat.'}*`);
@@ -1226,21 +1265,7 @@ INTIMATE HISTORY — cumulative development tracking. Each MAP_SET BUILDS on pre
 
 Each update should reference encounter NUMBER so the development arc is traceable. A preference discovered in encounter 2 that becomes a pattern by encounter 5 is character growth. Track it.
 
-INTIMACY DEDUCTION (use this format, one line per item):
----DEDUCTION---
-Setting: [where — surface, lighting, temperature]
-Clothing: [each participant — what's on, off, displaced]
-Exposure: [each participant — what skin is visible/accessible]
-Arousal: [physical indicators — concrete, not numeric]
-Position: [who's where, what's touching what]
-Stance: [partner's current intimacy_stance — what they'd do right now]
-Constraint: [which constraint is pressured by this intimacy — or: none]
-Partner wants: [what they haven't asked for but their body is showing]
-History: [what pattern from intimate_history applies — or: first encounter]
-Draw: [how divination shapes the sexual energy]
-Beat: [ONE sensory beat.]
----END DEDUCTION---
-Then prose, then choices, then ledger block.]`;
+The deduction template is injected separately via the lorebook.]`;
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} moves closer.*`);
@@ -1508,8 +1533,22 @@ async function handleImportData(data) {
             await saveMetadata();
             toastr.info(`Word count: ${length}`);
         },
-        onSettingsChange: () => {
-            // Re-inject prompts immediately so the LLM sees updated settings
+        onSettingsChange: (changedKey, newValue) => {
+            const { chatMetadata: cm } = SillyTavern.getContext();
+            if (changedKey === 'gravity_prose_style') {
+                const tier = cm?.['gravity_model_tier'] || 'opus';
+                applyProseStyle(newValue, tier === 'sonnet');
+            }
+            if (changedKey === 'gravity_model_tier') {
+                const style = cm?.['gravity_prose_style'] || 'noir';
+                applyProseStyle(style, newValue === 'sonnet');
+            }
+            if (changedKey === 'gravity_word_count') {
+                applyWordCount(newValue);
+            }
+            if (changedKey === 'gravity_divination_system') {
+                applyDivination(newValue);
+            }
             injectPrompt();
         },
     });

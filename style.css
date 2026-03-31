@@ -183,3 +183,14 @@
 #gl-input-bar .gl-input-btn { background:rgba(255,255,255,.05); border:1px solid #444; border-radius:4px; color:#ccc; font-size:11px; padding:4px 10px; cursor:pointer; transition:background .15s; font-family:inherit; }
 #gl-input-bar .gl-input-btn:hover { background:rgba(255,255,255,.12); color:#fff; }
 #gl-input-bar .gl-input-btn i { margin-right:3px; }
+
+/* Ledger status block — shown below each AI message after commit */
+.gl-ledger-status { display:flex; align-items:baseline; gap:5px; margin-top:8px; padding:4px 8px; border-top:1px solid rgba(255,255,255,.06); font-size:0.78em; font-family:inherit; color:#666; }
+.gl-ls-icon { font-size:0.9em; flex-shrink:0; }
+.gl-ls-text { color:#777; }
+.gl-ls-summary { color:#555; margin-left:2px; }
+.gl-ls-ok { color:#4a9; }
+.gl-ls-warn { color:#b87; }
+.gl-ls-dim { color:#444; }
+@keyframes gl-spin { to { transform:rotate(360deg); } }
+.gl-ls-spin { display:inline-block; animation:gl-spin 1s linear infinite; color:#667; }

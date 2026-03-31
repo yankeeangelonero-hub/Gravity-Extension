@@ -204,6 +204,7 @@ function renderAllSections() {
         { id: 'collisions', icon: 'fa-burst', title: 'Collisions', html: renderCollisions(_lastState) },
         { id: 'arc', icon: 'fa-book-open', title: 'Arc & Chapters', html: renderArc(_lastState) },
         { id: 'settings', icon: 'fa-gear', title: 'Settings', html: renderSettings(_lastState) },
+        { id: 'deepseek', icon: 'fa-robot', title: 'DeepSeek', html: renderDeepSeek() },
         { id: 'exemplars', icon: 'fa-thumbs-up', title: 'Style Exemplars', html: renderExemplars() },
     ];
 
@@ -264,7 +265,7 @@ function renderAllSections() {
         chatMetadata[key] = value;
         await saveMetadata();
         toastr.info(`${label}: ${value}`);
-        if (_onSettingsChange) _onSettingsChange();
+        if (_onSettingsChange) _onSettingsChange(key, value);
     };
 
     // Model tier selector
@@ -301,6 +302,38 @@ function renderAllSections() {
     const styleSelect = container.querySelector('#gl-style-select');
     if (styleSelect) {
         styleSelect.addEventListener('change', () => saveSetting('gravity_prose_style', styleSelect.value, 'Prose style'));
+    }
+
+    // DeepSeek settings
+    const dsEnabledCb = container.querySelector('#gl-ds-enabled');
+    const dsApiKeyInput = container.querySelector('#gl-ds-apikey');
+    const dsModelSelect = container.querySelector('#gl-ds-model');
+    const dsKeyToggle = container.querySelector('#gl-ds-key-toggle');
+
+    const saveDeepSeek = async () => {
+        const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+        chatMetadata['gravity_deepseek'] = {
+            enabled: dsEnabledCb?.checked === true,
+            apiKey: dsApiKeyInput?.value?.trim() || '',
+            model: dsModelSelect?.value || 'deepseek-chat',
+        };
+        await saveMetadata();
+        if (_onSettingsChange) _onSettingsChange('gravity_deepseek', chatMetadata['gravity_deepseek']);
+        toastr.info(`DeepSeek ledger agent: ${dsEnabledCb?.checked ? 'enabled' : 'disabled'}`);
+    };
+
+    if (dsEnabledCb) dsEnabledCb.addEventListener('change', saveDeepSeek);
+    if (dsApiKeyInput) dsApiKeyInput.addEventListener('blur', saveDeepSeek);
+    if (dsModelSelect) dsModelSelect.addEventListener('change', saveDeepSeek);
+    if (dsKeyToggle) {
+        dsKeyToggle.addEventListener('click', () => {
+            if (!dsApiKeyInput) return;
+            const isHidden = dsApiKeyInput.type === 'password';
+            dsApiKeyInput.type = isHidden ? 'text' : 'password';
+            dsKeyToggle.innerHTML = isHidden
+                ? '<i class="fa-solid fa-eye-slash"></i>'
+                : '<i class="fa-solid fa-eye"></i>';
+        });
     }
 
     // Auto-save textareas — save on blur (click away)
@@ -939,14 +972,14 @@ function renderSettings(state) {
     </div>`);
 
     // Prose Style
-    const activeStyle = chatMetadata?.['gravity_prose_style'] || 'noir-realist';
+    const activeStyle = chatMetadata?.['gravity_prose_style'] || 'noir';
     parts.push(`<div class="gl-d-row"><b>Prose Style:</b>
         <select class="gl-div-select" id="gl-style-select">
-            <option value="noir-realist"${activeStyle === 'noir-realist' ? ' selected' : ''}>Noir Realist</option>
+            <option value="noir"${activeStyle === 'noir' ? ' selected' : ''}>Noir Realist</option>
             <option value="literary"${activeStyle === 'literary' ? ' selected' : ''}>Literary Fiction</option>
             <option value="cinematic"${activeStyle === 'cinematic' ? ' selected' : ''}>Cinematic</option>
             <option value="minimalist"${activeStyle === 'minimalist' ? ' selected' : ''}>Minimalist</option>
-            <option value="wuxia-chronicle"${activeStyle === 'wuxia-chronicle' ? ' selected' : ''}>Wuxia Chronicle</option>
+            <option value="wuxia"${activeStyle === 'wuxia' ? ' selected' : ''}>Wuxia Chronicle</option>
         </select>
     </div>`);
 
@@ -991,6 +1024,60 @@ function renderSettings(state) {
             return `<div class="gl-d-row">${esc(rd.value || '?')} — ${esc(rd.reading || '')} <span class="gl-history-time">${esc(rd.t || rd.timestamp || '')}</span></div>`;
         });
         parts.push(collapsibleList(readItems, 3, 'older readings'));
+    }
+
+    return parts.join('');
+}
+
+function renderDeepSeek() {
+    const { chatMetadata } = SillyTavern.getContext();
+    const ds = chatMetadata?.['gravity_deepseek'] || {};
+    const dsEnabled = ds.enabled === true;
+    const dsApiKey = ds.apiKey || '';
+    const dsModel = ds.model || 'deepseek-chat';
+
+    const parts = [];
+    parts.push(`<div class="gl-d-section" style="margin-top:0">
+        <span style="font-size:0.8em;color:#888;">Opus writes prose only — DeepSeek writes the ledger as a separate low-cost call.</span>
+    </div>`);
+
+    // Enable toggle
+    parts.push(`<div class="gl-d-row" style="display:flex;align-items:center;gap:8px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="gl-ds-enabled" ${dsEnabled ? 'checked' : ''} />
+            <span>Enable DeepSeek ledger agent</span>
+        </label>
+    </div>`);
+
+    // API key
+    parts.push(`<div class="gl-d-section"><b>API Key</b></div>`);
+    parts.push(`<div class="gl-d-row" style="display:flex;gap:6px;align-items:center;">
+        <input type="password" id="gl-ds-apikey" class="gl-input-field"
+            placeholder="sk-..." value="${esc(dsApiKey)}"
+            style="flex:1;font-family:monospace;font-size:0.85em;" />
+        <button class="gl-btn" id="gl-ds-key-toggle" title="Show/hide key" style="flex-shrink:0;padding:2px 8px;">
+            <i class="fa-solid fa-eye"></i>
+        </button>
+    </div>`);
+
+    // Model
+    parts.push(`<div class="gl-d-section"><b>Model</b></div>`);
+    parts.push(`<div class="gl-d-row">
+        <select class="gl-div-select" id="gl-ds-model">
+            <option value="deepseek-chat"${dsModel === 'deepseek-chat' ? ' selected' : ''}>deepseek-chat — DeepSeek-V3 (fast, cheap)</option>
+            <option value="deepseek-reasoner"${dsModel === 'deepseek-reasoner' ? ' selected' : ''}>deepseek-reasoner — R1 (thorough, slower)</option>
+        </select>
+    </div>`);
+
+    // Status of last call
+    const dsStatus = chatMetadata?.['gravity_deepseek_last'] || {};
+    if (dsStatus.ts) {
+        const statusIcon = dsStatus.ok ? '✓' : '⚠';
+        const statusText = dsStatus.ok
+            ? `${dsStatus.tx ?? '?'} tx in ${dsStatus.ms ?? '?'}ms`
+            : `failed — ${esc(dsStatus.err || 'unknown error')}`;
+        parts.push(`<div class="gl-d-section"><b>Last call</b></div>`);
+        parts.push(`<div class="gl-d-row" style="font-size:0.8em;color:#888;">${statusIcon} ${statusText} <span style="margin-left:6px;opacity:0.5;">${esc(dsStatus.ts)}</span></div>`);
     }
 
     return parts.join('');
@@ -1101,6 +1188,49 @@ function initDrag(panel, handle) {
     document.addEventListener('mouseup', () => { isDragging = false; panel.style.transition = ''; });
 }
 
+/**
+ * Inject or update a ledger status block below the specified chat message.
+ *
+ * @param {number} messageId - Chat message index (0-based, matching SillyTavern's mesid attr)
+ * @param {'pending'|'done'|'empty'|'failed'|'error'} status
+ * @param {string|null} [summary] - Optional summary string from summarizeTransactions()
+ */
+function showLedgerStatus(messageId, status, summary = null) {
+    // Try to find the message by mesid, fall back to last message
+    let mesEl = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
+    if (!mesEl) {
+        const all = document.querySelectorAll('#chat .mes');
+        if (all.length) mesEl = all[all.length - 1];
+    }
+    if (!mesEl) return;
+
+    let statusEl = mesEl.querySelector('.gl-ledger-status');
+    if (!statusEl) {
+        statusEl = document.createElement('div');
+        statusEl.className = 'gl-ledger-status';
+        const mesText = mesEl.querySelector('.mes_text');
+        if (mesText) {
+            mesText.insertAdjacentElement('afterend', statusEl);
+        } else {
+            mesEl.appendChild(statusEl);
+        }
+    }
+
+    if (status === 'pending') {
+        statusEl.innerHTML = `<span class="gl-ls-icon gl-ls-spin">⟳</span><span class="gl-ls-text">Ledger updating…</span>`;
+    } else if (status === 'done') {
+        const detail = summary ? ` <span class="gl-ls-summary">${esc(summary)}</span>` : '';
+        statusEl.innerHTML = `<span class="gl-ls-icon gl-ls-ok">✓</span><span class="gl-ls-text">Ledger</span>${detail}`;
+    } else if (status === 'empty') {
+        statusEl.innerHTML = `<span class="gl-ls-icon gl-ls-dim">◦</span><span class="gl-ls-text gl-ls-dim">No ledger changes</span>`;
+    } else if (status === 'failed') {
+        statusEl.innerHTML = `<span class="gl-ls-icon gl-ls-warn">⚠</span><span class="gl-ls-text gl-ls-warn">Ledger unavailable — will retry next turn</span>`;
+    } else if (status === 'error') {
+        const detail = summary ? ` <span class="gl-ls-summary gl-ls-warn">${esc(summary)}</span>` : '';
+        statusEl.innerHTML = `<span class="gl-ls-icon gl-ls-warn">⚠</span><span class="gl-ls-text gl-ls-warn">Ledger errors</span>${detail}`;
+    }
+}
+
 function showSetupPhase(label) {
     const indicator = document.getElementById('gl-setup-indicator');
     const labelEl = document.getElementById('gl-setup-label');
@@ -1113,4 +1243,4 @@ function showSetupPhase(label) {
     }
 }
 
-export { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning, PANEL_ID };
+export { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning, showLedgerStatus, PANEL_ID };
