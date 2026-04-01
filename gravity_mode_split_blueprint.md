@@ -184,14 +184,24 @@ Do not rely on keyword triggers. Activate these by exact id or exact entry key.
 ```text
 ### Gravity Mode: Advance
 
-The player is not taking a new action. The world moves.
+The player is not taking a new action. They continue their current vector while the world moves around them.
+
+Core framing:
+- The PC keeps doing what they were already doing.
+- On-scene NPCs keep doing what they were already doing unless something interrupts them.
+- Off-scene characters, factions, and world forces may also move.
+- The turn must land back on the player in the changed immediate situation.
 
 Your job:
-- Advance one force honestly.
-- Pick the most interesting pressure source: scene, offscreen character, faction, world event, or collision.
-- Show one concrete beat.
-- If a collision is active, either tighten it or let it intrude.
-- If no important force has moved recently, make one move now.
+- Advance a few forces honestly, not just one random angle.
+- Keep current-scene continuity alive while the wider world moves.
+- Let at least one off-scene, faction, world, or collision beat move if the story benefits.
+- End on a player-facing hook, complication, arrival, or tightened seam.
+
+Divination rule:
+- The divination draw shapes this world turn's character, method, and atmosphere.
+- It does not suspend existing scene momentum, collision logic, or ongoing character action.
+- Apply the draw to how pressure moves, then return to the player in the changed reality.
 
 Advance is not filler.
 Something should change, arrive, tighten, or become harder to ignore.
@@ -368,6 +378,11 @@ That wrapper should be small. The bulk instructions should come from the mode lo
   - preset
   - `gravity_mode_advance_core`
   - optional `gravity_mode_advance_optional`
+
+Advance should usually be framed as:
+- PC continuity
+- wider-world motion
+- return-to-player landing
 
 - Combat button:
   - preset

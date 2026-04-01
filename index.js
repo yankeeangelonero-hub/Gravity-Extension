@@ -1324,15 +1324,19 @@ async function handleTimeskipButton() {
         }
     }
 
+    const timeskipDraw = drawDivination();
+
     _pendingOOCInjection = buildModeInjection(
         'GRAVITY TIMESKIP',
         `The user requested a time skip of "${duration}". For this response only, narrate as an impartial omniscient voice called "The Passage of Time."
+
+${formatDrawInstruction(timeskipDraw, 'The draw shapes the character of the elapsed time - what kind of pressure, drift, or convergence defines this skip. It does not override continuity or collision logic.')}
 
 First, sanity-check whether active danger, pursuit, or unresolved pressure would interrupt the skip. If yes, abort early and drop the player into that interruption.
 
 Advance the world honestly across 3-6 beats: the PC's rhythm, at least one off-screen faction or tracked character, a collision or pressure point tightening, and the landing scene that demands response now.
 
-Use a full LEDGER block for the structural updates across characters, factions, collisions, world, pressure points, timeline, and summary. Do not close the chapter.`,
+Use a full LEDGER block for the structural updates across characters, factions, collisions, world, pressure points, timeline, and summary. Record divination.last_draw in the update block. Do not close the chapter.`,
         [MODE_LOREBOOK_KEYS.timeskipCore],
     );
 
