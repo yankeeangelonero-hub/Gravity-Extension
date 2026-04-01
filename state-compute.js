@@ -113,6 +113,23 @@ function getFieldHistory(state, entityType, entityId, field) {
     return state._history[key] || [];
 }
 
+function getArrayFieldHistory(state, entityType, entityId, field) {
+    return getFieldHistory(state, entityType, entityId, `${field}[]`);
+}
+
+function toComparableArrayValue(value) {
+    return typeof value === 'string'
+        ? value.replace(/\s+/g, ' ').trim().toLowerCase()
+        : JSON.stringify(value);
+}
+
+function getArrayItemHistory(state, entityType, entityId, field, value) {
+    const target = toComparableArrayValue(value);
+    return getArrayFieldHistory(state, entityType, entityId, field).filter(entry =>
+        toComparableArrayValue(entry.to !== undefined ? entry.to : entry.from) === target
+    );
+}
+
 /**
  * Get all history for an entity.
  */
@@ -153,7 +170,14 @@ function applyTransaction(state, tx) {
             if (isSingleton) {
                 Object.assign(state[collection], tx.d);
             } else {
-                state[collection][tx.id] = { id: tx.id, ...tx.d };
+                const data = { id: tx.id, ...tx.d };
+                // Backward compat: normalize legacy CRASHED status on creation
+                if (tx.e === 'collision' && typeof data.status === 'string' &&
+                    data.status.trim().toUpperCase() === 'CRASHED') {
+                    data.status = 'RESOLVED';
+                    if (!data.outcome_type) data.outcome_type = 'CRASHED';
+                }
+                state[collection][tx.id] = data;
             }
             break;
         }
@@ -161,9 +185,16 @@ function applyTransaction(state, tx) {
         case 'TR': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
+                let newTo = tx.d.to;
+                // Backward compat: normalize MOVE collision status CRASHED → RESOLVED
+                if (tx.e === 'collision' && tx.d.f === 'status' &&
+                    typeof newTo === 'string' && newTo.trim().toUpperCase() === 'CRASHED') {
+                    newTo = 'RESOLVED';
+                    if (!target.outcome_type) target.outcome_type = 'CRASHED';
+                }
                 const oldVal = target[tx.d.f];
-                target[tx.d.f] = tx.d.to;
-                recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, tx.d.to, tx);
+                target[tx.d.f] = newTo;
+                recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, newTo, tx);
             }
             break;
         }
@@ -171,10 +202,17 @@ function applyTransaction(state, tx) {
         case 'S': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
+                let newVal = tx.d.v;
+                // Backward compat: normalize SET collision status CRASHED → RESOLVED
+                if (tx.e === 'collision' && tx.d.f === 'status' &&
+                    typeof newVal === 'string' && newVal.trim().toUpperCase() === 'CRASHED') {
+                    newVal = 'RESOLVED';
+                    if (!target.outcome_type) target.outcome_type = 'CRASHED';
+                }
                 const oldVal = target[tx.d.f];
-                target[tx.d.f] = tx.d.v;
-                if (oldVal !== tx.d.v) {
-                    recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, tx.d.v, tx);
+                target[tx.d.f] = newVal;
+                if (oldVal !== newVal) {
+                    recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, newVal, tx);
                 }
             }
             break;
@@ -192,6 +230,7 @@ function applyTransaction(state, tx) {
                 });
                 if (!isDuplicate) {
                     target[tx.d.f].push(tx.d.v);
+                    recordHistory(state, tx.e, tx.id, `${tx.d.f}[]`, undefined, tx.d.v, tx);
                 }
             }
             break;
@@ -200,9 +239,13 @@ function applyTransaction(state, tx) {
         case 'R': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f && Array.isArray(target[tx.d.f])) {
+                const beforeLength = target[tx.d.f].length;
                 target[tx.d.f] = target[tx.d.f].filter(item =>
                     typeof item === 'string' ? item !== tx.d.v : JSON.stringify(item) !== JSON.stringify(tx.d.v)
                 );
+                if (target[tx.d.f].length !== beforeLength) {
+                    recordHistory(state, tx.e, tx.id, `${tx.d.f}[]`, tx.d.v, undefined, tx);
+                }
             }
             break;
         }
@@ -331,5 +374,7 @@ export {
     getPhonebook,
     getCollectionName,
     getFieldHistory,
+    getArrayFieldHistory,
+    getArrayItemHistory,
     getEntityHistory,
 };

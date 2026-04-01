@@ -479,30 +479,85 @@ They should also show:
 
 Resolved collisions should remain inspectable, not just collapse into one-line graves.
 
-## Recommended Implementation Order
+## Implementation Notes
 
-### Phase 1: Contract and docs
+### CRASHED is used in five places in index.js
 
-- normalize the documented lifecycle
-- expand collision field guidance
-- rewrite examples
+All five must be updated in a single pass to avoid inconsistent state:
 
-### Phase 2: Audit layer
+1. `_resolutionTracker` cleanup check — `st === 'RESOLVED' || st === 'CRASHED'`
+2. The CRASHED oracle block — detects `status === 'CRASHED'`, fires oracle, tells model to MOVE to RESOLVED and DESTROY
+3. Phase 3 escalation prompt — tells model to "MOVE to CRASHED"
+4. Distance warning guard — `if (status !== 'CRASHED')`
+5. `handleAdvanceButton` ripe collision check — `status !== 'CRASHED'`
+6. `handleCombatButton` filter — `c.status !== 'CRASHED'`
 
-- add collision richness warnings
-- add closure audit
-- add backward compatibility for old `CRASHED` status
+### Backward compatibility lives in state-compute.js
 
-### Phase 3: Runtime behavior
+Normalizing old `status: CRASHED` entries must happen during replay in `applyTransaction`, not only in the injection path. The compute layer needs to rewrite:
+- `S` op where `d.f === 'status'` and `d.v === 'CRASHED'` → set `status = 'RESOLVED'`, set `outcome_type = 'CRASHED'` (if not already set)
+- `TR` op where `d.f === 'status'` and `d.to === 'CRASHED'` → same normalization
+- `CR` op where `d.status === 'CRASHED'` → same normalization
 
-- stop destroying crashed collisions immediately
-- add convergence protocol for simultaneous arrivals
-- add successor-linking expectations on closure
+This ensures old ledger entries replay correctly into the new model without any migration.
 
-### Phase 4: UI
+### The DESTROY instruction is a one-line prompt fix
 
-- show full collision story data
-- show resolved collision aftermath and lineage
+The crash oracle block in index.js ends with:
+
+```
+Then DESTROY this collision: DESTROY collision:${id}
+```
+
+This is a string inside a template literal. Removing that line is the entire Phase 3 "stop destroying crashed collisions" change — no data model work needed.
+
+### Convergence classification should be prompt-driven, not mechanically classified
+
+The extension cannot reliably infer `PARALLEL` vs `CASCADE` vs `COMPOSITE` from field values alone — that requires narrative judgment. Instead of the extension classifying, inject a convergence prompt when ≥2 arrivals happen in the same turn, and ask the model to declare the relationship explicitly. The extension validates that the declared type is one of the three.
+
+### Run Phase 1 (docs) and Phase 2 (audit layer) in parallel
+
+If docs land before audit, the model will start emitting `outcome_type`, `aftermath`, etc. with no signal that they're landing. Running both phases together gives immediate feedback from the audit warnings.
+
+### IMPLODED needs worked examples before deployment
+
+`IMPLODED` is a new concept with no current analogue. `CRASHED` is "player ignored it," `IMPLODED` is "the collision collapsed internally." The distinction is subtle enough that without 2–3 worked examples in the readme, the model will conflate them. Add examples before deploying the prompt changes.
+
+## Implementation Status
+
+### ✓ Phase 1+2 — Complete (branch: codex-v13-state-delta)
+
+**`state-compute.js`**
+- Backward compat normalization in `CR`, `TR`, and `S` operations: any collision receiving `status: CRASHED` during ledger replay is silently rewritten to `status: RESOLVED` + `outcome_type: CRASHED`. Old chats replay correctly without migration.
+
+**`index.js`**
+- Removed the two-step CRASHED oracle block entirely (status=CRASHED → oracle fires → RESOLVED). That flow is replaced by the Phase 3 crash prompt writing directly to RESOLVED+outcome_type.
+- Removed CRASHED from `_resolutionTracker` cleanup, ripe collision check (`handleAdvanceButton`), and combat collision filter (`handleCombatButton`).
+- Rewrote Phase 3 escalation prompt: "MOVE to CRASHED" → "MOVE to RESOLVED, set outcome_type: CRASHED, record aftermath."
+- Rewrote arrival prompt outcomes to list all four outcome types with ledger requirements.
+- Removed `if (status !== 'CRASHED')` distance warning guard; updated the RESOLVING/CRASHED distance warning text.
+- Added **closure audit**: every turn scans all RESOLVED collisions and injects `[CLOSURE AUDIT]` corrections for missing `outcome_type`, `aftermath`, or `successor_collision_ids` (for EVOLVED/MERGED).
+- Added **convergence injection**: when ≥2 collisions arrive on the same turn, individual arrival blocks are followed by a shared convergence block with a fresh oracle draw. The model is asked to declare PARALLEL/CASCADE/COMPOSITE explicitly before writing the scene.
+- Added convergence handling to `handleAdvanceButton` for the advance-turn path (single ripe vs. multiple ripe now handled separately).
+
+**`state-view.js`**
+- Removed CRASHED from both collision filter conditions (entity registry + detail section).
+- Added `last_manifestation` display to the live collision detail section (injected every turn in the `_state` slot).
+- Added new paths to the quick reference COMMON PATHS: `collision:id.last_manifestation`, `collision:id.outcome_type`, `collision:id.aftermath`, `collision:id.successor_collision_ids+`, `collision:id.parent_collision_ids+`.
+- Updated CREATE collision example to include `details`, `cost`, `target_constraint`.
+- Added full **COLLISION CLOSURE** protocol to the full readme, with worked IMPLODED example (secret-holder breaks before confrontation) and EVOLVED example (watcher transmits, successor collision spawned).
+
+**`ui-panel.js`**
+- Active collision cards: show `details` (preferred over raw forces), `target_constraint`, and `last_manifestation`.
+- Resolved collision cards: promoted from one-line graves to full cards showing `outcome_type`, `aftermath`, and `successor_collision_ids` links.
+
+### Remaining
+
+**Phase 3 — Runtime behavior (cleanup)**
+- Richness warnings for created collisions missing required narrative fields at their stage (e.g., SIMMERING without `cost`, RESOLVING without `last_manifestation`).
+
+**Phase 4 — UI (deferred)**
+- No remaining items beyond what was shipped above.
 
 ## Guiding Principle
 

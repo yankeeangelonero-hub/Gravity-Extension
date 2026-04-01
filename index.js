@@ -10,7 +10,7 @@
 import { init as initLedger, reset as resetLedger, append, getAllTransactions, getTransactionsForEntity, exportData, importData } from './ledger-store.js';
 import { initSnapshots, computeCurrentState, createSnapshot } from './snapshot-mgr.js';
 import { validateBatch, formatErrors } from './consistency.js';
-import { computeState, applyTransaction, createEmptyState } from './state-compute.js';
+import { computeState, applyTransaction, createEmptyState, getArrayItemHistory } from './state-compute.js';
 import { formatStateView, formatReadme } from './state-view.js';
 import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
@@ -131,6 +131,211 @@ function formatDrawInstruction(draw, guidance) {
     }
     if (guidance) sections.push(guidance);
     return sections.join('\n');
+}
+
+function normalizeText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function stringSimilarity(a, b) {
+    if (a === b) return 1;
+    if (!a || !b || a.length < 2 || b.length < 2) return 0;
+    const lower = s => normalizeText(s).toLowerCase();
+    const bigrams = s => {
+        const set = new Map();
+        const str = lower(s);
+        for (let i = 0; i < str.length - 1; i++) {
+            const bi = str.substring(i, i + 2);
+            set.set(bi, (set.get(bi) || 0) + 1);
+        }
+        return set;
+    };
+    const aBi = bigrams(a);
+    const bBi = bigrams(b);
+    let intersection = 0;
+    for (const [bi, count] of aBi) {
+        intersection += Math.min(count, bBi.get(bi) || 0);
+    }
+    return (2 * intersection) / (a.length - 1 + b.length - 1);
+}
+
+function getCollisionForcesText(col) {
+    if (Array.isArray(col?.forces)) {
+        return col.forces
+            .map(force => normalizeText(force?.name || force))
+            .filter(Boolean)
+            .join(', ');
+    }
+    return normalizeText(col?.forces);
+}
+
+function buildCollisionStoryCapsule(id, col) {
+    const lines = [];
+    const details = normalizeText(col?.details);
+    const forces = getCollisionForcesText(col);
+    const cost = normalizeText(col?.cost);
+    const targetConstraint = normalizeText(col?.target_constraint);
+    const manifestation = normalizeText(col?.last_manifestation);
+
+    if (details) lines.push(`Thread: ${details}`);
+    if (forces) lines.push(`Forces: ${forces}`);
+    else if (!details) lines.push(`Collision: ${col?.name || id}`);
+
+    if (cost) lines.push(`Cost: ${cost}`);
+    if (targetConstraint) lines.push(`Target constraint: ${targetConstraint}`);
+    if (manifestation) lines.push(`Current manifestation: ${manifestation}`);
+
+    return lines.join('\n');
+}
+
+function isThinCollisionDetails(details) {
+    const clean = normalizeText(details);
+    if (!clean) return false;
+    const words = clean.split(/\s+/).filter(Boolean);
+    return clean.length < 80 || words.length < 12;
+}
+
+function buildCollisionNarrativeWarnings(id, col, status) {
+    const warnings = [];
+    const name = col?.name || id;
+    const details = normalizeText(col?.details);
+    const cost = normalizeText(col?.cost);
+    const manifestation = normalizeText(col?.last_manifestation);
+    const forces = getCollisionForcesText(col);
+
+    if (!forces) {
+        warnings.push(`"${name}" is ${status} but missing forces — SET collision:${id}.forces so the pressure has named poles.`);
+    }
+
+    if (!details) {
+        warnings.push(`"${name}" is ${status} but missing details — every live collision needs a narrative thread. SET collision:${id}.details to a compact story capsule naming: what is converging, who or what is caught in it, how it is surfacing now, and the forced choice looming.`);
+    } else if (isThinCollisionDetails(details)) {
+        warnings.push(`"${name}" details are still too thin — rewrite collision:${id}.details as a fuller story capsule with source pressure, the people or places at risk, the present expression, and the forced choice looming.`);
+    }
+
+    if ((status === 'SIMMERING' || status === 'ACTIVE' || status === 'RESOLVING') && !cost) {
+        warnings.push(`"${name}" is ${status} but missing cost — SET collision:${id}.cost to what engagement, delay, or failure will cost.`);
+    }
+
+    if ((status === 'ACTIVE' || status === 'RESOLVING') && !manifestation) {
+        warnings.push(`"${name}" is ${status} but missing last_manifestation — SET collision:${id}.last_manifestation to the concrete way this pressure is entering the scene right now.`);
+    }
+
+    return warnings;
+}
+
+function getPressurePoints(state) {
+    const raw = state?.world?.pressure_points;
+    if (Array.isArray(raw)) return raw.map(p => normalizeText(p)).filter(Boolean);
+    if (raw) return [normalizeText(raw)].filter(Boolean);
+    return [];
+}
+
+function getPressurePointAgeTx(state, point) {
+    const history = getArrayItemHistory(state, 'world', '_', 'pressure_points', point);
+    const lastAdd = [...history].reverse().find(entry => entry.to !== undefined);
+    return lastAdd ? Math.max(0, (state?.lastTxId || 0) - (lastAdd.tx || 0)) : null;
+}
+
+function classifyPressurePointAge(ageTx) {
+    if (ageTx == null) return 'unknown';
+    if (ageTx >= 18) return 'stale';
+    if (ageTx >= 8) return 'aging';
+    return 'fresh';
+}
+
+function buildPressurePointAudit(state) {
+    const pressurePoints = getPressurePoints(state);
+    if (pressurePoints.length === 0) return null;
+
+    const liveCollisions = Object.entries(state?.collisions || {})
+        .filter(([, col]) => normalizeText(col?.status).toUpperCase() !== 'RESOLVED')
+        .map(([id, col]) => ({
+            id,
+            name: col?.name || id,
+            text: normalizeText([
+                col?.name,
+                col?.details,
+                getCollisionForcesText(col),
+                col?.cost,
+                col?.last_manifestation,
+            ].filter(Boolean).join(' | ')),
+        }));
+
+    const warnings = [];
+    const embodied = [];
+    const duplicates = [];
+    const candidates = [];
+    const seen = [];
+    const annotated = [];
+
+    for (const point of pressurePoints) {
+        const duplicateOf = seen.find(prev => stringSimilarity(prev, point) > 0.82);
+        if (duplicateOf) {
+            duplicates.push({ point, duplicateOf });
+            continue;
+        }
+        seen.push(point);
+
+        const matchedCollision = liveCollisions.find(col => {
+            const pointText = point.toLowerCase();
+            const collisionText = col.text.toLowerCase();
+            const collisionName = normalizeText(col.name).toLowerCase();
+            return stringSimilarity(point, col.text) > 0.5
+                || (collisionName && pointText.includes(collisionName))
+                || (collisionName && collisionText.includes(pointText))
+                || (pointText.length > 12 && collisionText.includes(pointText));
+        });
+
+        const ageTx = getPressurePointAgeTx(state, point);
+        const ageClass = classifyPressurePointAge(ageTx);
+        if (matchedCollision) {
+            embodied.push({ point, collision: matchedCollision.name, ageTx, ageClass });
+        } else {
+            candidates.push({ point, ageTx, ageClass });
+        }
+        annotated.push({ point, ageTx, ageClass, matchedCollision: matchedCollision?.name || '' });
+    }
+
+    if (pressurePoints.length > 5) {
+        warnings.push(`PRESSURE_POINTS: ${pressurePoints.length} live seams — trim stale ones and convert the hottest seam into a collision if it now has actors, cost, and a forced choice.`);
+    }
+    for (const dup of duplicates.slice(0, 3)) {
+        warnings.push(`Pressure point "${dup.point}" duplicates "${dup.duplicateOf}" — REMOVE one duplicate. Pressure points are seeds, not a backlog.`);
+    }
+    for (const item of embodied.slice(0, 3)) {
+        warnings.push(`Pressure point "${item.point}" appears to already be embodied by live collision "${item.collision}" — REMOVE the pressure point if that seam has already graduated into the collision.`);
+    }
+    for (const item of candidates.filter(item => item.ageClass === 'stale').slice(0, 3)) {
+        warnings.push(`Pressure point "${item.point}" has been live for ${item.ageTx} tx without graduating — REMOVE it as stale or ESCALATE it into a collision now.`);
+    }
+    if (liveCollisions.length === 0 && candidates.length > 0) {
+        warnings.push(`No live collision currently carries these seams — escalate the hottest pressure point into a collision unless it is stale.`);
+    } else if (candidates.length > liveCollisions.length + 1) {
+        warnings.push(`There are ${candidates.length} pressure points not clearly carried by live collisions — prune stale seams or graduate one into a collision this turn.`);
+    }
+
+    const candidateLines = annotated.slice(0, 5).map(item => {
+        const ageText = item.ageTx == null ? 'age unknown' : `${item.ageTx} tx old`;
+        const statusText = item.matchedCollision
+            ? `already embodied by collision "${item.matchedCollision}"`
+            : item.ageClass === 'stale'
+                ? 'stale if not escalated now'
+                : item.ageClass === 'aging'
+                    ? 'aging seam'
+                    : 'fresh seam';
+        return `  • ${item.point} — ${ageText}; ${statusText}`;
+    });
+    const prompt = `[PRESSURE POINT CHECK:
+${candidateLines.length ? candidateLines.join('\n') : '  • Review current seams and remove any that already fired.'}
+Pressure points are SEEDS, not history.
+For each pressure point, decide one:
+  KEEP — only if it is still a live seam but not yet specific enough to become a collision.
+  REMOVE — if it fired, resolved, became irrelevant, or is already embodied by a live collision.
+  ESCALATE — if it now has actors, a concrete cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point in the same turn.
+If no live collision currently carries the world's pressure, at least one surviving pressure point should either escalate into a collision or be pruned as stale.]`;
+
+    return { warnings, prompt };
 }
 
 function pickAdvanceFocus() {
@@ -449,6 +654,18 @@ function injectPrompt(mode) {
             setExtensionPrompt(`${MODULE_NAME}_exemplars`, '', PROMPT_NONE, 0);
         }
 
+        // Pressure point audit — keep seams live, prune stale ones, and graduate them into collisions
+        if (_currentState) {
+            const pressureAudit = buildPressurePointAudit(_currentState);
+            if (pressureAudit) {
+                setExtensionPrompt(`${MODULE_NAME}_pressure`, pressureAudit.prompt, PROMPT_IN_CHAT, 0);
+            } else {
+                setExtensionPrompt(`${MODULE_NAME}_pressure`, '', PROMPT_NONE, 0);
+            }
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_pressure`, '', PROMPT_NONE, 0);
+        }
+
         // Faction heartbeat — every 10 turns on regular turns only (advance/integration handle factions directly)
         if (isRegular && _turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
             const factions = Object.values(_currentState.factions || {});
@@ -498,42 +715,28 @@ function injectPrompt(mode) {
         // ── Collision Resolution System (oracle-driven escalation) ─────────────
         if (_currentState) {
             const collisionBlocks = [];
-            const distWarnings = [];
-            const totalTxCount = getAllTransactions().length;
+            const collisionWarnings = [];
+            const pressureAudit = buildPressurePointAudit(_currentState);
+            if (pressureAudit?.warnings?.length) {
+                collisionWarnings.push(...pressureAudit.warnings.map(w => `[PRESSURE POINT AUDIT] ${w}`));
+            }
 
             // Clean up tracker for resolved/crashed collisions
             for (const trackedId of _resolutionTracker.keys()) {
                 const col = (_currentState.collisions || {})[trackedId];
                 if (!col) { _resolutionTracker.delete(trackedId); continue; }
                 const st = (col.status || '').trim().toUpperCase();
-                if (st === 'RESOLVED' || st === 'CRASHED') _resolutionTracker.delete(trackedId);
+                if (st === 'RESOLVED') _resolutionTracker.delete(trackedId);
             }
+
+            const newArrivals = [];
 
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
                 const status = (col.status || '').trim().toUpperCase();
                 if (status === 'RESOLVED') continue;
                 const dist = parseFloat(col.distance);
-                const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
-                const colDetails = col.details || `Forces: ${forces}\nCost: ${col.cost || 'unspecified'}${col.target_constraint ? `\nTarget constraint: ${col.target_constraint}` : ''}`;
-
-                // ── CRASHED — oracle decides the wreckage ────────────────────────
-                if (status === 'CRASHED') {
-                    const crashDraw = drawDivination();
-                    collisionBlocks.push(`═══ COLLISION CRASHED: "${col.name || id}" ═══
-${colDetails}
-
-${crashDraw.label}: ${crashDraw.reading}${crashDraw.html ? `\nRender this HTML card reveal before interpreting:\n${crashDraw.html}` : ''}
-
-This collision CRASHED — the player did not engage, and gravity resolved it without them.
-
-The oracle determines the shape of the wreckage. Write the WORST REASONABLE OUTCOME colored by this draw. The player had their chance. This is what inaction costs.
-
-Consequences are permanent. MOVE status to RESOLVED in the ledger. Record what was lost. If the aftermath seeds new tension, CREATE a new collision from the wreckage.
-
-Then DESTROY this collision: DESTROY collision:${id}`);
-                    _resolutionTracker.delete(id);
-                    continue;
-                }
+                const colDetails = buildCollisionStoryCapsule(id, col);
+                collisionWarnings.push(...buildCollisionNarrativeWarnings(id, col, status));
 
                 // ── New arrival — distance ≤ 0 and not yet tracked ───────────────
                 if (!isNaN(dist) && dist <= 0 && !_firedCollisionArrivals.has(id)) {
@@ -544,26 +747,7 @@ Then DESTROY this collision: DESTROY collision:${id}`);
                         arrivalTurn: _turnCounter,
                         arrivalDraw,
                     });
-
-                    collisionBlocks.push(`═══ COLLISION ARRIVAL: "${col.name || id}" ═══
-${colDetails}
-
-${arrivalDraw.label}: ${arrivalDraw.reading}${arrivalDraw.html ? `\nRender this HTML card reveal before interpreting:\n${arrivalDraw.html}` : ''}
-
-This collision has reached distance 0. It detonates NOW.
-
-You have FULL LICENSE to make this happen. Move NPCs into the scene. Spawn threats. Have someone arrive with information. Trigger events. Create new characters. Use environmental disasters. Whatever it takes to force this issue into the player's immediate reality.
-
-The draw shapes the CIRCUMSTANCE of how this collision arrives — not the outcome. Write the situation, not the resolution. The player must respond to it.
-
-MOVE status to RESOLVING. The resolution clock is now ticking.
-
-Three outcomes are possible:
-• RESOLVED — the player engaged and shaped the result. Clean or costly. RESOLVED includes retreat — if the player actively chooses to disengage and pays the cost, that's a resolution. They shaped the outcome.
-• EVOLUTION — resolution reveals a different tension. MOVE to RESOLVED, CREATE a new collision from what surfaced.
-• CRASHED — the player pretended it wasn't there. Not retreat — inaction. Gravity resolves it for them. Worst outcome. No agency.
-
-The player has ${RESOLUTION_CRASH_TURNS} turns to engage before the oracle decides for them.`);
+                    newArrivals.push({ id, col, colDetails, arrivalDraw });
                     continue;
                 }
 
@@ -584,7 +768,7 @@ The collision is RESOLVING. Its presence permeates the current scene as atmosphe
 
 DO NOT let the player ignore this. The collision's weight is in the room even if its forces aren't. Subtext in dialogue. Physical tension in body language. Environmental details that mirror the approaching confrontation.
 
-Your deduction MUST name how this collision is affecting the current scene. If the player's action doesn't engage the collision, show how the collision's pressure bleeds into whatever they're doing instead.`);
+Your deduction MUST name how this collision is affecting the current scene. If the player's action doesn't engage the collision, show how the collision's pressure bleeds into whatever they're doing instead. If the collision stays live after this beat, SET collision:${id}.last_manifestation to the concrete way it pressed into the scene.`);
 
                     } else if (turnsSince <= RESOLUTION_INTRUSION_TURNS) {
                         // Phase 2: The Oracle Manifests — direct intrusion with fresh draw
@@ -603,10 +787,10 @@ This is not subtext anymore. An NPC arrives. A consequence detonates. A choice i
 
 You have FULL LICENSE: move NPCs, trigger events, create witnesses, use the environment. The draw is the shape. The collision is the force. Write the most dramatically honest intrusion this draw suggests.
 
-The player has ${RESOLUTION_CRASH_TURNS - turnsSince} turns before gravity resolves this without them.`);
+If the collision survives the beat, SET collision:${id}.last_manifestation to the concrete intrusion you wrote. The player has ${RESOLUTION_CRASH_TURNS - turnsSince} turns before gravity resolves this without them.`);
 
                     } else {
-                        // Phase 3: Crash threshold — final warning or auto-crash
+                        // Phase 3: Crash threshold — gravity resolves without player
                         const crashDraw = drawDivination();
                         collisionBlocks.push(`═══ COLLISION RESOLVING: "${col.name || id}" — THE ORACLE DECIDES (${turnsSince}/${RESOLUTION_CRASH_TURNS}) ═══
 ${colDetails}
@@ -615,11 +799,11 @@ ${crashDraw.label}: ${crashDraw.reading}${crashDraw.html ? `\nRender this HTML c
 
 TIME IS UP. The player has not engaged this collision for ${turnsSince} turns. Gravity will no longer wait.
 
-MOVE this collision to CRASHED in the update block. The oracle determines the shape of the uncontrolled outcome. Write the WORST REASONABLE OUTCOME colored by this draw.
+MOVE this collision to RESOLVED in the update block. Set outcome_type: CRASHED and record aftermath. The oracle determines the shape of the uncontrolled outcome. Write the WORST REASONABLE OUTCOME colored by this draw.
 
 This is what ignoring a collision costs. The player had their chance — every turn for ${turnsSince} turns, the collision pushed toward them. They chose not to engage. Now gravity chooses for them.
 
-Write the crash as a scene that interrupts whatever the player is doing. It is dramatic, consequential, and permanent. Record what was lost. If the aftermath seeds new tension, CREATE a new collision from the wreckage.`);
+Write the crash as a scene that interrupts whatever the player is doing. It is dramatic, consequential, and permanent. Record what was lost in aftermath. If the wreckage seeds new tension, CREATE a successor collision and link it with successor_collision_ids.`);
                     }
                     continue;
                 }
@@ -634,24 +818,90 @@ Write the crash as a scene that interrupts whatever the player is doing. It is d
                     // Will pick up escalation next turn
                 }
 
-                // ── Distance warnings (non-terminal collisions only) ─────────────
-                if (status !== 'CRASHED') {
-                    const distHist = (_currentState._history || {})[`collision:${id}:distance`] || [];
-                    if (distHist.length > 0) {
-                        const last = distHist[distHist.length - 1];
-                        const fromDist = parseFloat(last.from);
-                        const toDist = parseFloat(last.to);
-                        if (!isNaN(fromDist) && !isNaN(toDist) && toDist > fromDist) {
-                            distWarnings.push(`"${col.name || id}" distance went ${last.from} → ${last.to} — collision distances are countdowns, they MUST NOT increase. SET it back to ${last.from} or lower.`);
-                        }
-                    }
-                    // Incoherent state: RESOLVING but distance > 0
-                    if (status === 'RESOLVING') {
-                        if (!isNaN(dist) && dist > 0) {
-                            distWarnings.push(`"${col.name || id}" is RESOLVING but distance is ${dist} — a collision cannot resolve at range. If avoided, MOVE to CRASHED. If still approaching, MOVE back to ACTIVE.`);
-                        }
+                // ── Distance warnings ─────────────────────────────────────────────
+                const distHist = (_currentState._history || {})[`collision:${id}:distance`] || [];
+                if (distHist.length > 0) {
+                    const last = distHist[distHist.length - 1];
+                    const fromDist = parseFloat(last.from);
+                    const toDist = parseFloat(last.to);
+                    if (!isNaN(fromDist) && !isNaN(toDist) && toDist > fromDist) {
+                        collisionWarnings.push(`"${col.name || id}" distance went ${last.from} → ${last.to} — collision distances are countdowns, they MUST NOT increase. SET it back to ${last.from} or lower.`);
                     }
                 }
+                // Incoherent state: RESOLVING but distance > 0
+                if (status === 'RESOLVING') {
+                    if (!isNaN(dist) && dist > 0) {
+                        collisionWarnings.push(`"${col.name || id}" is RESOLVING but distance is ${dist} — a collision cannot resolve at range. If avoided, MOVE to RESOLVED with outcome_type: CRASHED. If still approaching, MOVE back to ACTIVE.`);
+                    }
+                }
+            }
+
+            // ── Build arrival blocks (deferred to allow convergence handling) ──────
+            if (newArrivals.length === 1) {
+                const { id, col, colDetails, arrivalDraw } = newArrivals[0];
+                collisionBlocks.push(`═══ COLLISION ARRIVAL: "${col.name || id}" ═══
+${colDetails}
+
+${arrivalDraw.label}: ${arrivalDraw.reading}${arrivalDraw.html ? `\nRender this HTML card reveal before interpreting:\n${arrivalDraw.html}` : ''}
+
+This collision has reached distance 0. It detonates NOW.
+
+You have FULL LICENSE to make this happen. Move NPCs into the scene. Spawn threats. Have someone arrive with information. Trigger events. Create new characters. Use environmental disasters. Whatever it takes to force this issue into the player's immediate reality.
+
+The draw shapes the CIRCUMSTANCE of how this collision arrives — not the outcome. Write the situation, not the resolution. The player must respond to it.
+
+MOVE status to RESOLVING. SET collision:${id}.last_manifestation to the concrete arrival you wrote. The resolution clock is now ticking.
+
+Four outcomes are possible:
+• RESOLVED (outcome_type: DIRECT) — the player engaged and shaped the result. Clean or costly, including active retreat.
+• RESOLVED (outcome_type: EVOLVED) — resolution reveals a deeper tension. Record aftermath, CREATE a successor collision, link with successor_collision_ids.
+• RESOLVED (outcome_type: IMPLODED) — the collision collapsed internally before the player engaged. Record what fell apart and why. Successor optional.
+• RESOLVED (outcome_type: CRASHED) — the player ignored it and gravity resolves it for them. Worst outcome. Write the worst reasonable outcome. Record aftermath.
+
+Every closure requires: collision:${id}.status: RESOLVED — collision:${id}.outcome_type: DIRECT/EVOLVED/IMPLODED/CRASHED — collision:${id}.aftermath: "..."
+
+The player has ${RESOLUTION_CRASH_TURNS} turns to engage before the oracle decides for them.`);
+
+            } else if (newArrivals.length > 1) {
+                // Multiple simultaneous arrivals — build individual blocks then add convergence
+                for (const { id, col, colDetails, arrivalDraw } of newArrivals) {
+                    collisionBlocks.push(`═══ COLLISION ARRIVAL: "${col.name || id}" ═══
+${colDetails}
+
+${arrivalDraw.label}: ${arrivalDraw.reading}${arrivalDraw.html ? `\nRender this HTML card reveal before interpreting:\n${arrivalDraw.html}` : ''}`);
+                }
+                const convergenceDraw = drawDivination();
+                const arrivalNames = newArrivals.map(a => `"${a.col.name || a.id}"`).join(' and ');
+                collisionBlocks.push(`═══ CONVERGENCE: ${newArrivals.length} COLLISIONS ARRIVE SIMULTANEOUSLY ═══
+${arrivalNames} have all hit distance 0 on the same turn.
+
+${convergenceDraw.label}: ${convergenceDraw.reading}${convergenceDraw.html ? `\nRender this HTML card reveal before interpreting:\n${convergenceDraw.html}` : ''}
+
+Declare the relationship between these arrivals before writing the scene. Choose one:
+• PARALLEL — they arrive at the same time but remain distinct tensions. One foregrounds first; the others are active in the same scene or immediate next beat. No forced merge.
+• CASCADE — one collision becomes the trigger or delivery vehicle for another. Both remain distinct, but their arrivals are causally linked. Name which drives which.
+• COMPOSITE — the simultaneous arrivals form a single larger event. Write one coherent converged scene. Each parent collision typically closes with outcome_type: MERGED. CREATE a composite successor collision and link parent_collision_ids / successor_collision_ids.
+
+State your choice explicitly at the start of your deduction (e.g., "Convergence: PARALLEL — both arrive but X foregrounds first"). The convergence draw colors the shape of the combined event.
+
+If a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.
+
+MOVE each arrived collision to RESOLVING. SET each collision's last_manifestation to how it entered the converged scene. The resolution clock is now ticking for all of them.`);
+            }
+
+            // ── Closure audit — resolved collisions missing required fields ────────
+            const closureWarnings = [];
+            for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+                const status = (col.status || '').trim().toUpperCase();
+                if (status !== 'RESOLVED') continue;
+                if (!col.outcome_type) closureWarnings.push(`"${col.name || id}" is RESOLVED but missing outcome_type (DIRECT / EVOLVED / MERGED / IMPLODED / CRASHED)`);
+                if (!col.aftermath) closureWarnings.push(`"${col.name || id}" is RESOLVED but missing aftermath — what changed, what was lost, what it left behind`);
+                if ((col.outcome_type === 'EVOLVED' || col.outcome_type === 'MERGED') && !col.successor_collision_ids) {
+                    closureWarnings.push(`"${col.name || id}" has outcome_type: ${col.outcome_type} but no successor_collision_ids — link or explain why no successor seam remains`);
+                }
+            }
+            if (closureWarnings.length > 0) {
+                collisionWarnings.push(...closureWarnings.map(w => `[CLOSURE AUDIT] ${w}`));
             }
 
             if (collisionBlocks.length > 0) {
@@ -661,9 +911,9 @@ Write the crash as a scene that interrupts whatever the player is doing. It is d
                 setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
             }
 
-            if (distWarnings.length > 0) {
+            if (collisionWarnings.length > 0) {
                 setExtensionPrompt(`${MODULE_NAME}_dist_warn`,
-                    `[COLLISION DISTANCE ERROR:\n${distWarnings.map(w => '  • ' + w).join('\n')}]`,
+                    `[COLLISION AUDIT:\n${collisionWarnings.map(w => '  • ' + w).join('\n')}]`,
                     PROMPT_IN_CHAT, 0);
             } else {
                 setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
@@ -1089,9 +1339,8 @@ function handleAdvanceButton() {
             const dist = parseFloat(col.distance);
             const status = (col.status || '').trim().toUpperCase();
 
-            if (!isNaN(dist) && dist <= 0 && status !== 'RESOLVED' && status !== 'CRASHED' && !_firedCollisionArrivals.has(id)) {
-                const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
-                ripeCollisions.push({ id, col, forces });
+            if (!isNaN(dist) && dist <= 0 && status !== 'RESOLVED' && !_firedCollisionArrivals.has(id)) {
+                ripeCollisions.push({ id, col });
                 _firedCollisionArrivals.add(id);
                 _resolutionTracker.set(id, {
                     phase: 'arrived',
@@ -1102,8 +1351,7 @@ function handleAdvanceButton() {
                 status === 'RESOLVING' ||
                 (!isNaN(dist) && dist <= 0 && status === 'ACTIVE' && _firedCollisionArrivals.has(id))
             ) {
-                const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
-                inProgressCollisions.push({ id, col, forces });
+                inProgressCollisions.push({ id, col });
             }
         }
     }
@@ -1111,26 +1359,35 @@ function handleAdvanceButton() {
     const draw = drawDivination();
     const markers = [MODE_LOREBOOK_KEYS.advanceCore, MODE_LOREBOOK_KEYS.advanceOptional];
 
-    if (ripeCollisions.length > 0) {
-        const collisionBlocks = ripeCollisions.map(a => {
-            const colDetails = a.col.details || `Forces: ${a.forces}\nCost: ${a.col.cost || 'unspecified'}${a.col.target_constraint ? `\nTarget constraint: ${a.col.target_constraint}` : ''}`;
-            return `COLLISION: "${a.col.name || a.id}"\n${colDetails}`;
-        }).join('\n\n');
-
+    if (ripeCollisions.length === 1) {
+        const a = ripeCollisions[0];
+        const colDetails = buildCollisionStoryCapsule(a.id, a.col);
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY ADVANCE',
-            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\n${ripeCollisions.length === 1 ? 'ARRIVED COLLISION:' : 'ARRIVED COLLISIONS:'}\n${collisionBlocks}\n\nThis is the world's move. Force the issue into the player's immediate reality now. Write the arrival, not the final resolution. MOVE each arrived collision to RESOLVING, record divination.last_draw, then end with deduction + prose + compact STATE block.`,
+            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISION:\n${`COLLISION: "${a.col.name || a.id}"\n${colDetails}`}\n\nThis is the world's move. Force the issue into the player's immediate reality now. Write the arrival, not the final resolution. MOVE the collision to RESOLVING, SET collision:${a.id}.last_manifestation to the concrete arrival, record divination.last_draw, then end with deduction + prose + compact STATE block.`,
+            markers,
+        );
+    } else if (ripeCollisions.length > 1) {
+        const collisionBlocks = ripeCollisions.map(a => {
+            const colDetails = buildCollisionStoryCapsule(a.id, a.col);
+            return `COLLISION: "${a.col.name || a.id}"\n${colDetails}`;
+        }).join('\n\n');
+        const convergenceDraw = drawDivination();
+        const arrivalNames = ripeCollisions.map(a => `"${a.col.name || a.id}"`).join(' and ');
+        _pendingOOCInjection = buildModeInjection(
+            'GRAVITY ADVANCE',
+            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISIONS:\n${collisionBlocks}\n\nCONVERGENCE — ${arrivalNames} arrive on the same turn.\n${convergenceDraw.label}: ${convergenceDraw.reading}${convergenceDraw.html ? `\nRender this HTML card reveal:\n${convergenceDraw.html}` : ''}\n\nDeclare the relationship before writing the scene:\n• PARALLEL — distinct arrivals; one foregrounds first, others active in same beat\n• CASCADE — one triggers or delivers the other; name which drives which\n• COMPOSITE — one converged event; parents close as MERGED; CREATE a composite successor collision\n\nIf a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.\n\nMOVE each arrived collision to RESOLVING. SET each collision's last_manifestation to the concrete way it entered the converged scene. Record divination.last_draw, then end with deduction + prose + compact STATE block.`,
             markers,
         );
     } else if (inProgressCollisions.length > 0) {
         const collisionBlocks = inProgressCollisions.map(a => {
-            const colDetails = a.col.details || `Forces: ${a.forces} | Cost: ${a.col.cost || 'unspecified'}`;
+            const colDetails = buildCollisionStoryCapsule(a.id, a.col);
             return `"${a.col.name || a.id}" [${a.col.status}] - ${colDetails}`;
         }).join('\n');
 
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY ADVANCE',
-            `${pcName} yields the turn while a collision is already in motion.\n\n${formatDrawInstruction(draw, 'The draw colors what happens next, not the outcome.')}\n\nIN-PROGRESS COLLISION:\n${collisionBlocks}\n\nKeep pushing the confrontation. It cannot stall. Either resolve it this turn or force it into a sharper crisis. If it resolves, MOVE it to RESOLVED and record the cost or evolved collision. Record divination.last_draw, then end with deduction + prose + compact STATE block.`,
+            `${pcName} yields the turn while a collision is already in motion.\n\n${formatDrawInstruction(draw, 'The draw colors what happens next, not the outcome.')}\n\nIN-PROGRESS COLLISION:\n${collisionBlocks}\n\nKeep pushing the confrontation. It cannot stall. Either resolve it this turn or force it into a sharper crisis. For each collision that stays live, SET that collision's last_manifestation to the new concrete manifestation. If it resolves, MOVE it to RESOLVED with outcome_type and aftermath. Record divination.last_draw, then end with deduction + prose + compact STATE block.`,
             markers,
         );
     } else {
@@ -1140,7 +1397,7 @@ function handleAdvanceButton() {
             world: `FOCUS: THE WORLD\nCut away from ${pcName}. Show a faction or macro move whose consequences will matter later.`,
             offscreen: 'FOCUS: OFF-SCREEN CHARACTER\nA tracked character pursues their own want. Show the beat and update what it changes.',
             new_threat: 'FOCUS: SOMETHING NEW\nIntroduce a fresh threat, complication, or revelation that belongs to the current story logic.',
-            collision: `FOCUS: COLLISION TIGHTENS\nPick the collision that creates the most honest pressure right now and show why it compressed.`,
+            collision: `FOCUS: PRESSURE TIGHTENS\nPick the collision that creates the most honest pressure right now and show why it compressed. If no existing collision can honestly carry the beat, escalate the hottest pressure point into a new collision and REMOVE the pressure point it came from.`,
         };
 
         _pendingOOCInjection = buildModeInjection(
@@ -1174,7 +1431,7 @@ function handleCombatButton() {
     const pcPower = _currentState?.pc?.power;
 
     const combatCollisions = Object.values(_currentState?.collisions || {}).filter(
-        c => c.mode === 'combat' && c.status !== 'RESOLVED' && c.status !== 'CRASHED'
+        c => c.mode === 'combat' && c.status !== 'RESOLVED'
     );
 
     let powerAssessment = '';

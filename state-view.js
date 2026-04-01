@@ -8,8 +8,53 @@
  * No lorebook interaction — all injection handled by index.js via setExtensionPrompt.
  */
 
-import { getPhonebook } from './state-compute.js';
+import { getPhonebook, getArrayItemHistory } from './state-compute.js';
 import { getHotView } from './memory-tier.js';
+
+function normalizeText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function getCollisionForcesText(col) {
+    if (Array.isArray(col?.forces)) {
+        return col.forces
+            .map(force => normalizeText(force?.name || force))
+            .filter(Boolean)
+            .join(' | ');
+    }
+    return normalizeText(col?.forces);
+}
+
+function getCollisionNarrativeLines(col, options = {}) {
+    const lines = [];
+    const details = normalizeText(col?.details);
+    const forces = getCollisionForcesText(col);
+    const cost = normalizeText(col?.cost);
+    const targetConstraint = normalizeText(col?.target_constraint);
+    const manifestation = normalizeText(col?.last_manifestation);
+    const includeForces = options.includeForces !== false;
+    const includeManifestation = options.includeManifestation !== false;
+
+    if (details) lines.push(`Thread: ${details}`);
+    else if (forces) lines.push(`Forces: ${forces}`);
+
+    if (includeForces && details && forces) lines.push(`Forces: ${forces}`);
+    if (cost) lines.push(`Cost: ${cost}`);
+    if (targetConstraint) lines.push(`Target constraint: ${targetConstraint}`);
+    if (includeManifestation && manifestation) lines.push(`Now: ${manifestation}`);
+
+    return lines;
+}
+
+function getPressurePointMeta(state, point) {
+    const history = getArrayItemHistory(state, 'world', '_', 'pressure_points', point);
+    const lastAdd = [...history].reverse().find(entry => entry.to !== undefined);
+    if (!lastAdd) return '';
+    const ageTx = Math.max(0, (state?.lastTxId || 0) - (lastAdd.tx || 0));
+    if (ageTx >= 18) return `stale (${ageTx} tx)`;
+    if (ageTx >= 8) return `aging (${ageTx} tx)`;
+    return `fresh (${ageTx} tx)`;
+}
 
 /**
  * Render the full state view into the always-on lorebook entry.
@@ -80,7 +125,7 @@ function formatStateView(state, mode = 'full') {
     }
 
     // Collisions — slim: just IDs, full: adds detail section below
-    const allCollisions = Object.values(state.collisions).filter(c => c.status !== 'RESOLVED' && c.status !== 'CRASHED');
+    const allCollisions = Object.values(state.collisions).filter(c => c.status !== 'RESOLVED');
     if (allCollisions.length) {
         lines.push('');
         lines.push('Collisions:');
@@ -89,6 +134,12 @@ function formatStateView(state, mode = 'full') {
             if (col.mode === 'combat') colLine += ' ⚔';
             colLine += ` → id: ${col.id}`;
             lines.push(colLine);
+            if (slim) {
+                const threadLines = getCollisionNarrativeLines(col, { includeForces: false });
+                for (const threadLine of threadLines) {
+                    lines.push(`    ${threadLine}`);
+                }
+            }
         }
     }
 
@@ -204,24 +255,18 @@ function formatStateView(state, mode = 'full') {
     if (!slim) {
         // Collisions detail
         const liveCollisions = Object.values(state.collisions).filter(
-            c => c.status !== 'RESOLVED' && c.status !== 'CRASHED' && c.status !== 'SEEDED'
+            c => c.status !== 'RESOLVED' && c.status !== 'SEEDED'
         );
         if (liveCollisions.length) {
             lines.push('');
             lines.push('COLLISIONS');
             for (const col of liveCollisions) {
                 lines.push(`  ⊕ ${col.name || col.id} [${col.status}] dist:${col.distance || '?'} → id: ${col.id}`);
-                if (col.details) {
-                    // New: single details paragraph
-                    lines.push(`    ${col.details}`);
-                } else {
-                    // Legacy: separate fields
-                    const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(' → ') : String(col.forces || '');
-                    if (forces) lines.push(`    Forces: ${forces}`);
-                    if (col.mode === 'combat') lines.push(`    Mode: COMBAT${col.upper_hand ? ` | Upper hand: ${col.upper_hand}` : ''}`);
-                    if (col.cost) lines.push(`    Cost: ${col.cost}`);
-                    if (col.target_constraint) lines.push(`    Targets: ${col.target_constraint}`);
+                const narrativeLines = getCollisionNarrativeLines(col);
+                for (const narrativeLine of narrativeLines) {
+                    lines.push(`    ${narrativeLine}`);
                 }
+                if (col.mode === 'combat') lines.push(`    Mode: COMBAT${col.upper_hand ? ` | Upper hand: ${col.upper_hand}` : ''}`);
             }
         }
 
@@ -261,7 +306,8 @@ function formatStateView(state, mode = 'full') {
             lines.push('');
             lines.push('PRESSURE POINTS');
             for (const pp of pressurePoints) {
-                lines.push(`  - ${pp}`);
+                const meta = getPressurePointMeta(state, pp);
+                lines.push(`  - ${pp}${meta ? ` [${meta}]` : ''}`);
             }
         }
 
@@ -398,8 +444,18 @@ COMMON PATHS:
   char:id.condition
   char:id.doing
   char:id.reads.pc
+  collision:id.name
+  collision:id.forces
+  collision:id.details
+  collision:id.cost
+  collision:id.target_constraint
   collision:id.distance
   collision:id.status
+  collision:id.last_manifestation
+  collision:id.outcome_type
+  collision:id.aftermath
+  collision:id.successor_collision_ids+
+  collision:id.parent_collision_ids+
   constraint:id.integrity
   world.world_state
   world.pressure_points+
@@ -423,6 +479,10 @@ If a turn gets structurally complicated, switch to a full ---LEDGER--- block ins
 DISCIPLINE:
   Only write what changed materially.
   Keep doing as "action | Cost: what this neglects or risks".
+  Every live collision needs a story capsule: what is converging, who or what is caught in it, what it costs, and the forced choice looming.
+  When a collision presses into the scene, update collision:id.last_manifestation with the concrete current expression.
+  Pressure points are seeds, not history. If a seam fired, resolved, or became a collision, REMOVE it.
+  If a pressure point gains actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point the same turn.
   key_moments are permanent; do not remove them.
   summary+ should capture what happened and what changed. If at: is set, do not repeat the timestamp inside the text unless it matters stylistically.
   Cleanup is still capped on normal turns; save bulk pruning for eval or chapter close.
@@ -464,7 +524,7 @@ OPERATIONS:
 CREATE — new entity
   > CREATE char:tifa name="Tifa Lockhart" tier=KNOWN -- First encounter
   > CREATE constraint:c1-steady name="The Steady One" owner_id=tifa integrity=STABLE prevents="Showing vulnerability or exhaustion" threshold="Sustained pressure from someone trusted" replacement="Regression — stillness without purpose" replacement_type=regression shedding_order=2 -- Core constraint
-  > CREATE collision:trust-vs-duty name="Trust vs Duty" forces="trust,duty" status=SEEDED distance=10 -- Central tension
+  > CREATE collision:trust-vs-duty name="Trust vs Duty" forces="trust,duty" status=SEEDED distance=10 details="Trust and duty are converging. Autumn's loyalty demands she tell Kenji the truth. Her mission demands she doesn't." cost="If it detonates: one of them walks away for good" target_constraint=c1-the-steady-one -- Central tension
   > CREATE chapter:ch1 number=1 title="Arrival" status=OPEN arc="Meeting" central_tension="Friend or foe?" -- Init chapter
 
   Constraint fields: name, owner_id, integrity, prevents, threshold, replacement, replacement_type (sophistication/displacement/depth_shift/regression), shedding_order, current_pressure
@@ -592,6 +652,11 @@ FACTIONS — create and manage factions with political simulation
   relations (map: faction_id → stance string). Optional: doctrine, leadership, territory, alliances.
   Pressure points generated from faction conflicts are collision fuel — during advance turns,
   they compress existing collision distances or spawn new collisions.
+  A pressure point should stay SHORT: a seam, signal, or pending break.
+  Once it has named actors, a concrete cost, and a looming forced choice, it is ready to graduate:
+  > APPEND world field=pressure_points value="Demon scouts are testing the church perimeter at dusk." -- New seam
+  > CREATE collision:closing-perimeter name="The Closing Perimeter" status=ACTIVE distance=3 forces="demon advance, trapped survivors" details="Demon scouts have stopped probing and started shaping the block into a kill-box. Survivors are still inside, the exits are narrowing, and every delay gives the Prince a cleaner entrance." cost="Every minute they stay, the perimeter tightens. Moving means fighting through demons. Staying means the Prince arrives." target_constraint=c1-protector -- Pressure graduates into collision
+  > REMOVE world field=pressure_points value="Demon scouts are testing the church perimeter at dusk." -- The seam is now embodied by the collision
 
 DIVINATION — record current draw only (no history accumulation)
   > SET divination field=last_draw value="XIV — Temperance" -- Record draw (overwrites previous)
@@ -621,6 +686,40 @@ STATE MACHINES (MOVE between adjacent states only, no skipping):
     Relief reverse:     CRITICAL → STRESSED → STABLE
   Collision status:     SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED
   Chapter status:       PLANNED → OPEN → CLOSING → CLOSED
+
+COLLISIONS ARE STORY ENGINES, NOT LABELS:
+  Every live collision should tell you, cold:
+  1. what is converging
+  2. who or what is trapped in it
+  3. what engagement, delay, or failure costs
+  4. how it is showing up in the scene right now
+  5. what forced choice is looming
+  details           — the story capsule for the collision
+  cost              — the price of delay, engagement, or failure
+  target_constraint — which tracked defense this pressure is leaning on (if personal)
+  last_manifestation — the current concrete expression in scene reality; update it whenever the collision enters or sharpens in-scene
+
+COLLISION CLOSURE (required on every RESOLVED transition):
+  Every collision that reaches RESOLVED must record three fields:
+  > SET collision:id field=outcome_type value=DIRECT     -- Player engaged and shaped the result
+  > SET collision:id field=outcome_type value=EVOLVED    -- Resolution revealed a deeper tension
+  > SET collision:id field=outcome_type value=MERGED     -- Multiple parent collisions fused into a composite successor event
+  > SET collision:id field=outcome_type value=IMPLODED   -- Collision collapsed internally (betrayal, self-destruction, internal failure before it reached the player)
+  > SET collision:id field=outcome_type value=CRASHED    -- Player ignored it; gravity resolved it; worst outcome
+  > SET collision:id field=aftermath value="What changed. What was lost. What it left behind."
+  For EVOLVED or MERGED: add successor_collision_ids and link parent_collision_ids on the new collision.
+
+  IMPLODED example — the secret-holder breaks before the confrontation:
+  > MOVE collision:loyalty-trap field=status RESOLVING->RESOLVED
+  > SET collision:loyalty-trap field=outcome_type value=IMPLODED
+  > SET collision:loyalty-trap field=aftermath value="Mira confessed before Autumn could corner her — not from guilt, from fear. The confrontation Autumn had been building toward never happened. What remains is not resolution but rubble: a confession that arrived too fast to trust, and a debt she didn't earn."
+
+  EVOLVED example — resolution surfaces a new tension:
+  > MOVE collision:shadow-activity field=status RESOLVING->RESOLVED
+  > SET collision:shadow-activity field=outcome_type value=EVOLVED
+  > SET collision:shadow-activity field=aftermath value="The watcher was neutralized, but not before transmitting. Someone now knows Arcueid is in the district."
+  > SET collision:shadow-activity field=successor_collision_ids+ value=handler-convergence
+  > CREATE collision:handler-convergence name="Handler Convergence" status=SIMMERING distance=7 forces="handler network, Arcueid's exposure" cost="If they move first: extraction becomes impossible" details="The watcher's transmission went through. The handler network now has a confirmed sighting. This is not over — it has moved upstream." parent_collision_ids=shadow-activity
 
 HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):
   - Pressure points: REMOVE when activated (converted into collision fuel) or no longer relevant. These are seeds, not history.

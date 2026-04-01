@@ -9,7 +9,7 @@
  * 5. Divination — active system, last draw, reading history
  */
 
-import { getFieldHistory, getEntityHistory } from './state-compute.js';
+import { getFieldHistory, getEntityHistory, getArrayItemHistory } from './state-compute.js';
 
 const PANEL_ID = 'gravity-ledger-panel';
 const TOGGLE_ID = 'gravity-ledger-toggle';
@@ -79,6 +79,12 @@ function badge(value) {
 
 function historyLine(h) {
     return `<span class="gl-history-entry">${esc(h.from || '?')} → ${esc(h.to || '?')} <span class="gl-history-time">${esc(h.t)} ${h.r ? '— ' + esc(h.r) : ''}</span></span>`;
+}
+
+function arrayHistoryLine(h) {
+    const action = h.to !== undefined ? 'added' : 'removed';
+    const value = h.to !== undefined ? h.to : h.from;
+    return `<span class="gl-history-entry">${action}: ${esc(value || '?')} <span class="gl-history-time">${esc(h.t)} ${h.r ? '— ' + esc(h.r) : ''}</span></span>`;
 }
 
 /**
@@ -658,6 +664,7 @@ function renderCharDossier(char, state) {
 
 function renderWorld(state) {
     const parts = [];
+    const liveCollisions = Object.values(state.collisions || {}).filter(c => c.status !== 'RESOLVED');
 
     // Constants
     const c = toObj(state.world.constants);
@@ -731,7 +738,27 @@ function renderWorld(state) {
     const pp = toArr(state.world.pressure_points);
     if (pp.length) {
         parts.push(`<div class="gl-d-section"><b>Pressure Points:</b></div>`);
-        for (const p of pp) parts.push(`<div class="gl-d-row">- ${esc(p)}</div>`);
+        for (const p of pp) {
+            const hist = getArrayItemHistory(state, 'world', '_', 'pressure_points', p);
+            const lastAdd = [...hist].reverse().find(entry => entry.to !== undefined);
+            const ageTx = lastAdd ? Math.max(0, (state.lastTxId || 0) - (lastAdd.tx || 0)) : null;
+            const ageLabel = ageTx == null ? '' : ageTx >= 18 ? `stale (${ageTx} tx)` : ageTx >= 8 ? `aging (${ageTx} tx)` : `fresh (${ageTx} tx)`;
+            const match = liveCollisions.find(col => {
+                const hay = `${col.name || ''} ${col.details || ''} ${col.forces || ''} ${col.cost || ''} ${col.last_manifestation || ''}`.toLowerCase();
+                const needle = String(p).toLowerCase();
+                return needle.length > 8 && hay.includes(needle);
+            });
+
+            parts.push(`<div class="gl-collision-card">`);
+            parts.push(`<div class="gl-collision-name">${esc(p)}${ageLabel ? ` <span class="gl-history-time">${esc(ageLabel)}</span>` : ''}</div>`);
+            if (match) parts.push(`<div class="gl-d-detail"><b>Likely embodied by:</b> ${esc(match.name || match.id)}</div>`);
+            if (lastAdd?.r) parts.push(`<div class="gl-d-detail"><b>Last reason:</b> ${esc(lastAdd.r)}</div>`);
+            if (hist.length > 1) {
+                parts.push(`<div class="gl-history-toggle">History (${hist.length})</div>`);
+                parts.push(`<div class="gl-history-list" style="display:none">${hist.map(arrayHistoryLine).join('<br>')}</div>`);
+            }
+            parts.push(`</div>`);
+        }
     }
 
     // Knowledge asymmetry
@@ -761,12 +788,19 @@ function renderCollisions(state) {
         const forces = Array.isArray(col.forces) ? col.forces.map(f => typeof f === 'object' ? f.name || f : f).join(' vs ') : String(col.forces || '');
         const dist = col.distance != null ? Number(col.distance) : null;
         const distBar = dist != null ? renderDistanceBar(dist) : '';
+        const parents = toArr(col.parent_collision_ids);
 
         parts.push(`<div class="gl-collision-card">`);
         parts.push(`<div class="gl-collision-name">${esc(col.name || col.id)} ${badge(col.status)}</div>`);
-        parts.push(`<div class="gl-d-detail">${esc(forces)}</div>`);
+        if (col.details) {
+            parts.push(`<div class="gl-d-detail"><b>Thread:</b> ${esc(col.details)}</div>`);
+        }
+        if (forces) parts.push(`<div class="gl-d-detail"><b>Forces:</b> ${esc(forces)}</div>`);
         if (distBar) parts.push(distBar);
         if (col.cost) parts.push(`<div class="gl-d-detail"><b>Cost:</b> ${esc(col.cost)}</div>`);
+        if (col.target_constraint) parts.push(`<div class="gl-d-detail"><b>Target:</b> ${esc(col.target_constraint)}</div>`);
+        if (col.last_manifestation) parts.push(`<div class="gl-d-detail"><b>Now:</b> ${esc(col.last_manifestation)}</div>`);
+        if (parents.length) parts.push(`<div class="gl-d-detail"><b>From:</b> ${parents.map(p => esc(p)).join(', ')}</div>`);
 
         const distHist = getFieldHistory(state, 'collision', col.id, 'distance');
         const statusHist = getFieldHistory(state, 'collision', col.id, 'status');
@@ -781,7 +815,19 @@ function renderCollisions(state) {
     if (resolved.length) {
         parts.push(`<div class="gl-d-section"><b>Resolved:</b></div>`);
         for (const col of resolved) {
-            parts.push(`<div class="gl-d-row gl-resolved">${esc(col.name || col.id)} — ${esc(col.cost || 'resolved')}</div>`);
+            const outcomeLabel = col.outcome_type ? ` [${col.outcome_type}]` : '';
+            const forces = Array.isArray(col.forces) ? col.forces.map(f => typeof f === 'object' ? f.name || f : f).join(' vs ') : String(col.forces || '');
+            const parents = toArr(col.parent_collision_ids);
+            const successors = toArr(col.successor_collision_ids);
+            parts.push(`<div class="gl-collision-card gl-resolved">`);
+            parts.push(`<div class="gl-collision-name">${esc(col.name || col.id)}${outcomeLabel}</div>`);
+            if (col.details) parts.push(`<div class="gl-d-detail"><b>Thread:</b> ${esc(col.details)}</div>`);
+            if (forces) parts.push(`<div class="gl-d-detail"><b>Forces:</b> ${esc(forces)}</div>`);
+            if (col.cost) parts.push(`<div class="gl-d-detail"><b>Cost:</b> ${esc(col.cost)}</div>`);
+            if (col.aftermath) parts.push(`<div class="gl-d-detail"><b>Aftermath:</b> ${esc(col.aftermath)}</div>`);
+            if (parents.length) parts.push(`<div class="gl-d-detail"><b>From:</b> ${parents.map(p => esc(p)).join(', ')}</div>`);
+            if (successors.length) parts.push(`<div class="gl-d-detail"><b>Spawned:</b> ${successors.map(s => esc(s)).join(', ')}</div>`);
+            parts.push(`</div>`);
         }
     }
 

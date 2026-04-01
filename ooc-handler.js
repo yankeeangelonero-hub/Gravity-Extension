@@ -107,9 +107,10 @@ async function handleEval() {
     lines.push('1. CONTINUITY: Check for errors, missing/ghost state, rule violations, stale fields.');
     lines.push('2. STALE FIELDS: Review ALL location, condition, equipment, doing fields. Update any that are outdated.');
     lines.push('3. KNOWLEDGE GAPS: Verify pc.knowledge_gaps is accurate — add missing gaps, remove discovered ones.');
-    lines.push('4. PRUNE: REMOVE fired pressure points, stale noticed details, resolved entries, duplicate summaries.');
-    lines.push('5. CONSOLIDATE: If story_summary exceeds 30 entries, consolidate oldest batches into 3-5 sentence overviews.');
-    lines.push('6. FIX: emit AMEND for any continuity errors found.');
+    lines.push('4. PRESSURE POINTS: For each pressure point, decide KEEP / REMOVE / ESCALATE. REMOVE fired or stale seams; if one now has actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point.');
+    lines.push('5. PRUNE: REMOVE stale noticed details, resolved entries, duplicate summaries.');
+    lines.push('6. CONSOLIDATE: If story_summary exceeds 30 entries, consolidate oldest batches into 3-5 sentence overviews.');
+    lines.push('7. FIX: emit AMEND for any continuity errors found.');
     lines.push('This turn is UNCAPPED — emit as many ledger lines as needed for a thorough cleanup.');
     lines.push('═══ END EVALUATION ═══');
     return lines.join('\n');

@@ -220,11 +220,11 @@ EMIT ALL OF THE FOLLOWING in one ---LEDGER--- block:
 3. CHAPTER:
 > CREATE chapter:ch1-slug number=1 title="[focus]" status=OPEN arc="[central question]" central_tension="[forced choice]"
 
-4. COLLISIONS (at least 1 active or simmering):
-> CREATE collision:slug name="[name]" forces="force1,force2" status=SIMMERING distance=8 cost="[what resolution costs]"
+4. COLLISIONS (at least 1 active or simmering; each must be a compact narrative thread, not just a label):
+> CREATE collision:slug name="[name]" forces="force1,force2" status=SIMMERING distance=8 details="[what is converging, who is caught in it, how it is already surfacing, what forced choice is looming]" cost="[what engagement, delay, or failure costs]" target_constraint="[constraint-id if this is pressing a tracked defense]"
 
-5. PRESSURE POINTS (2-3 seams where the world is about to break):
-> APPEND world field=pressure_points value="[seam]"
+5. PRESSURE POINTS (2-3 seams where the world is about to break; short seeds, not full collisions):
+> APPEND world field=pressure_points value="[seam that could later tighten into a collision]"
 
 6. PRINCIPAL CHARACTER (from scenario/character card):
 > CREATE char:name name="[Full Name]" tier=PRINCIPAL want="[motivation]" doing="[action]" cost="[risk]"
