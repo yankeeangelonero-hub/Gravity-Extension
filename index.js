@@ -42,6 +42,7 @@ let _pendingReinforcement = null;
 let _pendingOOCInjection = null;
 let _uncappedTurn = false;
 let _currentInjectMode = 'regular';
+let _lastCompletedMode = 'regular'; // snapshot before reset — used by exemplar flagging
 let _pendingDeductionType = 'regular'; // regular, combat, advance, intimacy
 
 // ─── Collision Resolution Tracking ───────────────────────────────────────────
@@ -1197,6 +1198,8 @@ async function onChatChanged() {
 
 async function onMessageReceived(messageId) {
     if (!_initialized) await initialize();
+    // Snapshot the mode before resetting so exemplar flagging preserves the real turn mode
+    _lastCompletedMode = _currentInjectMode;
     // Reset inject mode and clear OOC injection — the special turn is over
     _currentInjectMode = 'regular';
     const context = SillyTavern.getContext();
@@ -1641,7 +1644,7 @@ async function handleGoodTurnButton() {
     if (!text) return;
 
     const trimmed = text.trim();
-    const modeHint = _currentInjectMode === 'advance' ? 'advance' : 'regular';
+    const modeHint = _lastCompletedMode || 'regular';
     const exemplar = normalizeExemplarRecord({
         text: trimmed,
         mode_hint: modeHint,
