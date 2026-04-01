@@ -101,6 +101,11 @@ const MODE_LOREBOOK_KEYS = Object.freeze({
     intimacyOptional: 'gravity_mode_intimacy_optional_examples',
     timeskipCore: 'gravity_mode_timeskip_core',
     chapterCloseCore: 'gravity_mode_chapter_close_core',
+    // prose modulation keys (fired alongside mode gameplay keys)
+    proseRegular: 'gravity_prose_regular',
+    proseCombat: 'gravity_prose_combat',
+    proseIntimacy: 'gravity_prose_intimacy',
+    proseAdvance: 'gravity_prose_advance',
 });
 
 function uniqueStrings(values) {
@@ -1092,6 +1097,13 @@ Update current_scene, location, and condition when they materially change or the
 CLEANUP (REMOVE/DESTROY): max 3 per regular turn. Save bulk for eval or chapter close.
 
 You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memory.]`;
+
+        // Fire regular prose trigger on regular turns only
+        // (combat/intimacy/advance fire their own prose triggers via _ooc)
+        if (isRegular) {
+            nudgeText += `\n\n[WORLD INFO TRIGGERS - DO NOT ECHO:\n${MODE_LOREBOOK_KEYS.proseRegular}\n]`;
+        }
+
         setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
@@ -1358,7 +1370,7 @@ Write the next prose beat (200-400 words) responding to that action, then genera
 Collision pressure stays live. "OOC: fade to black" cuts to afterglow.
 
 Then write deduction + prose + choices + compact STATE block.`,
-            [MODE_LOREBOOK_KEYS.intimacyCore, MODE_LOREBOOK_KEYS.intimacyOptional],
+            [MODE_LOREBOOK_KEYS.intimacyCore, MODE_LOREBOOK_KEYS.intimacyOptional, MODE_LOREBOOK_KEYS.proseIntimacy],
         );
         injectPrompt('advance');
         return;
@@ -1439,7 +1451,7 @@ function handleAdvanceButton() {
     }
 
     const draw = drawDivination();
-    const markers = [MODE_LOREBOOK_KEYS.advanceCore, MODE_LOREBOOK_KEYS.advanceOptional];
+    const markers = [MODE_LOREBOOK_KEYS.advanceCore, MODE_LOREBOOK_KEYS.advanceOptional, MODE_LOREBOOK_KEYS.proseAdvance];
 
     if (ripeCollisions.length === 1) {
         const a = ripeCollisions[0];
@@ -1565,7 +1577,7 @@ function handleCombatButton() {
     _pendingOOCInjection = buildModeInjection(
         'GRAVITY COMBAT',
         body,
-        [MODE_LOREBOOK_KEYS.combatCore, MODE_LOREBOOK_KEYS.combatOptional],
+        [MODE_LOREBOOK_KEYS.combatCore, MODE_LOREBOOK_KEYS.combatOptional, MODE_LOREBOOK_KEYS.proseCombat],
     );
 
     injectPrompt('advance');
@@ -1616,7 +1628,7 @@ If active, write one short sensory beat and then generate 4-5 clickable choices 
 <span class="act" data-value="intimate: first-person action description">Short display text</span>
 
 Check collisions every turn. If one hits distance 0, the world interrupts the scene. After the scene, resume deduction + prose + STATE updates for reads, stance shifts, key moments, intimate history, and constraint pressure.`,
-        [MODE_LOREBOOK_KEYS.intimacyCore, MODE_LOREBOOK_KEYS.intimacyOptional],
+        [MODE_LOREBOOK_KEYS.intimacyCore, MODE_LOREBOOK_KEYS.intimacyOptional, MODE_LOREBOOK_KEYS.proseIntimacy],
     );
 
     injectPrompt('advance');
