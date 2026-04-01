@@ -19,6 +19,11 @@ node -c ledger-store.js
 
 There are no tests, no linter, and no CI. Validate changes by syntax-checking modified files.
 
+## Project Memory
+
+Persistent project-state notes live in `Documentation/project_memory.md`.
+Use it as the durable handoff file for "what changed and what matters now" between Codex sessions.
+
 ## Architecture
 
 ### Three-Layer Design
@@ -52,6 +57,7 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_setup`** — Setup wizard phase prompts (when active)
 - **`_ooc`** — OOC command injection (from buttons)
 - **`_arrival`** — Oracle-driven collision resolution (arrival, escalation, crash — all phases)
+- **`_pressure`** — Pressure point keep/remove/escalate audit
 - **`_dist_warn`** — Distance-increase error corrections
 - **`_intimacy`** — Intimacy stance boundary enforcement
 - **`_faction`** — Faction heartbeat (every 10 regular turns)
@@ -77,8 +83,10 @@ The extension injects turn-specific deduction templates via the `_nudge` slot:
 - **Operations**: `CR` (create), `S` (set), `TR` (transition/move), `A` (append), `R` (remove), `MS` (map_set/read), `MR` (map_del), `D` (destroy), `SNAP`, `ROLL`, `AMEND`
 - **Entity types**: `char`, `constraint`, `collision`, `chapter`, `faction`, `world`, `pc`, `divination`, `summary`
 - **State machines** (char tiers, constraint integrity, collision status, chapter status) are documented in `state-machine.js` and the v11 preset but not enforced by code — the LLM follows and self-audits via `OOC: eval`
-- **Collision status**: `SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED` or `→ CRASHED` (player ignored it, gravity resolved it — worst outcome)
+- **Collision status**: `SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED`
+- **Collision outcomes**: `DIRECT`, `EVOLVED`, `MERGED`, `IMPLODED`, `CRASHED`
 - **Oracle-driven resolution**: When a collision hits distance 0, the extension starts a resolution clock with divination draws at each phase: atmosphere (turns 1-2), direct intrusion with fresh draw (turns 3-4), crash with final draw (turn 5+). Tracked via `_resolutionTracker` Map in index.js.
+- **Pressure points**: short world seams stored in `world.pressure_points`; keep them short, remove them when spent/stale, and escalate them into collisions when they gain actors + cost + forced choice
 - **Format validation only**: `consistency.js` checks structure, not gameplay rules
 - **OOC commands** in `ooc-handler.js`: `combat setup`, `snapshot`, `rollback`, `eval`, `history`, `consolidate`, etc. — these inject contextual prompts, they don't modify state directly
 - **Storage**: All canonical state lives in `chatMetadata` (persisted per chat by SillyTavern). Optional mode playbooks may live in importable World Info files such as `Gravity World Info.json`, but those entries are prompt guidance only; the extension remains the source of truth for state.
