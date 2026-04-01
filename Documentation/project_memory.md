@@ -52,6 +52,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Saved exemplars are now normalized with inferred category/strength metadata and injected by turn fit rather than simple recency.
 - The world UI now shows pressure-point age, likely collision embodiment, last add reason, and append/remove history.
 - Collision UI now shows thread, forces, cost, target, manifestation, aftermath, and lineage more clearly.
+- Preset prose guidance was retuned to reduce dry/report-like output: the core craft rules, Noir Realist style block, and mode playbooks now push for stronger image, subtext, residue, and sentence-length variation while keeping Gravity's one-beat discipline.
 
 ## Important Files
 
@@ -86,6 +87,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
   - improve debug/inspection UX further so users can see why a collision or pressure point exists
   - if more prose styles are added, build style-specific exemplar banks instead of relying on inference alone
   - add user-facing upgrade notes whenever state model changes land
+  - frontend direction is now documented in `Documentation/frontend_ux_roadmap.md`; keep UI work extension-native and focused on explainability before broader workflow polish
 - Reminder:
   - after major behavior changes, update this file in the same commit
   - validate modified JS files with `node -c`
