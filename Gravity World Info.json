@@ -441,6 +441,40 @@
       "depth": 4,
       "role": 0,
       "automationId": ""
+    },
+    "14": {
+      "uid": 14,
+      "key": [
+        "gravity_prose_intimacy"
+      ],
+      "keysecondary": [],
+      "comment": "Gravity Prose - Intimacy NSFW",
+      "content": "### Prose Modulation: Intimacy — Explicit Layer\n\nThis layer stacks on top of the base intimacy prose. It unlocks anatomical language and physical realism.\n\nExplicit Permission:\nUse direct anatomical language. No euphemisms, no purple substitutions. Name body parts plainly. The prose earns its heat through context, not through coyness about what is being touched.\n\nPhysical Realism:\nRender the body honestly. Arousal has visible, tactile evidence — track it without flinching. Sweat, slickness, tension, release. The body does not perform for the reader; it responds to stimulus. Use the character's condition and wounds — pain and pleasure share a nervous system.\n\nSound and Vocalization:\nIntimacy is not silent. Breath, contact, friction, involuntary sound. Characters vocalize in their own register — vocabulary prison applies here too. What someone says during sex reveals as much as what they say in a negotiation.\n\nDossier Integration:\nConstraint integrity shapes how a character behaves here. STRESSED characters compensate — performing confidence, avoiding eye contact, rushing. CRITICAL characters lose the filter — the thing they have been holding back surfaces. Check the reads map: what each character believes about the other determines whether this is connection, performance, claim, or surrender.\n\nRealistic Mishaps:\nInclude awkward angles, fumbled adjustments, cramps, pauses for breath or water, graceless scrambles for leverage. These are evidence of reality. Shared laughter at minor failures is intimacy. Smoothness is a hallucination.",
+      "constant": false,
+      "vectorized": false,
+      "selective": false,
+      "selectiveLogic": 0,
+      "addMemo": false,
+      "order": 130,
+      "position": 0,
+      "disable": false,
+      "excludeRecursion": true,
+      "preventRecursion": true,
+      "matchWholeWords": false,
+      "caseSensitive": true,
+      "matchPersonaDescription": false,
+      "matchCharacterDescription": false,
+      "matchCharacterPersonality": false,
+      "matchCharacterDepthPrompt": false,
+      "matchScenario": false,
+      "matchCreatorNotes": false,
+      "delayUntilRecursion": false,
+      "scanDepth": null,
+      "useProbability": false,
+      "probability": 100,
+      "depth": 4,
+      "role": 0,
+      "automationId": ""
     }
   }
 }
