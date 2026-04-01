@@ -1,96 +1,77 @@
 # Project Memory
 
+Updated: 2026-04-02 01:08:09 +08:00
+
 Durable working memory for Codex sessions in this repository. Update this file when system behavior, active design decisions, or important constraints change.
 
 ## Current State
 
 - Gravity Ledger remains a pure-JS SillyTavern extension with no build step, tests, or CI.
-- Validation is still syntax-only: run `node -c` on every modified `.js` file.
-- `index.js` remains the central coordinator for injection, turn flow, collision resolution, pressure-point audit, and UI wiring.
-- World-story framing now lives in `world.constants.story_kind`; prose voice/tone rules are preset-owned rather than state-view-owned.
+- Validation is still syntax-only: run `node -c` on every modified `.js` file and parse-check modified JSON files.
+- `index.js` remains the central coordinator for prompt injection, turn flow, collision resolution, pressure-point audits, and UI wiring.
+- `gravity_v14.json` plus `Gravity World Info.json` now own sentence-level prose behavior and mode-specific length guidance.
+- Gravity deduction now lives in the model's hidden reasoning/thinking pass. The extension no longer asks for a visible `---DEDUCTION---` block in normal responses.
+- `gravity_v14.json` now includes a dedicated Lucid Loom-style CoT trigger plus a separate Gravity CoT entry. On fresh turns the model must open `<think>`, do deduction first there, close `</think>`, and only then emit visible output.
+- Setup and runtime state were trimmed aggressively. Live setup now authors the opening arc, optional combat rules, and optional PC starting power. The extension no longer authors `story_kind`, `guidelines`, `voice`, `tone`, `length`, `motivation`, `objective`, or `knowledge_asymmetry`.
+- `world.constants.combat_rules` is the only actively surfaced setup-authored world constant in the current extension contract.
+- Good-turn exemplar tagging now preserves the real completed turn mode through `_lastCompletedMode`, so combat/intimacy/advance exemplars are not silently recorded as regular.
 
-## Collision System
+## Prose Architecture
 
-- Collision live statuses are now `SEEDED -> SIMMERING -> ACTIVE -> RESOLVING -> RESOLVED`.
-- `CRASHED`, `MERGED`, and `IMPLODED` are closure outcomes, not live statuses.
-- Replay compatibility lives in `state-compute.js`: old collision `status: CRASHED` normalizes to `status: RESOLVED` with `outcome_type: CRASHED`.
-- Live collisions are expected to carry narrative substance:
-  - `forces`
-  - `details`
-  - `cost`
-  - `target_constraint` when relevant
-  - `last_manifestation` once the collision is active in-scene
-- Runtime audits now warn on collisions that are missing those fields or whose `details` are too thin.
-- Closure audits warn on missing `outcome_type`, `aftermath`, or successor linkage for `EVOLVED` / `MERGED`.
-- Simultaneous arrivals use convergence framing with explicit `PARALLEL`, `CASCADE`, or `COMPOSITE` declaration.
+- Always-on prose authority lives in the preset: Prose Kernel, active Group 5 prose style, Character Voice, and Dossier-Driven Prose.
+- The preset now owns the hidden reasoning wrapper and first-step ordering. The `_nudge` slot only injects the live per-turn deduction checklist plus post-thinking output order.
+- Divination HTML card reveals are explicitly instructed to stay in visible output before the prose scene, never inside hidden reasoning.
+- Mode-specific prose lives in World Info entries:
+  - `gravity_prose_regular`
+  - `gravity_prose_combat`
+  - `gravity_prose_intimacy`
+  - `gravity_prose_advance`
+- Timeskip and chapter-close are structural modes and currently fall back to the Prose Kernel rather than using dedicated prose World Info keys.
+- Length guidance now lives in World Info mode prose entries rather than extension prompts or preset-side length controls.
 
-## Pressure Point System
+## State Modeling Notes
 
-- Pressure points still live in `world.pressure_points` as short string seams. They are intentionally seeds, not full entities.
-- Pressure points now have append/remove lifecycle history stored in `_history` as `pressure_points[]` events.
-- Runtime pressure-point audit expects each seam to be classified as:
-  - `KEEP`
-  - `REMOVE`
-  - `ESCALATE`
-- Pressure points should be removed when they:
-  - fired
-  - became irrelevant
-  - were already embodied by a live collision
-- Pressure points should escalate into collisions when they have:
-  - named actors
-  - a concrete cost
-  - a looming forced choice
-- Prompt state and UI now surface pressure-point age in tx-count terms (`fresh`, `aging`, `stale`).
-- Matching a pressure point to a collision is heuristic because pressure points are still plain strings.
+- Collision live statuses are `SEEDED -> SIMMERING -> ACTIVE -> RESOLVING -> RESOLVED`.
+- Closure outcomes remain `DIRECT`, `EVOLVED`, `MERGED`, `IMPLODED`, and `CRASHED`.
+- Pressure points still live in `world.pressure_points` as short world seams with lifecycle history recorded in `_history`.
+- Story identity no longer lives in runtime state. Use scenario/card context, preset guidance, and mode playbooks instead of `world.constants.story_kind`.
+- World-level `knowledge_asymmetry` is effectively deprecated. The live system expresses asymmetry through:
+  - `char.reads`
+  - `noticed_details`
+  - summary residue
+  - collisions and their costs
+- There is no universal `blindspots` field in the current schema.
+- `pc.knowledge_gaps` is mentioned by `OOC: eval`, but it is not rendered or reinforced elsewhere yet. Treat it as orphaned guidance until it is either implemented properly or removed.
 
-## Prompt / UI Notes
+## UI and Prompt Notes
 
-- Prompt injection now includes a dedicated pressure-point audit slot in `index.js`.
-- Regular-turn state injection now shows collision narrative thread information instead of only name/status/distance.
-- Runtime state and setup now use `story_kind` for "what kind of story is this" framing instead of `voice` / `tone` / `tone_rules`.
-- Sentence-level prose authority now lives in the preset and lorebook; runtime state stays style-neutral apart from `story_kind` context.
-- Saved exemplars are now normalized with inferred category/strength metadata and injected by turn fit rather than simple recency.
-- The world UI now shows pressure-point age, likely collision embodiment, last add reason, and append/remove history.
-- Collision UI now shows thread, forces, cost, target, manifestation, aftermath, and lineage more clearly.
-- Preset prose guidance was retuned to reduce dry/report-like output: the core craft rules, Noir Realist style block, and mode playbooks now push for stronger image, subtext, residue, and sentence-length variation while keeping Gravity's one-beat discipline.
+- `state-view.js` now surfaces only active world constants, which currently means `combat_rules`.
+- `ui-panel.js` hides legacy constants from older saves so deprecated setup fields do not keep resurfacing in the interface.
+- The world panel no longer renders a `knowledge_asymmetry` section.
+- Intimacy prose guidance explicitly uses relational asymmetry and misread via the `reads` map rather than a dedicated knowledge-asymmetry state field.
+
+## Documentation Layout
+
+- Active durable memory file: `Documentation/project_memory.md`
+- Archived memory and older planning docs: `Documentation/Old/`
+- Existing prose rollout handoff: `Documentation/v14_prose_architecture_handoff.md`
 
 ## Important Files
 
-- `index.js` — runtime orchestration, injections, audits, button flows
-- `state-compute.js` — replay logic plus field/array history
-- `state-view.js` — prompt state/readme output
-- `ui-panel.js` — world/collision inspection UI
-- `ooc-handler.js` — eval/history/consolidate prompts
-- `setup-wizard.js` — initialization guidance
-- `Documentation/collision_pipeline_upgrade_plan.md` — collision design plan and status notes
+- `index.js` - runtime orchestration, prompt injection, audits, and button flows
+- `state-compute.js` - replay logic and history tracking
+- `state-view.js` - prompt state and readme output
+- `ui-panel.js` - panel rendering and world/collision inspection UI
+- `setup-wizard.js` - setup prompt contract
+- `ooc-handler.js` - eval/history/consolidate prompts
+- `gravity_v14.json` - active preset with prose kernel and dossier-driven layers
+- `Gravity World Info.json` - active mode playbooks and prose modulation entries
 
-## Known Limits
+## Suggested Next Focus
 
-- No automated tests; syntax-checking is the only in-repo validation.
-- Pressure-point embodiment is heuristic, not identity-based.
-- A lot of gameplay discipline still depends on prompt quality and audit prompts rather than hard enforcement.
-
-## Handoff
-
-- Active branch: `codex-v13-state-delta`
-- Recent completed work:
-  - collision lifecycle normalized around `RESOLVED` + `outcome_type`
-  - collision prompt/state/UI upgraded so live collisions carry richer narrative threads
-  - pressure points now record append/remove lifecycle history
-  - pressure-point audits now push `KEEP / REMOVE / ESCALATE`
-  - world UI now shows pressure-point age, likely collision embodiment, and history
-  - `AGENTS.md` now points here as the durable project memory file
-  - prose ownership moved fully into preset/lorebook guidance while runtime state uses `story_kind`
-  - exemplar selection now targets turn mode/technique instead of injecting the last liked passages blindly
-  - preset and lorebook prose kernels now enforce camera/rhythm, stronger summary fuel, and mode-specific micro-guidance
-- Suggested next focus:
-  - improve debug/inspection UX further so users can see why a collision or pressure point exists
-  - if more prose styles are added, build style-specific exemplar banks instead of relying on inference alone
-  - add user-facing upgrade notes whenever state model changes land
-  - frontend direction is now documented in `Documentation/frontend_ux_roadmap.md`; keep UI work extension-native and focused on explainability before broader workflow polish
-- Reminder:
-  - after major behavior changes, update this file in the same commit
-  - validate modified JS files with `node -c`
+- Decide whether to formalize `pc.knowledge_gaps` as a real feature or remove it from `OOC: eval`.
+- If explicit asymmetry tracking is needed, start with PC-only knowledge gaps or optional blindspots for major recurring characters rather than adding blindspots to every character.
+- Clean up remaining mojibake in docs and some source comments when it becomes worth a dedicated pass.
 
 ## Update Rule
 

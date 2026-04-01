@@ -23,6 +23,7 @@ There are no tests, no linter, and no CI. Validate changes by syntax-checking mo
 
 Persistent project-state notes live in `Documentation/project_memory.md`.
 Use it as the durable handoff file for "what changed and what matters now" between Codex sessions.
+Archived notes and superseded plans live in `Documentation/Old/`.
 
 ## Architecture
 
@@ -53,7 +54,7 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_state`** — Entity registry + dossiers (full state view every turn)
 - **`_readme`** — Command format reference (core on regular/advance, full on integration)
 - **`_inject`** — Corrections + reinforcement prompts
-- **`_nudge`** — Turn format with deduction template (regular/combat/advance/intimacy)
+- **`_nudge`** — Active per-turn deduction checklist plus post-thinking output order (regular/combat/advance/intimacy)
 - **`_setup`** — Setup wizard phase prompts (when active)
 - **`_ooc`** — OOC command injection (from buttons)
 - **`_arrival`** — Oracle-driven collision resolution (arrival, escalation, crash — all phases)
@@ -68,7 +69,7 @@ Turn modes: `regular` (player prose), `advance` (world moves), `integration` (se
 
 ### Deduction Templates
 
-The extension injects turn-specific deduction templates via the `_nudge` slot:
+The extension injects turn-specific deduction checklists via the `_nudge` slot. The preset's dedicated CoT entry owns the actual `<think>...</think>` reasoning wrapper and executes these checklists there, not in visible prose:
 - **`regular`** — Full 12-field deduction (intent, story, collisions, constraints, factions, cost overlap, divination, contest, scene, plan, updates, chapter)
 - **`combat`** — Power assessment, advantages, enemy logic, wounds, distance
 - **`advance`** — Focus, what moves, divination, collision tracking
@@ -86,6 +87,9 @@ The extension injects turn-specific deduction templates via the `_nudge` slot:
 - **Collision status**: `SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED`
 - **Collision outcomes**: `DIRECT`, `EVOLVED`, `MERGED`, `IMPLODED`, `CRASHED`
 - **Story framing**: sentence-level prose and story identity belong in preset files, lorebook entries, and the scenario/card context rather than runtime state
+- **Active setup-authored world constants**: `world.constants.combat_rules` is the only live setup-authored world constant; older framing fields such as `story_kind`, `guidelines`, `motivation`, `objective`, `length`, and `knowledge_asymmetry` are deprecated
+- **Knowledge asymmetry**: model it through `reads`, `noticed_details`, summaries, and collisions rather than `world.knowledge_asymmetry`; there is no universal `blindspots` field
+- **Knowledge gaps**: `pc.knowledge_gaps` is referenced by `OOC: eval` guidance but is not a fully surfaced runtime feature yet
 - **Oracle-driven resolution**: When a collision hits distance 0, the extension starts a resolution clock with divination draws at each phase: atmosphere (turns 1-2), direct intrusion with fresh draw (turns 3-4), crash with final draw (turn 5+). Tracked via `_resolutionTracker` Map in index.js.
 - **Pressure points**: short world seams stored in `world.pressure_points`; keep them short, remove them when spent/stale, and escalate them into collisions when they gain actors + cost + forced choice
 - **Format validation only**: `consistency.js` checks structure, not gameplay rules
@@ -104,4 +108,6 @@ The extension injects turn-specific deduction templates via the `_nudge` slot:
 - The extension imports SillyTavern globals (e.g., `getContext`, `setExtensionPrompt`, `saveMetadataDebounced`) from the ST environment — these are not local dependencies.
 - `index.js` is the central coordinator (~1,500 lines). It wires all modules together and handles the turn lifecycle.
 - `gravity-system-prompt.md` is a legacy reference for the ledger command format. Current presets live in `gravity_v13_c.json` and `gravity_v14.json`, while mode-specific playbooks can be imported from `Gravity World Info.json`. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
+- `Documentation/project_memory.md` is the active durable memory file. Archived docs and older planning artifacts live in `Documentation/Old/`.
+- `Documentation/v14_prose_architecture_handoff.md` captures the modular prose rollout that moved prose authority into `gravity_v14.json` plus `Gravity World Info.json`.
 - Divination uses random tables (Arcana/Classic/I-Ching) defined in `index.js`.

@@ -215,7 +215,7 @@ function formatDrawInstruction(draw, guidance) {
     if (!draw) return guidance || '';
     const sections = [`${draw.label}: ${draw.reading}`];
     if (draw.html) {
-        sections.push(`Render this HTML card reveal before interpreting:\n${draw.html}`);
+        sections.push(`Render this HTML card reveal in visible output before the prose scene, never inside hidden reasoning:\n${draw.html}`);
     }
     if (guidance) sections.push(guidance);
     return sections.join('\n');
@@ -856,7 +856,7 @@ The collision is RESOLVING. Its presence permeates the current scene as atmosphe
 
 DO NOT let the player ignore this. The collision's weight is in the room even if its forces aren't. Subtext in dialogue. Physical tension in body language. Environmental details that mirror the approaching confrontation.
 
-Your deduction MUST name how this collision is affecting the current scene. If the player's action doesn't engage the collision, show how the collision's pressure bleeds into whatever they're doing instead. If the collision stays live after this beat, SET collision:${id}.last_manifestation to the concrete way it pressed into the scene.`);
+Your hidden deduction must name how this collision is affecting the current scene. If the player's action doesn't engage the collision, show how the collision's pressure bleeds into whatever they're doing instead. If the collision stays live after this beat, SET collision:${id}.last_manifestation to the concrete way it pressed into the scene.`);
 
                     } else if (turnsSince <= RESOLUTION_INTRUSION_TURNS) {
                         // Phase 2: The Oracle Manifests — direct intrusion with fresh draw
@@ -970,7 +970,7 @@ Declare the relationship between these arrivals before writing the scene. Choose
 • CASCADE — one collision becomes the trigger or delivery vehicle for another. Both remain distinct, but their arrivals are causally linked. Name which drives which.
 • COMPOSITE — the simultaneous arrivals form a single larger event. Write one coherent converged scene. Each parent collision typically closes with outcome_type: MERGED. CREATE a composite successor collision and link parent_collision_ids / successor_collision_ids.
 
-State your choice explicitly at the start of your deduction (e.g., "Convergence: PARALLEL — both arrive but X foregrounds first"). The convergence draw colors the shape of the combined event.
+State your choice explicitly at the start of your reasoning deduction pass (e.g., "Convergence: PARALLEL — both arrive but X foregrounds first"). The convergence draw colors the shape of the combined event.
 
 If a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.
 
@@ -1029,70 +1029,67 @@ MOVE each arrived collision to RESOLVING. SET each collision's last_manifestatio
             setExtensionPrompt(`${MODULE_NAME}_intimacy`, '', PROMPT_NONE, 0);
         }
 
-        // Nudge — full on regular turns, slim on advance/integration (those prompts already instruct on ledger)
+        // Nudge - full on regular turns, slim on advance/integration (those prompts already instruct on ledger)
         const DEDUCTION_TEMPLATES = {
-            regular: `---DEDUCTION---
-Intent: [what the player is trying to do]
-Story: [1-2 lines — the dramatic situation, what's at stake]
+            regular: `Intent: [what the player is trying to do]
+Story: [1-2 lines - the dramatic situation, what's at stake]
 
 Collisions:
-- [name] | [distance] | [tightening / simmering / resolving] — [why this turn]
-New: [spawned — or: none]
-Resolving: [at zero — what's the forced choice?]
+- [name] | [distance] | [tightening / simmering / resolving] - [why this turn]
+New: [spawned - or: none]
+Resolving: [at zero - what's the forced choice?]
 
-Constraint: [which of the principal's constraints is pressured, why, integrity direction — or: none pressured]
-Factions: [which faction advanced or could advance — if none acted in 10+ turns, one MUST act now]
-Cost overlap: [whose costs are colliding — who's being forced to choose]
+Constraint: [which of the principal's constraints is pressured, why, integrity direction - or: none pressured]
+Factions: [which faction advanced or could advance - if none acted in 10+ turns, one MUST act now]
+Cost overlap: [whose costs are colliding - who's being forced to choose]
 
-Divination: [if drawn — result, reading. If not — skip]
+Divination: [if drawn - result, reading. If not - skip]
 Contest: [resolve player actions through logic and established capabilities]
 
-Scene: [who's present, atmosphere — for current_scene update]
+Scene: [who's present, atmosphere - for current_scene update]
 Plan: [ONE beat. What happens. What would each character logically do. Stop after the first shift.]
-Updates: [all material state changes for the STATE block — or: none]
-Chapter: [hold / propose "Title" / advance]
----END DEDUCTION---`,
-            combat: `---DEDUCTION---
-Action: [what the PC is attempting]
-Power: [PC power:X vs enemy power:Y — gap, can this work?]
-Advantages: [what PC has established — traits, prep, terrain, reads]
-Enemy: [what the enemy would logically do — adapt, counter, exploit]
-Wounds: [PC wounds, enemy wounds — effect on this exchange]
-Distance: [current → change? why?]
-Beat: [ONE exchange. What happens.]
----END DEDUCTION---`,
-            advance: `---DEDUCTION---
-Focus: [scene/world/offscreen/new_threat/collision]
+Updates: [all material state changes for the STATE block - or: none]
+Chapter: [hold / propose "Title" / advance]`,
+            combat: `Action: [what the PC is attempting]
+Power: [PC power:X vs enemy power:Y - gap, can this work?]
+Advantages: [what PC has established - traits, prep, terrain, reads]
+Enemy: [what the enemy would logically do - adapt, counter, exploit]
+Wounds: [PC wounds, enemy wounds - effect on this exchange]
+Distance: [current -> change? why?]
+Beat: [ONE exchange. What happens.]`,
+            advance: `Focus: [scene/world/offscreen/new_threat/collision]
 What moves: [the specific thing that happens]
 Draw: [how the divination shapes this]
-Collision: [which tightens or spawns — or: none]
-Beat: [what happens.]
----END DEDUCTION---`,
-            intimacy: `---DEDUCTION---
-Stance: [partner's current intimacy_stance]
-Constraint: [which is pressured — or: none]
+Collision: [which tightens or spawns - or: none]
+Beat: [what happens.]`,
+            intimacy: `Stance: [partner's current intimacy_stance]
+Constraint: [which is pressured - or: none]
 Partner wants: [what their body is showing]
-History: [pattern from intimate_history — or: first encounter]
+History: [pattern from intimate_history - or: first encounter]
 Draw: [how divination shapes the sexual energy]
-Beat: [ONE sensory beat.]
----END DEDUCTION---`,
+Beat: [ONE sensory beat.]`,
         };
 
         const deductionTemplate = DEDUCTION_TEMPLATES[_pendingDeductionType] || DEDUCTION_TEMPLATES.regular;
         _pendingDeductionType = 'regular'; // reset after use
 
-        const nudgeText = `[SYSTEM: TURN FORMAT — you MUST follow this exact structure:
+        const nudgeText = `[SYSTEM: ACTIVE GRAVITY DEDUCTION CHECKLIST FOR THIS TURN.
 
-IMPORTANT: Do ALL your thinking inside the ---DEDUCTION--- block. Do NOT produce a separate reasoning or thinking block before it. If you catch yourself reasoning before the deduction, STOP and put it inside the deduction instead. One reasoning pass, not two.
+Process this checklist inside the preset's active CoT/thinking entry. It must happen first in reasoning on a fresh turn.
+Do not skip, combine, or summarize deduction items.
+Do exactly one deduction pass and do not restart or repeat it later in reasoning.
+Do not emit a visible ---DEDUCTION--- block.
 
-1. DEDUCTION block (your ONLY reasoning space — compact, one line per item):
+Checklist (compact, one line per item):
 ${deductionTemplate}
 
+After the thinking pass closes, visible output is:
+1. Optional divination card HTML when another injection requests it
 2. Prose
-
 3. UPDATE block:
 - Normal turns: ---STATE--- (compact delta, only material changes)
-- Structural turns or explicit cleanup/setup instructions: ---LEDGER--- (full command block, no line limit)${_uncappedTurn ? ' (UNCAPPED — full cleanup allowed)' : ''}
+- Structural turns or explicit cleanup/setup instructions: ---LEDGER--- (full command block, no line limit)${_uncappedTurn ? ' (UNCAPPED - full cleanup allowed)' : ''}
+
 Update current_scene, location, and condition when they materially change or the scene would be hard to reconstruct without them.
 CLEANUP (REMOVE/DESTROY): max 3 per regular turn. Save bulk for eval or chapter close.
 
@@ -1371,7 +1368,7 @@ Write the next prose beat responding to that action, then generate 4-5 new click
 
 Collision pressure stays live. "OOC: fade to black" cuts to afterglow.
 
-Then write deduction + prose + choices + compact STATE block.`,
+Then do the deduction in reasoning, write prose, render the choices, and end with a compact STATE block.`,
             [MODE_LOREBOOK_KEYS.intimacyCore, MODE_LOREBOOK_KEYS.intimacyOptional, MODE_LOREBOOK_KEYS.proseIntimacy],
         );
         injectPrompt('advance');
@@ -1460,7 +1457,7 @@ function handleAdvanceButton() {
         const colDetails = buildCollisionStoryCapsule(a.id, a.col);
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY ADVANCE',
-            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISION:\n${`COLLISION: "${a.col.name || a.id}"\n${colDetails}`}\n\nThis is the world's move. Force the issue into the player's immediate reality now. Write the arrival, not the final resolution. MOVE the collision to RESOLVING, SET collision:${a.id}.last_manifestation to the concrete arrival, record divination.last_draw, then end with deduction + prose + compact STATE block.`,
+            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISION:\n${`COLLISION: "${a.col.name || a.id}"\n${colDetails}`}\n\nThis is the world's move. Force the issue into the player's immediate reality now. Write the arrival, not the final resolution. MOVE the collision to RESOLVING, SET collision:${a.id}.last_manifestation to the concrete arrival, record divination.last_draw, then do the deduction in reasoning, write prose, and end with a compact STATE block.`,
             markers,
         );
     } else if (ripeCollisions.length > 1) {
@@ -1472,7 +1469,7 @@ function handleAdvanceButton() {
         const arrivalNames = ripeCollisions.map(a => `"${a.col.name || a.id}"`).join(' and ');
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY ADVANCE',
-            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISIONS:\n${collisionBlocks}\n\nCONVERGENCE — ${arrivalNames} arrive on the same turn.\n${convergenceDraw.label}: ${convergenceDraw.reading}${convergenceDraw.html ? `\nRender this HTML card reveal:\n${convergenceDraw.html}` : ''}\n\nDeclare the relationship before writing the scene:\n• PARALLEL — distinct arrivals; one foregrounds first, others active in same beat\n• CASCADE — one triggers or delivers the other; name which drives which\n• COMPOSITE — one converged event; parents close as MERGED; CREATE a composite successor collision\n\nIf a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.\n\nMOVE each arrived collision to RESOLVING. SET each collision's last_manifestation to the concrete way it entered the converged scene. Record divination.last_draw, then end with deduction + prose + compact STATE block.`,
+            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISIONS:\n${collisionBlocks}\n\nCONVERGENCE — ${arrivalNames} arrive on the same turn.\n${convergenceDraw.label}: ${convergenceDraw.reading}${convergenceDraw.html ? `\nRender this HTML card reveal:\n${convergenceDraw.html}` : ''}\n\nDeclare the relationship before writing the scene:\n• PARALLEL — distinct arrivals; one foregrounds first, others active in same beat\n• CASCADE — one triggers or delivers the other; name which drives which\n• COMPOSITE — one converged event; parents close as MERGED; CREATE a composite successor collision\n\nIf a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.\n\nMOVE each arrived collision to RESOLVING. SET each collision's last_manifestation to the concrete way it entered the converged scene. Record divination.last_draw, then do the deduction in reasoning, write prose, and end with a compact STATE block.`,
             markers,
         );
     } else if (inProgressCollisions.length > 0) {
@@ -1483,7 +1480,7 @@ function handleAdvanceButton() {
 
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY ADVANCE',
-            `${pcName} yields the turn while a collision is already in motion.\n\n${formatDrawInstruction(draw, 'The draw colors what happens next, not the outcome.')}\n\nIN-PROGRESS COLLISION:\n${collisionBlocks}\n\nKeep pushing the confrontation. It cannot stall. Either resolve it this turn or force it into a sharper crisis. For each collision that stays live, SET that collision's last_manifestation to the new concrete manifestation. If it resolves, MOVE it to RESOLVED with outcome_type and aftermath. Record divination.last_draw, then end with deduction + prose + compact STATE block.`,
+            `${pcName} yields the turn while a collision is already in motion.\n\n${formatDrawInstruction(draw, 'The draw colors what happens next, not the outcome.')}\n\nIN-PROGRESS COLLISION:\n${collisionBlocks}\n\nKeep pushing the confrontation. It cannot stall. Either resolve it this turn or force it into a sharper crisis. For each collision that stays live, SET that collision's last_manifestation to the new concrete manifestation. If it resolves, MOVE it to RESOLVED with outcome_type and aftermath. Record divination.last_draw, then do the deduction in reasoning, write prose, and end with a compact STATE block.`,
             markers,
         );
     } else {
@@ -1498,7 +1495,7 @@ function handleAdvanceButton() {
 
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY ADVANCE',
-            `${pcName} maintains vector (continues ${doing}). The PC does not take a new action this turn.\n\n${formatDrawInstruction(draw, 'The draw colors the world\'s move - it does not prescribe it.')}\n\n${ADVANCE_PROMPTS[focus.key]}\n\nRecord divination.last_draw, then end with deduction + prose + compact STATE block.`,
+            `${pcName} maintains vector (continues ${doing}). The PC does not take a new action this turn.\n\n${formatDrawInstruction(draw, 'The draw colors the world\'s move - it does not prescribe it.')}\n\n${ADVANCE_PROMPTS[focus.key]}\n\nRecord divination.last_draw, then do the deduction in reasoning, write prose, and end with a compact STATE block.`,
             markers,
         );
     }
@@ -1574,7 +1571,7 @@ function handleCombatButton() {
     } else {
         body += `\n\nResolve one exchange only. Update distance or status only if the momentum genuinely shifts.`;
     }
-    body += `\n\nRecord divination.last_draw in the update block. End with deduction + prose + compact STATE block${isSetup ? ' (or LEDGER if the creation work gets structural).' : '.'}`;
+    body += `\n\nRecord divination.last_draw in the update block. Do the combat deduction in reasoning, then end with prose + compact STATE block${isSetup ? ' (or LEDGER if the creation work gets structural).' : '.'}`;
 
     _pendingOOCInjection = buildModeInjection(
         'GRAVITY COMBAT',
@@ -1629,7 +1626,7 @@ ${historyBlock}
 If active, write one short sensory beat and then generate 4-5 clickable choices using this exact HTML:
 <span class="act" data-value="intimate: first-person action description">Short display text</span>
 
-Check collisions every turn. If one hits distance 0, the world interrupts the scene. After the scene, resume deduction + prose + STATE updates for reads, stance shifts, key moments, intimate history, and constraint pressure.`,
+Check collisions every turn. If one hits distance 0, the world interrupts the scene. After the scene, resume hidden deduction + prose + STATE updates for reads, stance shifts, key moments, intimate history, and constraint pressure.`,
         [MODE_LOREBOOK_KEYS.intimacyCore, MODE_LOREBOOK_KEYS.intimacyOptional, MODE_LOREBOOK_KEYS.proseIntimacy],
     );
 
@@ -1888,6 +1885,5 @@ function createInputButtons() {
     document.getElementById('gl-input-skip').addEventListener('click', handleTimeskipButton);
     document.getElementById('gl-input-good').addEventListener('click', handleGoodTurnButton);
 }
-
 
 
