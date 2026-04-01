@@ -73,6 +73,55 @@ function toObj(v) {
     return {};
 }
 
+function inferExemplarCategory(text, modeHint = 'regular') {
+    const sample = String(text || '').toLowerCase();
+    if (!sample) return modeHint;
+    if (/\b(kiss|kissed|mouth|breath|touch|touched|thigh|hip|waist|shoulder|skin|leaned in|leaned against)\b/.test(sample)) return 'intimacy';
+    if (/\b(blood|blade|gun|shot|shots|strike|struck|wound|wounds|cover|impact|lunged|swung|knife|rifle|fist)\b/.test(sample)) return 'combat';
+    if (/\b(door|threshold|arrived|arrival|walked in|came in|entered|stepped in|stepped through)\b/.test(sample)) return 'arrival';
+    if (/\b(meanwhile|elsewhere|off-screen|offscreen|by the time|later|outside|down the street|radio|rumor|order)\b/.test(sample)) return 'advance';
+    if (/["“”]/.test(text)) return 'dialogue';
+    if (/\b(smell|sound|light|air|floor|wall|window|room|rain|heat|cold|dust|taste)\b/.test(sample)) return 'scene';
+    return modeHint;
+}
+
+function inferExemplarStrengths(text) {
+    const sample = String(text || '').toLowerCase();
+    const strengths = [];
+    if (/\b(smell|sound|light|air|heat|cold|texture|dust|taste|floor|wall|window)\b/.test(sample)) strengths.push('concrete detail');
+    if (/["“”]/.test(text)) strengths.push('dialogue leverage');
+    if (/\b(stop|stopped|pause|paused|hesitate|hesitated|recalculation|leaned|pulled back|after)\b/.test(sample)) strengths.push('aftereffect');
+    if (/\b(door|arrived|entered|walked in|came in|threshold)\b/.test(sample)) strengths.push('entrance framing');
+    if (/\b(blood|wound|impact|cover|breath|strike|shot|blade|gun)\b/.test(sample)) strengths.push('kinetic consequence');
+    if (strengths.length === 0) strengths.push('beat control');
+    return strengths.slice(0, 2);
+}
+
+function normalizeExemplarRecord(exemplar) {
+    const source = (typeof exemplar === 'object' && exemplar !== null) ? exemplar : { text: exemplar };
+    const text = String(source.text || '').trim();
+    if (!text) return null;
+    const modeHint = source.mode_hint || source.category || 'regular';
+    return {
+        text,
+        category: source.category || inferExemplarCategory(text, modeHint),
+        strengths: Array.isArray(source.strengths) && source.strengths.length
+            ? source.strengths.filter(Boolean).slice(0, 2)
+            : inferExemplarStrengths(text),
+        mode_hint: modeHint,
+        turn: source.turn || 0,
+        _ts: source._ts || 0,
+    };
+}
+
+function getStoryKindText(constants = {}) {
+    const explicit = String(constants.story_kind || '').trim();
+    if (explicit) return explicit;
+    const legacyTone = String(constants.tone || '').trim();
+    if (legacyTone) return legacyTone;
+    return String(constants.voice || '').trim();
+}
+
 function badge(value) {
     return value ? `<span class="gl-badge gl-badge-${esc(value)}">${esc(value)}</span>` : '';
 }
@@ -275,14 +324,14 @@ function renderAllSections() {
             const { chatMetadata, saveMetadata, Popup } = SillyTavern.getContext();
             const exemplars = chatMetadata?.['gravity_exemplars'] || [];
             if (idx < 0 || idx >= exemplars.length) return;
-            const current = typeof exemplars[idx] === 'object' ? exemplars[idx].text : exemplars[idx];
+            const currentRecord = normalizeExemplarRecord(exemplars[idx]);
+            if (!currentRecord) return;
+            const current = currentRecord.text;
             const newText = await Popup.show.input('Edit Exemplar', 'Edit the exemplar text:', current);
             if (newText === null || newText === undefined) return;
-            if (typeof exemplars[idx] === 'object') {
-                exemplars[idx].text = newText.trim();
-            } else {
-                exemplars[idx] = newText.trim();
-            }
+            const updated = normalizeExemplarRecord({ ...currentRecord, text: newText.trim() });
+            if (!updated) return;
+            exemplars[idx] = updated;
             await saveMetadata();
             renderAllSections();
             toastr.success('Exemplar updated');
@@ -670,7 +719,12 @@ function renderWorld(state) {
     const c = toObj(state.world.constants);
     if (Object.keys(c).length) {
         parts.push(`<div class="gl-d-section"><b>Constants:</b></div>`);
+        const storyKind = getStoryKindText(c);
+        if (storyKind) {
+            parts.push(`<div class="gl-d-row"><b>Story Kind:</b> ${esc(storyKind)}</div>`);
+        }
         for (const [k, v] of Object.entries(c)) {
+            if (k === 'story_kind' || k === 'voice' || k === 'tone' || k === 'tone_rules') continue;
             parts.push(`<div class="gl-d-row"><b>${esc(k)}:</b> ${esc(v)}</div>`);
         }
     }
@@ -937,18 +991,25 @@ function renderExemplars() {
     }
     const parts = [];
     for (let i = 0; i < exemplars.length; i++) {
-        const ex = exemplars[i];
-        const text = typeof ex === 'object' ? ex.text : ex;
+        const ex = normalizeExemplarRecord(exemplars[i]);
+        if (!ex) continue;
+        const text = ex.text;
         const truncated = text.length > 200 ? text.substring(0, 200) + '…' : text;
+        const metaBits = [
+            ex.category ? `Category: ${ex.category}` : '',
+            ex.strengths?.length ? `Strengths: ${ex.strengths.join(', ')}` : '',
+            ex.turn ? `Saved on turn ${ex.turn}` : '',
+        ].filter(Boolean);
         parts.push(`<div class="gl-exemplar-card" data-idx="${i}">
             <div class="gl-exemplar-text">${esc(truncated)}</div>
+            ${metaBits.length ? `<div class="gl-history-time">${esc(metaBits.join(' | '))}</div>` : ''}
             <div class="gl-exemplar-actions">
                 <button class="gl-exemplar-btn gl-exemplar-edit" data-idx="${i}" title="Edit"><i class="fa-solid fa-pen"></i></button>
                 <button class="gl-exemplar-btn gl-exemplar-remove" data-idx="${i}" title="Remove"><i class="fa-solid fa-trash"></i></button>
             </div>
         </div>`);
     }
-    parts.push(`<div class="gl-d-row" style="opacity:.5;font-size:10px;">Last ${Math.min(5, exemplars.length)} injected as style targets each turn.</div>`);
+    parts.push('<div class="gl-d-row" style="opacity:.5;font-size:10px;">Mode-matched exemplars are injected as technique targets for the current turn.</div>');
     return parts.join('');
 }
 

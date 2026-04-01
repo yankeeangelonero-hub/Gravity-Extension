@@ -7,6 +7,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Gravity Ledger remains a pure-JS SillyTavern extension with no build step, tests, or CI.
 - Validation is still syntax-only: run `node -c` on every modified `.js` file.
 - `index.js` remains the central coordinator for injection, turn flow, collision resolution, pressure-point audit, and UI wiring.
+- World-story framing now lives in `world.constants.story_kind`; prose voice/tone rules are preset-owned rather than state-view-owned.
 
 ## Collision System
 
@@ -46,6 +47,9 @@ Durable working memory for Codex sessions in this repository. Update this file w
 
 - Prompt injection now includes a dedicated pressure-point audit slot in `index.js`.
 - Regular-turn state injection now shows collision narrative thread information instead of only name/status/distance.
+- Runtime state and setup now use `story_kind` for "what kind of story is this" framing instead of `voice` / `tone` / `tone_rules`.
+- Sentence-level prose authority now lives in the preset and lorebook; runtime state stays style-neutral apart from `story_kind` context.
+- Saved exemplars are now normalized with inferred category/strength metadata and injected by turn fit rather than simple recency.
 - The world UI now shows pressure-point age, likely collision embodiment, last add reason, and append/remove history.
 - Collision UI now shows thread, forces, cost, target, manifestation, aftermath, and lineage more clearly.
 
@@ -75,10 +79,13 @@ Durable working memory for Codex sessions in this repository. Update this file w
   - pressure-point audits now push `KEEP / REMOVE / ESCALATE`
   - world UI now shows pressure-point age, likely collision embodiment, and history
   - `AGENTS.md` now points here as the durable project memory file
+  - prose ownership moved fully into preset/lorebook guidance while runtime state uses `story_kind`
+  - exemplar selection now targets turn mode/technique instead of injecting the last liked passages blindly
+  - preset and lorebook prose kernels now enforce camera/rhythm, stronger summary fuel, and mode-specific micro-guidance
 - Suggested next focus:
   - improve debug/inspection UX further so users can see why a collision or pressure point exists
+  - if more prose styles are added, build style-specific exemplar banks instead of relying on inference alone
   - add user-facing upgrade notes whenever state model changes land
-  - keep trimming always-on prompt load by preferring inspectable local state over repeated prose
 - Reminder:
   - after major behavior changes, update this file in the same commit
   - validate modified JS files with `node -c`

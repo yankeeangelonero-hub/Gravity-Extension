@@ -66,12 +66,8 @@ async function showSetupPopup() {
                 </div>
                 <div class="gl-setup-form">
                     <div class="gl-setup-section">
-                        <label class="gl-setup-label">Voice <span class="gl-setup-hint">How should the prose feel?</span></label>
-                        <input type="text" id="gl-setup-voice" class="gl-setup-input" placeholder="e.g. compressed and punchy, noir sensibility">
-                    </div>
-                    <div class="gl-setup-section">
-                        <label class="gl-setup-label">Tone <span class="gl-setup-hint">How does the world work?</span></label>
-                        <input type="text" id="gl-setup-tone" class="gl-setup-input" placeholder="e.g. gritty, consequences linger, trust is hard-won">
+                        <label class="gl-setup-label">Story Kind <span class="gl-setup-hint">What kind of story is this?</span></label>
+                        <input type="text" id="gl-setup-story-kind" class="gl-setup-input" placeholder="e.g. a gritty fugitive thriller where trust is expensive and every shelter has a cost">
                     </div>
                     <div class="gl-setup-section">
                         <label class="gl-setup-label">Opening Arc <span class="gl-setup-hint">What's the story about?</span></label>
@@ -139,8 +135,7 @@ async function showSetupPopup() {
 
         overlay.querySelector('.gl-setup-start').addEventListener('click', () => {
             const answers = {
-                voice: document.getElementById('gl-setup-voice').value.trim(),
-                tone: document.getElementById('gl-setup-tone').value.trim(),
+                story_kind: document.getElementById('gl-setup-story-kind').value.trim(),
                 arc: document.getElementById('gl-setup-arc').value.trim(),
                 motivation: document.getElementById('gl-setup-motivation').value.trim(),
                 objective: document.getElementById('gl-setup-objective').value.trim(),
@@ -155,7 +150,7 @@ async function showSetupPopup() {
         });
 
         // Focus first input
-        setTimeout(() => document.getElementById('gl-setup-voice')?.focus(), 100);
+        setTimeout(() => document.getElementById('gl-setup-story-kind')?.focus(), 100);
     });
 }
 
@@ -168,11 +163,8 @@ function buildSetupPrompt(answers) {
     const filled = [];
     const blank = [];
 
-    if (answers.voice) filled.push(`Voice: ${answers.voice}`);
-    else blank.push('voice (derive from character card personality and scenario)');
-
-    if (answers.tone) filled.push(`Tone: ${answers.tone}`);
-    else blank.push('tone (derive from scenario genre and setting)');
+    if (answers.story_kind) filled.push(`Story kind: ${answers.story_kind}`);
+    else blank.push('story kind (derive from scenario genre, dramatic promise, and recurring pressure)');
 
     if (answers.arc) filled.push(`Opening arc: ${answers.arc}`);
     else blank.push('opening arc and central question (derive from scenario)');
@@ -203,9 +195,7 @@ ${blank.length ? '\nAUTO-FILL (derive from character card, scenario, and genre):
 EMIT ALL OF THE FOLLOWING in one ---LEDGER--- block:
 
 1. WORLD SETUP:
-> MAP_SET world field=constants key=voice value="[voice]" -- Voice
-> MAP_SET world field=constants key=tone value="[tone]" -- Tone
-> MAP_SET world field=constants key=tone_rules value="1. [Rule] 2. [Rule] 3. [Rule]" -- Exactly 3 tone rules
+> MAP_SET world field=constants key=story_kind value="[story kind]" -- What kind of story this is
 > MAP_SET world field=constants key=role value="[role]" -- Role
 > MAP_SET world field=constants key=length value="[length]" -- Length
 > MAP_SET world field=constants key=guidelines value="[guidelines]" -- Guidelines

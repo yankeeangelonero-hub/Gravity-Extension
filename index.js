@@ -107,6 +107,88 @@ function uniqueStrings(values) {
     return [...new Set((values || []).filter(Boolean))];
 }
 
+function inferExemplarCategory(text, modeHint = 'regular') {
+    const sample = String(text || '').toLowerCase();
+    if (!sample) return modeHint;
+    if (/\b(kiss|kissed|mouth|breath|touch|touched|thigh|hip|waist|shoulder|skin|leaned in|leaned against)\b/.test(sample)) return 'intimacy';
+    if (/\b(blood|blade|gun|shot|shots|strike|struck|wound|wounds|cover|impact|lunged|swung|knife|rifle|fist)\b/.test(sample)) return 'combat';
+    if (/\b(door|threshold|arrived|arrival|walked in|came in|entered|stepped in|stepped through)\b/.test(sample)) return 'arrival';
+    if (/\b(meanwhile|elsewhere|off-screen|offscreen|by the time|later|outside|down the street|radio|rumor|order)\b/.test(sample)) return 'advance';
+    if (/["“”]/.test(text)) return 'dialogue';
+    if (/\b(smell|sound|light|air|floor|wall|window|room|rain|heat|cold|dust|taste)\b/.test(sample)) return 'scene';
+    return modeHint;
+}
+
+function inferExemplarStrengths(text) {
+    const sample = String(text || '').toLowerCase();
+    const strengths = [];
+    if (/\b(smell|sound|light|air|heat|cold|texture|dust|taste|floor|wall|window)\b/.test(sample)) strengths.push('concrete detail');
+    if (/["“”]/.test(text)) strengths.push('dialogue leverage');
+    if (/\b(stop|stopped|pause|paused|hesitate|hesitated|recalculation|leaned|pulled back|after)\b/.test(sample)) strengths.push('aftereffect');
+    if (/\b(door|arrived|entered|walked in|came in|threshold)\b/.test(sample)) strengths.push('entrance framing');
+    if (/\b(blood|wound|impact|cover|breath|strike|shot|blade|gun)\b/.test(sample)) strengths.push('kinetic consequence');
+    if (strengths.length === 0) strengths.push('beat control');
+    return strengths.slice(0, 2);
+}
+
+function normalizeExemplarRecord(exemplar) {
+    const source = (typeof exemplar === 'object' && exemplar !== null) ? exemplar : { text: exemplar };
+    const text = String(source.text || '').trim();
+    if (!text) return null;
+    const modeHint = source.mode_hint || source.category || 'regular';
+    return {
+        text,
+        category: source.category || inferExemplarCategory(text, modeHint),
+        strengths: Array.isArray(source.strengths) && source.strengths.length
+            ? source.strengths.filter(Boolean).slice(0, 2)
+            : inferExemplarStrengths(text),
+        mode_hint: modeHint,
+        turn: source.turn || 0,
+        _ts: source._ts || 0,
+    };
+}
+
+function getExemplarTargets(activeMode, deductionType) {
+    if (deductionType === 'combat') return ['combat', 'arrival', 'scene'];
+    if (deductionType === 'intimacy') return ['intimacy', 'dialogue', 'scene'];
+    if (activeMode === 'advance') return ['advance', 'arrival', 'scene'];
+    return ['dialogue', 'scene', 'arrival', 'regular'];
+}
+
+function selectExemplarsForPrompt(exemplars, activeMode, deductionType, limit = 3) {
+    const normalized = exemplars.map(normalizeExemplarRecord).filter(Boolean);
+    if (normalized.length === 0) return [];
+    const targets = getExemplarTargets(activeMode, deductionType);
+    const scored = normalized.map((ex, idx) => {
+        const matchIndex = targets.indexOf(ex.category);
+        const matchScore = matchIndex >= 0 ? (targets.length - matchIndex) * 10 : 0;
+        return {
+            ex,
+            idx,
+            score: matchScore + idx / 1000 + (ex._ts || 0) / 1e15,
+        };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const chosen = [];
+    const seen = new Set();
+    for (const { ex } of scored) {
+        if (seen.has(ex.text)) continue;
+        chosen.push(ex);
+        seen.add(ex.text);
+        if (chosen.length >= limit) break;
+    }
+    if (chosen.length === 0) {
+        return normalized.slice(-limit);
+    }
+    return chosen;
+}
+
+function formatExemplarForPrompt(exemplar, index) {
+    const tags = [exemplar.category, ...(exemplar.strengths || []).slice(0, 2)].filter(Boolean);
+    const label = tags.length ? `[${tags.join(' | ')}] ` : '';
+    return `  ${index + 1}. ${label}"${exemplar.text}"`;
+}
+
 function buildLorebookTriggerBlock(keys = []) {
     const active = uniqueStrings(keys);
     if (active.length === 0) return '';
@@ -641,14 +723,14 @@ function injectPrompt(mode) {
             setExtensionPrompt(`${MODULE_NAME}_inject`, '', PROMPT_NONE, 0);
         }
 
-        // Style exemplars — inject last 5 good paragraphs (skip on integration turns — no prose)
+        // Style exemplars — inject mode-matched good paragraphs (skip on integration turns — no prose)
         const { chatMetadata } = SillyTavern.getContext();
         const exemplars = (!isIntegration && chatMetadata?.['gravity_exemplars']) || [];
         if (exemplars.length > 0) {
-            const recent = exemplars.slice(-5);
-            const exLines = recent.map((ex, i) => `  ${i + 1}. "${ex.text}"`).join('\n');
+            const selected = selectExemplarsForPrompt(exemplars, activeMode, _pendingDeductionType, 3);
+            const exLines = selected.map(formatExemplarForPrompt).join('\n');
             setExtensionPrompt(`${MODULE_NAME}_exemplars`,
-                `[STYLE EXEMPLARS — the player flagged these as excellent prose. Match this quality and voice:\n${exLines}]`,
+                `[STYLE EXEMPLARS — the player flagged these as strong prose. Match the structural strengths that fit this turn's mode. Do not copy exact wording, imagery, or house voice.\n${exLines}]`,
                 PROMPT_IN_CHAT, 0);
         } else {
             setExtensionPrompt(`${MODULE_NAME}_exemplars`, '', PROMPT_NONE, 0);
@@ -957,7 +1039,7 @@ Factions: [which faction advanced or could advance — if none acted in 10+ turn
 Cost overlap: [whose costs are colliding — who's being forced to choose]
 
 Divination: [if drawn — result, reading. If not — skip]
-Tone check: [which tone rule applies — name it, one line]
+Story kind: [what kind of story is this beat inside — one line]
 Contest: [resolve player actions through logic and established capabilities]
 
 Scene: [who's present, atmosphere — for current_scene update]
@@ -1546,15 +1628,20 @@ async function handleGoodTurnButton() {
     const text = await Popup.show.input('Good Prose', 'Paste the paragraph(s) you liked:');
     if (!text) return;
 
-    // Store exemplar in chatMetadata
-    if (!chatMetadata['gravity_exemplars']) chatMetadata['gravity_exemplars'] = [];
-    chatMetadata['gravity_exemplars'].push({
-        text: text.trim(),
+    const trimmed = text.trim();
+    const modeHint = _currentInjectMode === 'advance' ? 'advance' : 'regular';
+    const exemplar = normalizeExemplarRecord({
+        text: trimmed,
+        mode_hint: modeHint,
         turn: _turnCounter,
         _ts: Date.now(),
     });
-    // Keep last 10
-    if (chatMetadata['gravity_exemplars'].length > 10) {
+
+    // Store exemplar in chatMetadata
+    if (!chatMetadata['gravity_exemplars']) chatMetadata['gravity_exemplars'] = [];
+    chatMetadata['gravity_exemplars'].push(exemplar);
+    // Keep a slightly larger pool so mode-targeted selection still has range
+    if (chatMetadata['gravity_exemplars'].length > 15) {
         chatMetadata['gravity_exemplars'].shift();
     }
     await saveMetadata();

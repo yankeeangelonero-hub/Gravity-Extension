@@ -15,6 +15,14 @@ function normalizeText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function getStoryKindText(constants = {}) {
+    const explicit = normalizeText(constants?.story_kind);
+    if (explicit) return explicit;
+    const legacyTone = normalizeText(constants?.tone);
+    if (legacyTone) return legacyTone;
+    return normalizeText(constants?.voice);
+}
+
 function getCollisionForcesText(col) {
     if (Array.isArray(col?.forces)) {
         return col.forces
@@ -225,19 +233,14 @@ function formatStateView(state, mode = 'full') {
         }
     }
 
-    // Constants — always shown (voice/tone are critical for prose)
+    // Constants — always shown (story framing lives here; prose rules live in the preset)
     const c = state.world.constants || {};
     if (Object.keys(c).length) {
         lines.push('');
         lines.push('CONSTANTS');
         if (c.role) lines.push(`  Role: ${c.role}`);
-        if (c.voice) lines.push(`  Voice: ${c.voice}`);
-        if (c.tone) lines.push(`  Tone: ${c.tone}`);
-        if (c.tone_rules) {
-            const rules = Array.isArray(c.tone_rules) ? c.tone_rules : [c.tone_rules];
-            lines.push(`  Tone Rules:`);
-            rules.forEach((r, i) => lines.push(`    ${i + 1}. ${r}`));
-        }
+        const storyKind = getStoryKindText(c);
+        if (storyKind) lines.push(`  Story Kind: ${storyKind}`);
         if (c.guidelines) lines.push(`  Guidelines: ${c.guidelines}`);
         if (c.motivation) lines.push(`  Motivation: ${c.motivation}`);
         if (c.objective) lines.push(`  Objective: ${c.objective}`);
@@ -460,7 +463,7 @@ COMMON PATHS:
   world.world_state
   world.pressure_points+
   world.pressure_points-
-  world.constants.tone
+  world.constants.story_kind
   divination.last_draw
   summary+
 
@@ -555,7 +558,7 @@ READ — set a character's read on someone (shorthand for MAP_SET on reads)
 
 MAP_SET — set a key in a map field
   > MAP_SET pc field=reputation key=tifa value="Investor. Unbearable. Has a room now." -- Reputation narrative
-  > MAP_SET world field=constants key=tone value="Noir thriller" -- Set tone
+  > MAP_SET world field=constants key=story_kind value="Noir thriller with trust under pressure" -- Set story kind
 
 INTIMATE HISTORY — per-character map tracking sexual development over time.
   Update keys via MAP_SET after intimate scenes. These are CUMULATIVE — each update builds on previous entries.

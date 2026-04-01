@@ -69,7 +69,7 @@ Turn modes: `regular` (player prose), `advance` (world moves), `integration` (se
 ### Deduction Templates
 
 The extension injects turn-specific deduction templates via the `_nudge` slot:
-- **`regular`** — Full 13-field deduction (intent, story, collisions, constraints, factions, cost overlap, divination, tone, contest, scene, plan, updates, chapter)
+- **`regular`** — Full 13-field deduction (intent, story, collisions, constraints, factions, cost overlap, divination, story kind, contest, scene, plan, updates, chapter)
 - **`combat`** — Power assessment, advantages, enemy logic, wounds, distance
 - **`advance`** — Focus, what moves, divination, collision tracking
 - **`intimacy`** — Stance, constraint, partner wants, history, divination
@@ -85,6 +85,7 @@ The extension injects turn-specific deduction templates via the `_nudge` slot:
 - **State machines** (char tiers, constraint integrity, collision status, chapter status) are documented in `state-machine.js` and the v11 preset but not enforced by code — the LLM follows and self-audits via `OOC: eval`
 - **Collision status**: `SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED`
 - **Collision outcomes**: `DIRECT`, `EVOLVED`, `MERGED`, `IMPLODED`, `CRASHED`
+- **Story framing**: `world.constants.story_kind` answers "what kind of story is this"; sentence-level prose rules belong in preset files, not runtime state
 - **Oracle-driven resolution**: When a collision hits distance 0, the extension starts a resolution clock with divination draws at each phase: atmosphere (turns 1-2), direct intrusion with fresh draw (turns 3-4), crash with final draw (turn 5+). Tracked via `_resolutionTracker` Map in index.js.
 - **Pressure points**: short world seams stored in `world.pressure_points`; keep them short, remove them when spent/stale, and escalate them into collisions when they gain actors + cost + forced choice
 - **Format validation only**: `consistency.js` checks structure, not gameplay rules
