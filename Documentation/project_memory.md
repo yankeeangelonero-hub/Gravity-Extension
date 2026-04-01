@@ -65,6 +65,24 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Pressure-point embodiment is heuristic, not identity-based.
 - A lot of gameplay discipline still depends on prompt quality and audit prompts rather than hard enforcement.
 
+## Handoff
+
+- Active branch: `codex-v13-state-delta`
+- Recent completed work:
+  - collision lifecycle normalized around `RESOLVED` + `outcome_type`
+  - collision prompt/state/UI upgraded so live collisions carry richer narrative threads
+  - pressure points now record append/remove lifecycle history
+  - pressure-point audits now push `KEEP / REMOVE / ESCALATE`
+  - world UI now shows pressure-point age, likely collision embodiment, and history
+  - `AGENTS.md` now points here as the durable project memory file
+- Suggested next focus:
+  - improve debug/inspection UX further so users can see why a collision or pressure point exists
+  - add user-facing upgrade notes whenever state model changes land
+  - keep trimming always-on prompt load by preferring inspectable local state over repeated prose
+- Reminder:
+  - after major behavior changes, update this file in the same commit
+  - validate modified JS files with `node -c`
+
 ## Update Rule
 
 When major behavior changes land, update this file in the same change if the new behavior would matter to a future Codex session.
