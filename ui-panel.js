@@ -114,14 +114,6 @@ function normalizeExemplarRecord(exemplar) {
     };
 }
 
-function getStoryKindText(constants = {}) {
-    const explicit = String(constants.story_kind || '').trim();
-    if (explicit) return explicit;
-    const legacyTone = String(constants.tone || '').trim();
-    if (legacyTone) return legacyTone;
-    return String(constants.voice || '').trim();
-}
-
 function badge(value) {
     return value ? `<span class="gl-badge gl-badge-${esc(value)}">${esc(value)}</span>` : '';
 }
@@ -718,14 +710,15 @@ function renderWorld(state) {
     // Constants
     const c = toObj(state.world.constants);
     if (Object.keys(c).length) {
-        parts.push(`<div class="gl-d-section"><b>Constants:</b></div>`);
-        const storyKind = getStoryKindText(c);
-        if (storyKind) {
-            parts.push(`<div class="gl-d-row"><b>Story Kind:</b> ${esc(storyKind)}</div>`);
-        }
+        const hiddenConstants = new Set(['role', 'guidelines', 'voice', 'tone', 'tone_rules', 'motivation', 'objective']);
+        const constantRows = [];
         for (const [k, v] of Object.entries(c)) {
-            if (k === 'story_kind' || k === 'voice' || k === 'tone' || k === 'tone_rules') continue;
-            parts.push(`<div class="gl-d-row"><b>${esc(k)}:</b> ${esc(v)}</div>`);
+            if (k === ['story', 'kind'].join('_') || hiddenConstants.has(k)) continue;
+            constantRows.push(`<div class="gl-d-row"><b>${esc(k)}:</b> ${esc(v)}</div>`);
+        }
+        if (constantRows.length) {
+            parts.push(`<div class="gl-d-section"><b>Constants:</b></div>`);
+            parts.push(...constantRows);
         }
     }
 
@@ -812,15 +805,6 @@ function renderWorld(state) {
                 parts.push(`<div class="gl-history-list" style="display:none">${hist.map(arrayHistoryLine).join('<br>')}</div>`);
             }
             parts.push(`</div>`);
-        }
-    }
-
-    // Knowledge asymmetry
-    const ka = toObj(state.world.knowledge_asymmetry);
-    if (Object.keys(ka).length) {
-        parts.push(`<div class="gl-d-section"><b>Knowledge Asymmetry:</b></div>`);
-        for (const [who, knows] of Object.entries(ka)) {
-            parts.push(`<div class="gl-d-row"><b>${esc(who)}:</b> ${esc(knows)}</div>`);
         }
     }
 

@@ -1045,7 +1045,6 @@ Factions: [which faction advanced or could advance — if none acted in 10+ turn
 Cost overlap: [whose costs are colliding — who's being forced to choose]
 
 Divination: [if drawn — result, reading. If not — skip]
-Story kind: [what kind of story is this beat inside — one line]
 Contest: [resolve player actions through logic and established capabilities]
 
 Scene: [who's present, atmosphere — for current_scene update]
@@ -1367,7 +1366,7 @@ async function onUserMessage(messageId) {
             'GRAVITY INTIMACY - continuing intimate scene',
             `The player chose an intimate action. Stay in intimate scene mode if the scene still makes sense.
 
-Write the next prose beat (200-400 words) responding to that action, then generate 4-5 new clickable choices using this exact HTML:
+Write the next prose beat responding to that action, then generate 4-5 new clickable choices using this exact HTML:
 <span class="act" data-value="intimate: [concrete first-person action]">Short display text</span>
 
 Collision pressure stays live. "OOC: fade to black" cuts to afterglow.
@@ -1889,5 +1888,6 @@ function createInputButtons() {
     document.getElementById('gl-input-skip').addEventListener('click', handleTimeskipButton);
     document.getElementById('gl-input-good').addEventListener('click', handleGoodTurnButton);
 }
+
 
 
