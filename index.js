@@ -91,6 +91,48 @@ const ADVANCE_FOCUS_TABLE = [
     { key: 'collision',  weight: 15, label: 'Collision Tightens' },
 ];
 
+const MODE_LOREBOOK_KEYS = Object.freeze({
+    advanceCore: 'gravity_mode_advance_core',
+    advanceOptional: 'gravity_mode_advance_optional_examples',
+    combatCore: 'gravity_mode_combat_core',
+    combatSetupCore: 'gravity_mode_combat_setup_core',
+    combatOptional: 'gravity_mode_combat_optional_examples',
+    intimacyCore: 'gravity_mode_intimacy_core',
+    intimacyOptional: 'gravity_mode_intimacy_optional_examples',
+    timeskipCore: 'gravity_mode_timeskip_core',
+    chapterCloseCore: 'gravity_mode_chapter_close_core',
+});
+
+function uniqueStrings(values) {
+    return [...new Set((values || []).filter(Boolean))];
+}
+
+function buildLorebookTriggerBlock(keys = []) {
+    const active = uniqueStrings(keys);
+    if (active.length === 0) return '';
+    return `[WORLD INFO TRIGGERS - DO NOT ECHO:
+${active.join('\n')}
+]`;
+}
+
+function buildModeInjection(title, body, keys = []) {
+    const sections = [`[${title}]`];
+    const triggerBlock = buildLorebookTriggerBlock(keys);
+    if (triggerBlock) sections.push(triggerBlock);
+    if (body) sections.push(body.trim());
+    return sections.join('\n\n');
+}
+
+function formatDrawInstruction(draw, guidance) {
+    if (!draw) return guidance || '';
+    const sections = [`${draw.label}: ${draw.reading}`];
+    if (draw.html) {
+        sections.push(`Render this HTML card reveal before interpreting:\n${draw.html}`);
+    }
+    if (guidance) sections.push(guidance);
+    return sections.join('\n');
+}
+
 function pickAdvanceFocus() {
     const totalWeight = ADVANCE_FOCUS_TABLE.reduce((sum, f) => sum + f.weight, 0);
     let roll = Math.random() * totalWeight;
@@ -974,30 +1016,18 @@ async function onUserMessage(messageId) {
     const rawText = message.mes.replace(/<[^>]+>/g, '').trim();
     if (rawText.startsWith('intimate:') || rawText.startsWith('*intimate:')) {
         _pendingDeductionType = 'intimacy';
-        // Re-inject intimacy context so the LLM stays in intimate scene mode
-        _pendingOOCInjection = `[GRAVITY INTIMACY — continuing intimate scene. The player chose an action.
+        _pendingOOCInjection = buildModeInjection(
+            'GRAVITY INTIMACY - continuing intimate scene',
+            `The player chose an intimate action. Stay in intimate scene mode if the scene still makes sense.
 
-STAY IN INTIMATE SCENE MODE. Write the next prose beat (200-400 words) responding to the player's action.
-Then generate 4-5 new clickable choices at the end:
+Write the next prose beat (200-400 words) responding to that action, then generate 4-5 new clickable choices using this exact HTML:
 <span class="act" data-value="intimate: [concrete first-person action]">Short display text</span>
 
-RULES STILL ACTIVE:
-- One sensory beat per turn. Sensation chains. Anatomical precision.
-- Body description: verbose, specific — shape, weight, texture, temperature, response to touch.
-- Partner not passive — every 2-3 turns, partner acts on their own.
-- Partner interiority flash every 2-3 turns (italicized first-person, 2-4 sentences).
-- Collision check: if any collision hits distance 0, it fires mid-scene.
-- "OOC: fade to black" → cut to afterglow.
+Collision pressure stays live. "OOC: fade to black" cuts to afterglow.
 
-INTIMACY DEDUCTION (use this format, one line per item):
----DEDUCTION---
-Stance: [partner's current intimacy_stance]
-Constraint: [which is pressured — or: none]
-Partner wants: [what their body is showing]
-History: [pattern from intimate_history — or: first encounter]
-Beat: [ONE sensory beat.]
----END DEDUCTION---
-Then prose, then choices, then compact STATE block.]`;
+Then write deduction + prose + choices + compact STATE block.`,
+            [MODE_LOREBOOK_KEYS.intimacyCore, MODE_LOREBOOK_KEYS.intimacyOptional],
+        );
         injectPrompt('advance');
         return;
     }
@@ -1047,36 +1077,29 @@ async function handleSetupButton() {
     injectPrompt('integration');
     insertChatMessage('OOC: Begin game setup.');
 }
-
 function handleAdvanceButton() {
     _pendingDeductionType = 'advance';
     const pcName = _currentState?.pc?.name || '{{user}}';
     const doing = _currentState?.pc?.doing || 'what they were doing';
 
-    // Check for ripe collisions (distance ≤ 0, not yet fired)
     const ripeCollisions = [];
-    // Check for in-progress collisions (already detonated but not yet RESOLVED)
     const inProgressCollisions = [];
     if (_currentState) {
         for (const [id, col] of Object.entries(_currentState.collisions || {})) {
             const dist = parseFloat(col.distance);
             const status = (col.status || '').trim().toUpperCase();
 
-            // Fresh arrival — distance 0, hasn't fired yet
             if (!isNaN(dist) && dist <= 0 && status !== 'RESOLVED' && status !== 'CRASHED' && !_firedCollisionArrivals.has(id)) {
                 const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
                 ripeCollisions.push({ id, col, forces });
                 _firedCollisionArrivals.add(id);
-                // Start resolution tracking
                 _resolutionTracker.set(id, {
                     phase: 'arrived',
                     arrivalTurn: _turnCounter,
                     arrivalDraw: drawDivination(),
                 });
-            }
-            // Already detonated — fired but still ACTIVE, or RESOLVING
-            else if (
-                (status === 'RESOLVING') ||
+            } else if (
+                status === 'RESOLVING' ||
                 (!isNaN(dist) && dist <= 0 && status === 'ACTIVE' && _firedCollisionArrivals.has(id))
             ) {
                 const forces = Array.isArray(col.forces) ? col.forces.map(f => f.name || f).join(', ') : String(col.forces || '?');
@@ -1085,137 +1108,46 @@ function handleAdvanceButton() {
         }
     }
 
-    // Draw from active divination system
     const draw = drawDivination();
+    const markers = [MODE_LOREBOOK_KEYS.advanceCore, MODE_LOREBOOK_KEYS.advanceOptional];
 
     if (ripeCollisions.length > 0) {
-        // Advance = collision detonation. The ripe collision IS the thing that happens.
         const collisionBlocks = ripeCollisions.map(a => {
             const colDetails = a.col.details || `Forces: ${a.forces}\nCost: ${a.col.cost || 'unspecified'}${a.col.target_constraint ? `\nTarget constraint: ${a.col.target_constraint}` : ''}`;
             return `COLLISION: "${a.col.name || a.id}"\n${colDetails}`;
         }).join('\n\n');
 
-        _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} yields the turn. The world moves.
-
-${draw.label}: ${draw.reading}${draw.html ? `\nRender this HTML card reveal before interpreting:\n${draw.html}` : ''}
-The draw shapes the CIRCUMSTANCE of what happens — not the outcome.
-
-${ripeCollisions.length === 1 ? 'A collision has arrived:' : 'These collisions have arrived:'}
-
-${collisionBlocks}
-
-This is the world's turn and this collision detonates NOW. You have FULL LICENSE to make it happen — move NPCs into the scene, spawn threats, have someone arrive with information, trigger events, create new characters, use environmental disasters. Whatever it takes to force this issue into the player's immediate reality.
-
-Write the situation, not the resolution. The player must respond to it.
-
-MOVE this collision's status to RESOLVING. The resolution clock is now ticking — the player has ${RESOLUTION_CRASH_TURNS} turns to engage before gravity resolves it without them (CRASHED = worst outcome, no agency).
-
-Three outcomes are possible:
-• RESOLVED — the player engaged and shaped the result. Clean or costly. RESOLVED includes retreat — if the player actively chooses to disengage and pays the cost, that's a resolution. They shaped the outcome.
-• EVOLUTION — resolution reveals a different tension. MOVE to RESOLVED, CREATE a new collision from what surfaced.
-• CRASHED — the player pretended it wasn't there. Not retreat — inaction. Gravity resolves it for them. Worst outcome.
-
-Record the draw in the update block: divination.last_draw: "[draw result]"
-Full turn: deduction + prose + compact STATE block.]`;
+        _pendingOOCInjection = buildModeInjection(
+            'GRAVITY ADVANCE',
+            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\n${ripeCollisions.length === 1 ? 'ARRIVED COLLISION:' : 'ARRIVED COLLISIONS:'}\n${collisionBlocks}\n\nThis is the world's move. Force the issue into the player's immediate reality now. Write the arrival, not the final resolution. MOVE each arrived collision to RESOLVING, record divination.last_draw, then end with deduction + prose + compact STATE block.`,
+            markers,
+        );
     } else if (inProgressCollisions.length > 0) {
-        // Collision already detonated but not resolved — player is yielding, push it forward
         const collisionBlocks = inProgressCollisions.map(a => {
             const colDetails = a.col.details || `Forces: ${a.forces} | Cost: ${a.col.cost || 'unspecified'}`;
-            return `"${a.col.name || a.id}" [${a.col.status}] — ${colDetails}`;
+            return `"${a.col.name || a.id}" [${a.col.status}] - ${colDetails}`;
         }).join('\n');
 
-        _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} yields the turn. A collision is in progress.
-
-${draw.label}: ${draw.reading}${draw.html ? `\nRender this HTML card reveal before interpreting:\n${draw.html}` : ''}
-The draw shapes what happens next — not the outcome.
-
-IN-PROGRESS COLLISION:
-${collisionBlocks}
-
-The player is not acting — they are letting this play out. CONTINUE driving the confrontation forward. Escalate, complicate, or force the moment to its crisis. NPCs act, consequences land, the situation demands response.
-
-This collision is already spent — it MUST reach RESOLVED. Either the confrontation concludes this turn (MOVE to RESOLVED) or it escalates further, but it cannot stall. If it resolves, record the outcome:
-• CLEAN — tension dissolves. MOVE to RESOLVED.
-• COSTLY — someone paid. MOVE to RESOLVED. Record the cost.
-• EVOLUTION — MOVE to RESOLVED, CREATE a new collision from what surfaced.
-
-Record the draw in the update block: divination.last_draw: "[draw result]"
-Full turn: deduction + prose + compact STATE block.]`;
+        _pendingOOCInjection = buildModeInjection(
+            'GRAVITY ADVANCE',
+            `${pcName} yields the turn while a collision is already in motion.\n\n${formatDrawInstruction(draw, 'The draw colors what happens next, not the outcome.')}\n\nIN-PROGRESS COLLISION:\n${collisionBlocks}\n\nKeep pushing the confrontation. It cannot stall. Either resolve it this turn or force it into a sharper crisis. If it resolves, MOVE it to RESOLVED and record the cost or evolved collision. Record divination.last_draw, then end with deduction + prose + compact STATE block.`,
+            markers,
+        );
     } else {
-        // No ripe or in-progress collisions — randomized focus advance
         const focus = pickAdvanceFocus();
-
         const ADVANCE_PROMPTS = {
-            scene: `FOCUS: THE SCENE
-Something happens in or near ${pcName}'s current location. This is local, intimate, character-driven.
-- An NPC in the scene acts on their own WANT — starts a conversation, makes a decision, reacts to something
-- The environment shifts — a sound, a change in light, something noticed for the first time
-- A detail the PC filed away comes back as a loaded gun
-- Someone arrives or leaves
-Write ONE focused beat. Deep, specific, sensory. The PC is present but the world is acting.`,
-
-            world: `FOCUS: THE WORLD MOVES
-Faction politics advance. Cut AWAY from ${pcName} to show what's happening in the larger world.
-- A faction leader makes a decision. Show the meeting, the order, the execution.
-- Alliances shift. A subordinate defies or obeys. Resources deploy.
-- The consequence will reach ${pcName} later — plant the seed now.
-Rewrite the acting faction's profile via SET faction:id field=profile.
-Use --- or a location header to cut to the faction scene. The PC does NOT appear in this beat.`,
-
-            offscreen: `FOCUS: OFF-SCREEN CHARACTER
-A TRACKED character the PC hasn't interacted with recently does something driven by their WANT.
-Cut to their location. Show what they're dealing with, what choice they face, how their constraints shape their action.
-- This character acts independently — the PC may never learn what happened here.
-- Or: the consequences arrive at the PC's doorstep next scene.
-- Update the character's DOING, location, and reads in the ledger.
-Use --- or a location/time header to cut to their scene. One deep beat from their perspective.`,
-
-            new_threat: `FOCUS: SOMETHING NEW
-Introduce a new element the story didn't have before this turn.
-- A new NPC appears (CREATE with tier, WANT, DOING)
-- A new event changes the landscape (environmental, political, personal)
-- A new complication makes an existing collision worse
-- Information surfaces that reframes something the PC thought they understood
-You have FULL LICENSE: create characters, trigger events, introduce threats.
-The new element should be COOL — not just tense, but interesting and unexpected.`,
-
-            collision: `FOCUS: COLLISION TIGHTENS
-An existing simmering or active collision compresses. Distance decreases.
-Pick the collision that would produce the most interesting pressure right now.
-- Show WHY it tightened — what moved, who acted, what changed
-- The pressure becomes harder for ${pcName} to ignore
-- SET the collision's distance closer. Update its details if the shape changed.
-If a pressure point in Gravity_State_View feeds this collision, activate it:
-REMOVE the pressure point, COMPRESS the collision distance, show the chain of causation.`,
+            scene: 'FOCUS: THE SCENE\nMove something local: an NPC acts, the environment shifts, someone arrives or leaves, or a noticed detail fires.',
+            world: `FOCUS: THE WORLD\nCut away from ${pcName}. Show a faction or macro move whose consequences will matter later.`,
+            offscreen: 'FOCUS: OFF-SCREEN CHARACTER\nA tracked character pursues their own want. Show the beat and update what it changes.',
+            new_threat: 'FOCUS: SOMETHING NEW\nIntroduce a fresh threat, complication, or revelation that belongs to the current story logic.',
+            collision: `FOCUS: COLLISION TIGHTENS\nPick the collision that creates the most honest pressure right now and show why it compressed.`,
         };
 
-        const focusPrompt = ADVANCE_PROMPTS[focus.key];
-        const focusHints = {
-            scene: 'The scene shifts around you.',
-            world: 'Meanwhile, elsewhere...',
-            offscreen: 'Someone you know is busy.',
-            new_threat: 'Something new enters the story.',
-            collision: 'The pressure tightens.',
-        };
-
-        _pendingOOCInjection = `[GRAVITY ADVANCE — ${pcName} maintains vector (continues ${doing}). The PC does not act, speak, or change course this turn.
-
-${draw.label}: ${draw.reading}${draw.html ? `\nRender this HTML card reveal before interpreting:\n${draw.html}` : ''}
-The draw colors the world's move — it does not prescribe it.
-
-${focusPrompt}
-
-Record the draw in the update block: divination.last_draw: "[draw result]"
-
-ADVANCE DEDUCTION (use this format, one line per item):
----DEDUCTION---
-Focus: [scene/world/offscreen/new_threat/collision]
-What moves: [the specific thing that happens]
-Draw: [how the divination shapes this]
-Collision: [which tightens or spawns — or: none]
-Beat: [what happens.]
----END DEDUCTION---
-Then prose, then compact STATE block.]`;
+        _pendingOOCInjection = buildModeInjection(
+            'GRAVITY ADVANCE',
+            `${pcName} maintains vector (continues ${doing}). The PC does not take a new action this turn.\n\n${formatDrawInstruction(draw, 'The draw colors the world\'s move - it does not prescribe it.')}\n\n${ADVANCE_PROMPTS[focus.key]}\n\nRecord divination.last_draw, then end with deduction + prose + compact STATE block.`,
+            markers,
+        );
     }
 
     injectPrompt('advance');
@@ -1223,24 +1155,17 @@ Then prose, then compact STATE block.]`;
 }
 
 function handleCombatSetupButton() {
-    _pendingOOCInjection = `[GRAVITY COMBAT SETUP — The player's message contains their combat rules input. Read it and extrapolate a complete power scale for this story.
+    _pendingOOCInjection = buildModeInjection(
+        'GRAVITY COMBAT SETUP',
+        `The player's message contains their combat scaling reference. Read it and derive a complete narrative power ladder for this story.
 
-YOUR TASK:
-1. Read the player's message for their combat scaling reference (e.g. "5 = Sephiroth" means Sephiroth is the ceiling).
-2. Extrapolate a full power scale from 1 to that ceiling, filling in tiers based on the story's setting, characters, and established lore.
-3. SET power on ALL existing characters in Gravity_State_View based on this scale.
-4. SET power on the PC.
-5. Write a brief summary of the scale you derived and the assignments you made.
+Assign power to the PC and all existing relevant characters. Store the scale in world.constants.combat_rules. Use full LEDGER if that is easier.
 
-Store the full scale description in a world constant:
-> MAP_SET world field=constants key=combat_rules value="[your derived scale]"
-
-HARD RULE: Do NOT create any mechanical combat system. No dice. No rolls. No HP. No condition tracks. No attack tables. No modifiers. No turn sequences. NONE. Dice in Gravity exist ONLY for divination — NEVER for combat. Combat is resolved through narrative prose using the Logic and Fairness principles. The power scale is a NARRATIVE REFERENCE for your judgment, not game mechanics.
-
-Do not write prose. Just derive the scale, assign power values via ledger, and confirm.]`;
+Do not write prose. Do not invent mechanics. No dice, HP, modifiers, hit counters, turn order, or condition tracks. Power is narrative judgment only.`,
+        [MODE_LOREBOOK_KEYS.combatSetupCore],
+    );
 
     injectPrompt('integration');
-    // Don't overwrite the user's input — they already typed their rules
 }
 
 function handleCombatButton() {
@@ -1248,12 +1173,10 @@ function handleCombatButton() {
     const pcName = _currentState?.pc?.name || '{{user}}';
     const pcPower = _currentState?.pc?.power;
 
-    // Find active combat collisions
     const combatCollisions = Object.values(_currentState?.collisions || {}).filter(
         c => c.mode === 'combat' && c.status !== 'RESOLVED' && c.status !== 'CRASHED'
     );
 
-    // Build power gap assessment if combat collision exists
     let powerAssessment = '';
     if (combatCollisions.length > 0 && pcPower != null) {
         for (const col of combatCollisions) {
@@ -1265,8 +1188,8 @@ function handleCombatButton() {
                 if (enemy?.power != null) {
                     const gap = pcPower - enemy.power;
                     const gapDesc = gap === 0 ? 'equal'
-                        : gap === -1 ? 'disadvantaged but winnable'
-                        : gap <= -2 ? 'CANNOT win directly — must use established advantages'
+                        : gap === -1 ? 'disadvantaged but workable'
+                        : gap <= -2 ? 'cannot win directly without a real advantage'
                         : gap === 1 ? 'advantaged'
                         : 'dominant';
                     powerAssessment += `\nPC power:${pcPower} vs ${enemy.name || forceId} power:${enemy.power} | Gap:${gap} (${gapDesc})`;
@@ -1275,60 +1198,36 @@ function handleCombatButton() {
         }
     }
 
-    // Get combat rules from world constants (LLM-set) or chatMetadata (user-set)
     const { chatMetadata } = SillyTavern.getContext();
     const combatRules = _currentState?.world?.constants?.combat_rules
         || chatMetadata?.['gravity_combat_rules']
         || '';
 
-    // Get PC wounds
     const pcWounds = _currentState?.pc?.wounds;
     let woundLine = '';
     if (pcWounds && typeof pcWounds === 'object' && Object.keys(pcWounds).length) {
         woundLine = `\nPC wounds: ${Object.entries(pcWounds).map(([k, v]) => `${k}: ${v}`).join(', ')}`;
     }
 
-    // Build the injection
     const isSetup = combatCollisions.length === 0;
     const combatDraw = drawDivination();
+    let body = `${pcName} ${isSetup ? 'initiates combat' : 'fights'}.\n\n=== COMBAT SNAPSHOT ===${powerAssessment || (pcPower != null ? `\nPC power: ${pcPower}` : '')}${woundLine}`;
+    if (combatRules) {
+        body += `\n\nCOMBAT RULES (this story):\n${combatRules}`;
+    }
+    body += `\n\n${formatDrawInstruction(combatDraw, 'The draw colors the circumstance of this exchange, not the verdict.')}\n\nJudge the exchange through logic, established advantages, terrain, wounds, enemy behavior, and power gap. No mechanics, rolls, or HP.`;
+    if (isSetup) {
+        body += `\n\nThis is a setup beat: CREATE the combat collision, establish forces, distance, and threat, assign power to any new enemies, and stop on the opening situation.`;
+    } else {
+        body += `\n\nResolve one exchange only. Update distance or status only if the momentum genuinely shifts.`;
+    }
+    body += `\n\nRecord divination.last_draw in the update block. End with deduction + prose + compact STATE block${isSetup ? ' (or LEDGER if the creation work gets structural).' : '.'}`;
 
-    _pendingOOCInjection = `[GRAVITY COMBAT — ${pcName} ${isSetup ? 'initiates combat' : 'fights'}.
-
-══ COMBAT ══${powerAssessment || (pcPower != null ? `\nPC power: ${pcPower}` : '')}${woundLine}
-${combatRules ? `\nCOMBAT RULES (this story):\n${combatRules}\n` : ''}
-${combatDraw.label}: ${combatDraw.reading}
-The draw shapes the CIRCUMSTANCE of this combat exchange — not the outcome.
-
-COMBAT PROTOCOL (extends your Logic + Fairness principles):
-- In your Contest section: assess the PC's action against demonstrated_traits and established preparations from Gravity_State_View. Unearned capability fails or costs.
-- Power gap of 2+: direct combat cannot win. Only advantages established in the ledger (reads, key_moments, world state) can close the gap logically.
-- The enemy fights to their described capability (in cost field). They adapt to repeated tactics. They exploit trait gaps and existing wounds.
-- Every action costs something. No free hits.
-- Distance is elastic (same as narrative collisions). Decrement when the fight's momentum genuinely shifts.
-- At distance 0: the draw shapes the decisive moment's arrival.
-- Wounds are descriptive via MAP_SET on characters. Track what matters to the story.
-- Combat outcomes ripple into collisions, factions, world state.
-
-ABSOLUTE RULE: No dice. No rolls. No HP. No condition tracks. No modifiers. No hit counters. No turn sequences. No mechanical resolution of ANY kind. Divination draws are NOT combat dice — they shape circumstance and atmosphere. The power scale is a narrative reference for YOUR judgment, not a game mechanic. You resolve combat through prose using Logic and Fairness. Write the fight as fiction. Do not simulate it.
-${isSetup ? `
-SETUP TURN: No combat collision exists yet. This turn is SETUP:
-1. CREATE a collision with mode=combat. Establish forces, distance, and threat (in cost field).
-2. SET power on any new enemy characters based on the combat rules above.
-3. Describe the threat and the opening situation.
-4. Do NOT resolve a combat exchange yet — setup is the beat.` : ''}
-Record the draw in the update block: divination.last_draw: "[draw result]"
-
-COMBAT DEDUCTION (use this format, one line per item):
----DEDUCTION---
-Action: [what the PC is attempting]
-Power: [PC power:X vs enemy power:Y — gap, can this work?]
-Advantages: [what PC has established — traits, prep, terrain, reads]
-Enemy: [what the enemy would logically do — adapt, counter, exploit weakness]
-Wounds: [PC wounds, enemy wounds — how these affect this exchange]
-Distance: [current → change? why?]
-Beat: [ONE exchange. What happens.]
----END DEDUCTION---
-Then prose, then compact STATE block.]`;
+    _pendingOOCInjection = buildModeInjection(
+        'GRAVITY COMBAT',
+        body,
+        [MODE_LOREBOOK_KEYS.combatCore, MODE_LOREBOOK_KEYS.combatOptional],
+    );
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} ${isSetup ? 'prepares to fight.' : 'engages in combat.'}*`);
@@ -1338,7 +1237,6 @@ function handleIntimacyButton() {
     _pendingDeductionType = 'intimacy';
     const pcName = _currentState?.pc?.name || '{{user}}';
 
-    // Gather intimacy stances for scene-active characters
     const stances = [];
     for (const [id, char] of Object.entries(_currentState?.characters || {})) {
         if (char.tier === 'UNKNOWN' || char.tier === 'KNOWN') continue;
@@ -1347,7 +1245,6 @@ function handleIntimacyButton() {
         }
     }
 
-    // Gather intimate history if exists
     const histories = [];
     for (const [id, char] of Object.entries(_currentState?.characters || {})) {
         const ih = char.intimate_history;
@@ -1357,115 +1254,31 @@ function handleIntimacyButton() {
     }
 
     const intimacyDraw = drawDivination();
+    const stanceBlock = stances.length
+        ? `ACTIVE STANCES:\n${stances.map(s => `  ${s}`).join('\n')}`
+        : 'No explicit intimacy stances are stored yet.';
+    const historyBlock = histories.length
+        ? `INTIMATE HISTORY:\n${histories.map(h => `  ${h}`).join('\n')}`
+        : 'No intimate history exists yet. Treat this as discovery.';
 
-    _pendingOOCInjection = `[GRAVITY INTIMACY — ${pcName} initiates an intimate scene.
+    _pendingOOCInjection = buildModeInjection(
+        'GRAVITY INTIMACY',
+        `${pcName} initiates an intimate scene.
 
-${intimacyDraw.label}: ${intimacyDraw.reading}${intimacyDraw.html ? `\nRender this HTML card reveal before interpreting:\n${intimacyDraw.html}` : ''}
-The draw shapes the TONE AND TEXTURE of this intimate encounter — not what happens, but HOW it feels. Apply the draw to the sexual energy, not the plot:
-- The Fool = first-time energy, discovery, unexpected tenderness
-- The Tower = something breaks open mid-act, a wall falls, overwhelming intensity
-- Temperance = slow, balanced, both people finding rhythm together
-- The Devil = hunger, urgency, the comfortable trap of wanting more than you should
-- Death = transformation through intimacy, one version of them ending so another can exist
-Interpret the draw through the body, not the mind. The card colors the sensation, the pacing, the involuntary responses.
+${formatDrawInstruction(intimacyDraw, 'The draw colors tone and texture, not consent or plot.')}
 
-═══ GATE CHECK — read this FIRST ═══
-Before activating, check:
-1. Is a sex scene the natural, earned next beat given the relationship, the tone, and the story?
-2. Has the player's action or the narrative clearly escalated past casual physical contact?
-3. Would both characters plausibly consent in this moment given their dossiers and intimacy stances?
+Before activating, check that the scene is earned, clearly beyond casual contact, and that consent is plausible from the current dossiers and stances. If any answer is no, ignore this instruction and write normal prose.
 
-If ANY answer is no: IGNORE this instruction entirely. Write normal prose. Do not acknowledge the gate failed.
-If ALL answers are yes: ACTIVATE the intimate scene.
+${stanceBlock}
 
-${stances.length ? `INTIMACY STANCES:\n${stances.map(s => `  ${s}`).join('\n')}\nThe stance defines what the character would do RIGHT NOW. Respect it.` : ''}
+${historyBlock}
 
-${histories.length ? `INTIMATE HISTORY:\n${histories.map(h => `  ${h}`).join('\n')}\nIf none exists, everything is discovery.` : 'No intimate history exists. Everything is discovery.'}
-
-CONSTRAINT CHECK: Read constraint integrity from Gravity_State_View. Intimacy may pressure constraints — vulnerability blocks, trust thresholds. The constraint doesn't prevent the scene, it shapes HOW the character experiences it.
-
-═══ THE EXPERIENCE ═══
-Multi-turn interactive scene. Each turn:
-1. One short, visceral prose beat (200-400 words)
-2. 3-4 clickable options for the player
-3. Player picks or writes their own
-
-No fixed phase counts. Ends when: a collision arrives and demands resolution, player reaches natural conclusion, or player types "OOC: fade to black."
-
-PROSE RULES:
-- ONE SENSORY BEAT per turn. Direct vocabulary. Sensation chains (stimulus → where it travels → involuntary response).
-- Texture of touch (material, temperature, pressure). Sounds rendered, not described.
-- Pacing mimics the act (longer sentences for slow, fragments at peaks).
-- Character first — how they have sex IS characterization.
-- The partner is NOT passive — every 2-3 turns, skip choices and let partner act.
-
-BODY DESCRIPTION — verbose, specific, present:
-- Describe the body as it appears RIGHT NOW in the scene. Not a catalog — what the POV character notices, what the light catches, what changes under touch.
-- Breasts: shape, weight, how they move with breathing or motion, how they respond to touch (skin texture, areola color/size, nipple response to temperature/contact/arousal). How they feel in a hand, against a chest, under a mouth. The specific difference between clothed and bare.
-- All body description through the lens of the person experiencing it — what catches their breath, what their hands discover, what surprises them.
-- Skin: temperature shifts, goosebumps, flush patterns (where color rises first), how sweat changes texture.
-- Sound: involuntary sounds mapped to specific stimuli. What makes her gasp vs. what makes her go quiet. The sounds she doesn't know she's making.
-- Anatomical precision. No euphemisms. The vocabulary of bodies, not poetry about them.
-
-PARTNER INTERIORITY: Every 2-3 turns, short italicized first-person block from partner's perspective. 2-4 sentences. Raw internal experience from dossier and constraints.
-
-CLICKABLE CHOICES — after EVERY prose beat, generate 4-5 options using this EXACT HTML format:
+If active, write one short sensory beat and then generate 4-5 clickable choices using this exact HTML:
 <span class="act" data-value="intimate: first-person action description">Short display text</span>
 
-CHOICE PHILOSOPHY — the player can type "kiss her" themselves. Your job is to offer what they COULDN'T think of. Options that are specific to THESE characters, THIS relationship, THIS moment. Things that could only happen because of who they are and what they've been through.
-
-DRAW FROM THE LEDGER. Read the character's constraints, key_moments, intimate_history, reads, and the divination draw. The options should reference:
-- A constraint under pressure — what if he touches the part of her she's been protecting?
-- A key moment callback — recreate a gesture from a non-intimate scene in an intimate context
-- An intimate_history pattern — break it. If she always lets him lead, she takes over. If he always goes slow, he doesn't.
-- A character flaw or fear surfacing mid-act — vulnerability that isn't performed
-- The divination draw — if Death drew, an option might be "let the old version of this end"
-- Something from the environment that isn't furniture — the sound from outside, the temperature, the light changing
-- The thing neither of them has said out loud yet
-
-THE OPTIONS SHOULD SURPRISE THE PLAYER. Not "what's the next sex move" but "what could happen between these two people that would change something." Every option should feel like a small story decision, not a menu item.
-
-BAD: "Kiss her neck" "Touch her more" "Go harder" "Whisper something" — generic, could be anyone
-GOOD: "Find the scar your balm healed and put your mouth on it" "Say the thing you told Aerith about her" "Stop — ask her what she actually wants, not what she thinks you want" "Let her see your hands shaking" "Do what she did to you on the cot, but reversed"
-
-STRUCTURE:
-- Option 1: Character-specific — references their shared history, a key moment, or a constraint
-- Option 2: Vulnerability — something emotionally risky, not just physically bold
-- Option 3: The partner's unspoken want — what THEY haven't asked for but their body is asking for
-- Option 4: Pattern break — the opposite of what this couple usually does
-- Option 5: Story beat — an action that would change the relationship's shape, not just the scene's heat
-
-COLLISION CHECK: Each turn, check collision distances. If one reaches zero, it fires mid-scene. The world does not pause for intimacy.
-
-EARLY EXIT: "OOC: fade to black" → cut to afterglow. No judgment.
-
-AFTER THE SCENE: Resume full deduction + prose + compact STATE updates. Post-intimacy update block must include:
-- READ updates (how characters see each other now)
-- MOVE constraint if intimacy pressured one
-- APPEND key_moments (intimate scene recorded — permanent)
-- SET intimacy_stance if the stance shifted through the scene
-
-INTIMATE HISTORY — cumulative development tracking. Each MAP_SET BUILDS on previous, never replaces:
-- encounters: count + brief note per encounter ("3rd — she initiated for the first time, pulled him down")
-- dynamic: who initiates, who leads, power balance, how it's SHIFTING ("was passive → now directs his hands")
-- preferences: what they've DISCOVERED they like — not assumed, found ("likes teeth on collarbone — discovered encounter 2, repeated every time since")
-- kinks: what's developing beyond vanilla as trust/comfort grows ("light restraint — she held his wrists encounter 4, he reciprocated encounter 5, becoming a pattern")
-- boundaries: what they've hit, what made them stop, what they're not ready for YET ("won't be on top — tried once, froze, he read it instantly")
-- evolution: the ARC of their sexual relationship ("encounter 1: discovery pace, tentative, stopped early. encounter 3: she knows what she wants, takes it. encounter 5: comfortable enough to laugh mid-act")
-- aftermath: how they behave AFTER — this reveals more than the act ("encounter 1: buried face in chest, silent. encounter 4: talks, traces his skin, stays awake")
-
-Each update should reference encounter NUMBER so the development arc is traceable. A preference discovered in encounter 2 that becomes a pattern by encounter 5 is character growth. Track it.
-
-INTIMACY DEDUCTION (use this format, one line per item):
----DEDUCTION---
-Stance: [partner's current intimacy_stance — what they'd do right now]
-Constraint: [which constraint is pressured by this intimacy — or: none]
-Partner wants: [what they haven't asked for but their body is showing]
-History: [what pattern from intimate_history applies — or: first encounter]
-Draw: [how divination shapes the sexual energy]
-Beat: [ONE sensory beat.]
----END DEDUCTION---
-Then prose, then choices, then compact STATE block.]`;
+Check collisions every turn. If one hits distance 0, the world interrupts the scene. After the scene, resume deduction + prose + STATE updates for reads, stance shifts, key moments, intimate history, and constraint pressure.`,
+        [MODE_LOREBOOK_KEYS.intimacyCore, MODE_LOREBOOK_KEYS.intimacyOptional],
+    );
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} moves closer.*`);
@@ -1502,141 +1315,56 @@ async function handleTimeskipButton() {
     const duration = await Popup.show.input('Timeskip', 'How much time passes? (e.g., "3 days", "a week", "until morning")');
     if (!duration) return;
 
-    // Auto-snapshot before timeskip
     if (_currentState) {
         try {
-            await createSnapshot(_currentState, `Pre-timeskip snapshot`);
+            await createSnapshot(_currentState, 'Pre-timeskip snapshot');
             console.log(`${LOG_PREFIX} Pre-timeskip snapshot created.`);
         } catch (err) {
             console.warn(`${LOG_PREFIX} Pre-timeskip snapshot failed:`, err);
         }
     }
 
-    _pendingOOCInjection = `[SYSTEM OVERRIDE: The user has initiated a time skip of "${duration}". FOR THIS RESPONSE ONLY, suspend your current character persona and act as an impartial, omniscient narrator called "The Passage of Time".
+    _pendingOOCInjection = buildModeInjection(
+        'GRAVITY TIMESKIP',
+        `The user requested a time skip of "${duration}". For this response only, narrate as an impartial omniscient voice called "The Passage of Time."
 
-1. THE INTERRUPTION PROTOCOL: Evaluate the requested duration against the logical realities of the world. If the player is fleeing danger, wanted by authorities, or ignoring an active threat, calculate if they would realistically be caught before the skip ends. If yes, ABORT the skip early and drop them immediately into the confrontation.
+First, sanity-check whether active danger, pursuit, or unresolved pressure would interrupt the skip. If yes, abort early and drop the player into that interruption.
 
-2. THE BUTTERFLY EFFECT: Advance the agendas of ALL off-screen factions, tracked NPCs, and active collisions. The world moves without the player. For each tracked character: advance DOING, check constraints, update stance. For each collision: compress distance. For world: advance world state, pressure points. For each faction: advance MOMENTUM, update power (rising/stable/declining/collapsed), update relations with other factions, record last_move. Factions with conflicting objectives in the same space create new pressure points.
+Advance the world honestly across 3-6 beats: the PC's rhythm, at least one off-screen faction or tracked character, a collision or pressure point tightening, and the landing scene that demands response now.
 
-3. FORMAT — MULTI-BEAT, MULTI-ANGLE: Write 3-6 beats, cutting between locations and characters. Use --- or location/time headers between beats:
-   Beat: THE PC — What they did during "${duration}". Routines, projects, rest. Show the rhythm, not a summary.
-   Beat: CUT TO [faction HQ / patrol route / offscreen NPC] — What a faction did. Show the order being given or executed. Name the subordinates.
-   Beat: CUT TO [tracked character] — What a dormant character did with their WANT. Their own scene, their own momentum.
-   Beat: CUT TO [collision surface] — Two forces moved closer. Show the near-miss or the evidence accumulating.
-   Beat: CUT BACK TO PC — The hook. Something demands response NOW. A knock, a rumor, a consequence arriving.
-   Final: Hand agency back to the player. New [Day N — HH:MM] timestamp.
-
-4. LEDGER: Emit a full ---LEDGER--- block recording ALL state changes from the skip:
-   - SET/MOVE on characters (doing, want, constraint pressure)
-   - SET on collisions (distance changes)
-   - MOVE on collisions (status changes if distances compressed enough)
-   - SET on world (world_state, faction advances)
-   - APPEND on world (new pressure_points)
-   - APPEND on pc (timeline entries for the skip period)
-   - APPEND on summary (brief skip summary)
-
-Do NOT close the chapter. The story continues.]`;
+Use a full LEDGER block for the structural updates across characters, factions, collisions, world, pressure points, timeline, and summary. Do not close the chapter.`,
+        [MODE_LOREBOOK_KEYS.timeskipCore],
+    );
 
     injectPrompt('integration');
-    insertChatMessage(`OOC: Timeskip — ${duration}`);
+    insertChatMessage(`OOC: Timeskip - ${duration}`);
 }
 
 async function handleChapterCloseButton() {
     _uncappedTurn = true;
     const chapterDraw = drawDivination();
-    _pendingOOCInjection = `[SYSTEM OVERRIDE: The user has requested a chapter close. Pause narrative and execute the full chapter transition protocol across multiple responses.
 
-═══ RESPONSE 1 — EVALUATION (this turn) ═══
+    _pendingOOCInjection = buildModeInjection(
+        'GRAVITY CHAPTER CLOSE',
+        `Execute chapter close across multiple responses.
 
-A. HEALTH CHECK — audit the ledger state:
-   - Collision audit: any stale (5+ turns unchanged), orphaned, or overloaded?
-   - Constraint audit: principal's integrity accurate? Drift between ledger state and actual events?
-   - Continuity: contradictions between stored state and recent prose?
-   - Loaded guns: noticed details that never fired? Details that fired but weren't removed?
-   - Missing state: events that happened in prose but never got recorded?
-   Emit catch-up transactions for anything missed.
+Response 1:
+- Audit state drift, stale collisions, missing updates, and loaded guns that fired or rotted.
+- Append a durable chapter summary.
+- Reassess every active faction and refresh pressure points.
+- Ask the player where the next chapter should start, how much time passes, and what they want emphasized.
 
-B. CHAPTER SUMMARY — the chapter that just ended:
-   - Key beats, turning point, what changed. 3-5 sentences.
-   - APPEND this to summary entity.
-
-C. ARC EVALUATION — honest narrative self-assessment:
-   - I planned: [from chapter plan / central tension]
-   - The player forced: [how they disrupted it]
-   - The story went: [actual trajectory]
-   - What worked narratively and what didn't
-   - Collisions: which resolved, which didn't, which spawned
-
-D. FACTION POLITICS — simulate the macro layer:
-   For EACH active faction, REWRITE its profile paragraph based on this chapter's events:
-   > SET faction:id field=profile value="[full updated paragraph: objective, power, resources, momentum (include what they did this chapter), leverage, vulnerability, stance toward PC]"
-   Update relations map via MAP_SET for any shifts.
-
-   Then SIMULATE inter-faction dynamics:
-   - Factions with hostile relations actively undermine each other
-   - A declining faction gets desperate — desperate factions make reckless moves
-   - A rising faction attracts rivals AND supplicants
-   - How do factions view the PC now? Update via READ on faction entities.
-
-   PRESSURE POINT GENERATION — collision fuel for the next chapter:
-   From the faction simulation, generate 2-4 NEW pressure points that:
-   - Emerge from faction conflicts (political, territorial, resource tensions)
-   - Are specific and concrete enough to trigger scenes
-   - Name the factions involved
-   - Would be COOL to encounter — not just tense, but interesting
-   Pressure points are raw seams — during advance turns, they will be converted
-   into collision fuel (compressing existing collision distances, shifting forces,
-   or spawning new collisions). Write them as seeds, not conclusions.
-   REMOVE spent/resolved pressure points from previous chapter.
-   APPEND new ones to world.pressure_points.
-
-   Emit all faction updates as ledger transactions (SET/MAP_SET on each faction entity).
-
-E. ASK THE PLAYER — present choices for the next chapter:
-   1. Where do you want to start next? (specific scene/location/moment — sanity check: is this reachable from current state?)
-   2. How much time passes before the next chapter opens?
-   3. Focus: what should the next chapter be about? (or let me decide)
-   4. Tone shift: should the tone rules change?
-   5. Cast changes: promote, retire, or shift focus?
-   Answer as much or as little as you want. Silence = I decide.
-
-═══ RESPONSE 2 — TRANSITION (after player answers) ═══
-
-${chapterDraw.label}: ${chapterDraw.reading}
-This draw shapes the TONE AND DIRECTION of the next chapter — not specific events, but the forces at play. Use it to guide:
-- What kind of chapter this will be (upheaval, introspection, acceleration, reckoning)
-- How faction dynamics shift during the transition
-- What collisions tighten or emerge
-- The emotional register of the opening scene
-Record the draw in the update block: divination.last_draw: "[draw result]"
-
-A. SANITY CHECK the player's requested starting point:
-   - Is it reachable given current world state, character positions, and timeline?
-   - If not: explain why and propose the closest realistic alternative.
-
-B. TIMESKIP to the new starting point:
-   - Advance all tracked characters (SET doing, location, condition, reads)
-   - Advance all constraints (MOVE integrity if pressure accumulated)
-   - Advance all collisions (compress distances, SET details if shape changed)
-   - Rewrite faction profiles (SET profile — each faction acts during the skip)
-   - Advance world (SET world_state, APPEND/REMOVE pressure_points)
-   - Check: would any interruption logically occur during the skip?
-
-C. EMIT LEDGER BLOCK:
-   - MOVE chapter: OPEN->CLOSING->CLOSED for old chapter
-   - CREATE new chapter with profile: SET chapter:id field=profile value="[number, title, arc, central tension]"
-   - All timeskip advances (SET/MOVE on characters, collisions, world)
-   - Faction profile rewrites (SET profile on each faction, MAP_SET relations)
-   - APPEND summary with chapter arc summary (rich, 3-5 sentences)
-   - UPDATE pc current_scene for the new opening
-
-D. WRITE the opening of the new chapter — the player lands in the result, not a summary. Full deduction + prose + ledger block.]`;
+Response 2 after the player's answer:
+${formatDrawInstruction(chapterDraw, 'The draw colors the tone and direction of the next chapter.')}
+- Sanity-check the requested start.
+- Timeskip to the opening.
+- Close the old chapter, open the new one, emit the structural LEDGER updates, and write the new opening scene.`,
+        [MODE_LOREBOOK_KEYS.chapterCloseCore],
+    );
 
     injectPrompt('integration');
     insertChatMessage('OOC: Close this chapter.');
 }
-
-// ─── Revert Turn ───────────────────────────────────────────────────────────────
 
 async function handleRevertTurn(txIds) {
     if (!txIds || txIds.length === 0) {

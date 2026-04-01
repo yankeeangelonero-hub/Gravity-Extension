@@ -81,7 +81,7 @@ The extension injects turn-specific deduction templates via the `_nudge` slot:
 - **Oracle-driven resolution**: When a collision hits distance 0, the extension starts a resolution clock with divination draws at each phase: atmosphere (turns 1-2), direct intrusion with fresh draw (turns 3-4), crash with final draw (turn 5+). Tracked via `_resolutionTracker` Map in index.js.
 - **Format validation only**: `consistency.js` checks structure, not gameplay rules
 - **OOC commands** in `ooc-handler.js`: `combat setup`, `snapshot`, `rollback`, `eval`, `history`, `consolidate`, etc. — these inject contextual prompts, they don't modify state directly
-- **Storage**: All state lives in `chatMetadata` (persisted per chat by SillyTavern). No external files, APIs, or lorebook entries. The extension is the sole source of truth — the preset references `Gravity_State_View` for all configuration (role, voice, tone, tone_rules, guidelines, motivation, objective) rather than lorebook entries.
+- **Storage**: All canonical state lives in `chatMetadata` (persisted per chat by SillyTavern). Optional mode playbooks may live in importable World Info files such as `Gravity World Info.json`, but those entries are prompt guidance only; the extension remains the source of truth for state.
 
 ## Branch Context
 
@@ -94,5 +94,5 @@ The extension injects turn-specific deduction templates via the `_nudge` slot:
 
 - The extension imports SillyTavern globals (e.g., `getContext`, `setExtensionPrompt`, `saveMetadataDebounced`) from the ST environment — these are not local dependencies.
 - `index.js` is the central coordinator (~1,500 lines). It wires all modules together and handles the turn lifecycle.
-- `gravity-system-prompt.md` is a legacy reference for the ledger command format. The v11 preset (`Gravity_v11.json`) contains the actual system prompts (L0–L3 + Anchor). The extension injects all runtime instructions via `setExtensionPrompt()`.
+- `gravity-system-prompt.md` is a legacy reference for the ledger command format. Current presets live in `gravity_v13_c.json` and `gravity_v13_c_split.json`, while mode-specific playbooks can be imported from `Gravity World Info.json`. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
 - Divination uses random tables (Arcana/Classic/I-Ching) defined in `index.js`.
