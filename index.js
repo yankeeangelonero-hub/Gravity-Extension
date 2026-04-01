@@ -1029,59 +1029,15 @@ MOVE each arrived collision to RESOLVING. SET each collision's last_manifestatio
             setExtensionPrompt(`${MODULE_NAME}_intimacy`, '', PROMPT_NONE, 0);
         }
 
-        // Nudge - full on regular turns, slim on advance/integration (those prompts already instruct on ledger)
-        const DEDUCTION_TEMPLATES = {
-            regular: `Intent: [what the player is trying to do]
-Story: [1-2 lines - the dramatic situation, what's at stake]
-
-Collisions:
-- [name] | [distance] | [tightening / simmering / resolving] - [why this turn]
-New: [spawned - or: none]
-Resolving: [at zero - what's the forced choice?]
-
-Constraint: [which of the principal's constraints is pressured, why, integrity direction - or: none pressured]
-Factions: [which faction advanced or could advance - if none acted in 10+ turns, one MUST act now]
-Cost overlap: [whose costs are colliding - who's being forced to choose]
-
-Divination: [if drawn - result, reading. If not - skip]
-Contest: [resolve player actions through logic and established capabilities]
-
-Scene: [who's present, atmosphere - for current_scene update]
-Plan: [ONE beat. What happens. What would each character logically do. Stop after the first shift.]
-Updates: [all material state changes for the STATE block - or: none]
-Chapter: [hold / propose "Title" / advance]`,
-            combat: `Action: [what the PC is attempting]
-Power: [PC power:X vs enemy power:Y - gap, can this work?]
-Advantages: [what PC has established - traits, prep, terrain, reads]
-Enemy: [what the enemy would logically do - adapt, counter, exploit]
-Wounds: [PC wounds, enemy wounds - effect on this exchange]
-Distance: [current -> change? why?]
-Beat: [ONE exchange. What happens.]`,
-            advance: `Focus: [scene/world/offscreen/new_threat/collision]
-What moves: [the specific thing that happens]
-Draw: [how the divination shapes this]
-Collision: [which tightens or spawns - or: none]
-Beat: [what happens.]`,
-            intimacy: `Stance: [partner's current intimacy_stance]
-Constraint: [which is pressured - or: none]
-Partner wants: [what their body is showing]
-History: [pattern from intimate_history - or: first encounter]
-Draw: [how divination shapes the sexual energy]
-Beat: [ONE sensory beat.]`,
-        };
-
-        const deductionTemplate = DEDUCTION_TEMPLATES[_pendingDeductionType] || DEDUCTION_TEMPLATES.regular;
+        // Nudge now only signals the active deduction mode; the preset owns the actual protocol.
+        const reasonMode = _pendingDeductionType || 'regular';
         _pendingDeductionType = 'regular'; // reset after use
 
-        const nudgeText = `[SYSTEM: ACTIVE GRAVITY DEDUCTION CHECKLIST FOR THIS TURN.
+        let nudgeText = `[SYSTEM: GRAVITY RUNTIME FLAGS
+GRAVITY_REASON_MODE: ${reasonMode}
 
-Process this checklist inside the preset's active CoT/thinking entry. It must happen first in reasoning on a fresh turn.
-Do not skip, combine, or summarize deduction items.
-Do exactly one deduction pass and do not restart or repeat it later in reasoning.
-Do not emit a visible ---DEDUCTION--- block.
-
-Checklist (compact, one line per item):
-${deductionTemplate}
+These flags are for hidden reasoning only. Never echo or paraphrase them in visible output.
+Run the matching deduction protocol from the preset's Gravity CoT entry. If no mode is present, default to regular.
 
 After the thinking pass closes, visible output is:
 1. Optional divination card HTML when another injection requests it
@@ -1368,7 +1324,7 @@ Write the next prose beat responding to that action, then generate 4-5 new click
 
 Collision pressure stays live. "OOC: fade to black" cuts to afterglow.
 
-Then do the deduction in reasoning, write prose, render the choices, and end with a compact STATE block.`,
+Then write prose, render the choices, and end with a compact STATE block.`,
             [MODE_LOREBOOK_KEYS.intimacyCore, MODE_LOREBOOK_KEYS.intimacyOptional, MODE_LOREBOOK_KEYS.proseIntimacy],
         );
         injectPrompt('advance');
@@ -1457,7 +1413,7 @@ function handleAdvanceButton() {
         const colDetails = buildCollisionStoryCapsule(a.id, a.col);
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY ADVANCE',
-            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISION:\n${`COLLISION: "${a.col.name || a.id}"\n${colDetails}`}\n\nThis is the world's move. Force the issue into the player's immediate reality now. Write the arrival, not the final resolution. MOVE the collision to RESOLVING, SET collision:${a.id}.last_manifestation to the concrete arrival, record divination.last_draw, then do the deduction in reasoning, write prose, and end with a compact STATE block.`,
+            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISION:\n${`COLLISION: "${a.col.name || a.id}"\n${colDetails}`}\n\nThis is the world's move. Force the issue into the player's immediate reality now. Write the arrival, not the final resolution. MOVE the collision to RESOLVING, SET collision:${a.id}.last_manifestation to the concrete arrival, record divination.last_draw, then write prose and end with a compact STATE block.`,
             markers,
         );
     } else if (ripeCollisions.length > 1) {
@@ -1469,7 +1425,7 @@ function handleAdvanceButton() {
         const arrivalNames = ripeCollisions.map(a => `"${a.col.name || a.id}"`).join(' and ');
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY ADVANCE',
-            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISIONS:\n${collisionBlocks}\n\nCONVERGENCE — ${arrivalNames} arrive on the same turn.\n${convergenceDraw.label}: ${convergenceDraw.reading}${convergenceDraw.html ? `\nRender this HTML card reveal:\n${convergenceDraw.html}` : ''}\n\nDeclare the relationship before writing the scene:\n• PARALLEL — distinct arrivals; one foregrounds first, others active in same beat\n• CASCADE — one triggers or delivers the other; name which drives which\n• COMPOSITE — one converged event; parents close as MERGED; CREATE a composite successor collision\n\nIf a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.\n\nMOVE each arrived collision to RESOLVING. SET each collision's last_manifestation to the concrete way it entered the converged scene. Record divination.last_draw, then do the deduction in reasoning, write prose, and end with a compact STATE block.`,
+            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISIONS:\n${collisionBlocks}\n\nCONVERGENCE — ${arrivalNames} arrive on the same turn.\n${convergenceDraw.label}: ${convergenceDraw.reading}${convergenceDraw.html ? `\nRender this HTML card reveal:\n${convergenceDraw.html}` : ''}\n\nDeclare the relationship before writing the scene:\n• PARALLEL — distinct arrivals; one foregrounds first, others active in same beat\n• CASCADE — one triggers or delivers the other; name which drives which\n• COMPOSITE — one converged event; parents close as MERGED; CREATE a composite successor collision\n\nIf a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.\n\nMOVE each arrived collision to RESOLVING. SET each collision's last_manifestation to the concrete way it entered the converged scene. Record divination.last_draw, then write prose and end with a compact STATE block.`,
             markers,
         );
     } else if (inProgressCollisions.length > 0) {
@@ -1480,7 +1436,7 @@ function handleAdvanceButton() {
 
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY ADVANCE',
-            `${pcName} yields the turn while a collision is already in motion.\n\n${formatDrawInstruction(draw, 'The draw colors what happens next, not the outcome.')}\n\nIN-PROGRESS COLLISION:\n${collisionBlocks}\n\nKeep pushing the confrontation. It cannot stall. Either resolve it this turn or force it into a sharper crisis. For each collision that stays live, SET that collision's last_manifestation to the new concrete manifestation. If it resolves, MOVE it to RESOLVED with outcome_type and aftermath. Record divination.last_draw, then do the deduction in reasoning, write prose, and end with a compact STATE block.`,
+            `${pcName} yields the turn while a collision is already in motion.\n\n${formatDrawInstruction(draw, 'The draw colors what happens next, not the outcome.')}\n\nIN-PROGRESS COLLISION:\n${collisionBlocks}\n\nKeep pushing the confrontation. It cannot stall. Either resolve it this turn or force it into a sharper crisis. For each collision that stays live, SET that collision's last_manifestation to the new concrete manifestation. If it resolves, MOVE it to RESOLVED with outcome_type and aftermath. Record divination.last_draw, then write prose and end with a compact STATE block.`,
             markers,
         );
     } else {
@@ -1495,7 +1451,7 @@ function handleAdvanceButton() {
 
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY ADVANCE',
-            `${pcName} maintains vector (continues ${doing}). The PC does not take a new action this turn.\n\n${formatDrawInstruction(draw, 'The draw colors the world\'s move - it does not prescribe it.')}\n\n${ADVANCE_PROMPTS[focus.key]}\n\nRecord divination.last_draw, then do the deduction in reasoning, write prose, and end with a compact STATE block.`,
+            `${pcName} maintains vector (continues ${doing}). The PC does not take a new action this turn.\n\n${formatDrawInstruction(draw, 'The draw colors the world\'s move - it does not prescribe it.')}\n\n${ADVANCE_PROMPTS[focus.key]}\n\nRecord divination.last_draw, then write prose and end with a compact STATE block.`,
             markers,
         );
     }
@@ -1571,7 +1527,7 @@ function handleCombatButton() {
     } else {
         body += `\n\nResolve one exchange only. Update distance or status only if the momentum genuinely shifts.`;
     }
-    body += `\n\nRecord divination.last_draw in the update block. Do the combat deduction in reasoning, then end with prose + compact STATE block${isSetup ? ' (or LEDGER if the creation work gets structural).' : '.'}`;
+    body += `\n\nRecord divination.last_draw in the update block. Then end with prose + compact STATE block${isSetup ? ' (or LEDGER if the creation work gets structural).' : '.'}`;
 
     _pendingOOCInjection = buildModeInjection(
         'GRAVITY COMBAT',

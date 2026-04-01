@@ -54,7 +54,7 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_state`** — Entity registry + dossiers (full state view every turn)
 - **`_readme`** — Command format reference (core on regular/advance, full on integration)
 - **`_inject`** — Corrections + reinforcement prompts
-- **`_nudge`** — Active per-turn deduction checklist plus post-thinking output order (regular/combat/advance/intimacy)
+- **`_nudge`** — Runtime flags for hidden reasoning mode plus post-thinking output order (regular/combat/advance/intimacy)
 - **`_setup`** — Setup wizard phase prompts (when active)
 - **`_ooc`** — OOC command injection (from buttons)
 - **`_arrival`** — Oracle-driven collision resolution (arrival, escalation, crash — all phases)
@@ -69,7 +69,7 @@ Turn modes: `regular` (player prose), `advance` (world moves), `integration` (se
 
 ### Deduction Templates
 
-The extension injects turn-specific deduction checklists via the `_nudge` slot. The preset's dedicated CoT entry owns the actual `<think>...</think>` reasoning wrapper and executes these checklists there, not in visible prose:
+The preset owns the turn-specific deduction protocols inside its dedicated CoT entry. The extension only injects the active mode flag via `_nudge` so the preset can select the right protocol inside `<think>...</think>`, not in visible prose:
 - **`regular`** — Full 12-field deduction (intent, story, collisions, constraints, factions, cost overlap, divination, contest, scene, plan, updates, chapter)
 - **`combat`** — Power assessment, advantages, enemy logic, wounds, distance
 - **`advance`** — Focus, what moves, divination, collision tracking

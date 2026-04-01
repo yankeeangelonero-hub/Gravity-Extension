@@ -1,6 +1,6 @@
 # Project Memory
 
-Updated: 2026-04-02 01:08:09 +08:00
+Updated: 2026-04-02 01:20:19 +08:00
 
 Durable working memory for Codex sessions in this repository. Update this file when system behavior, active design decisions, or important constraints change.
 
@@ -11,7 +11,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - `index.js` remains the central coordinator for prompt injection, turn flow, collision resolution, pressure-point audits, and UI wiring.
 - `gravity_v14.json` plus `Gravity World Info.json` now own sentence-level prose behavior and mode-specific length guidance.
 - Gravity deduction now lives in the model's hidden reasoning/thinking pass. The extension no longer asks for a visible `---DEDUCTION---` block in normal responses.
-- `gravity_v14.json` now includes a dedicated Lucid Loom-style CoT trigger plus a separate Gravity CoT entry. On fresh turns the model must open `<think>`, do deduction first there, close `</think>`, and only then emit visible output.
+- `gravity_v14.json` now includes a dedicated Lucid Loom-style CoT trigger plus a separate Gravity CoT entry. On fresh turns the model must open `<think>`, pick the matching mode protocol there, close `</think>`, and only then emit visible output.
 - Setup and runtime state were trimmed aggressively. Live setup now authors the opening arc, optional combat rules, and optional PC starting power. The extension no longer authors `story_kind`, `guidelines`, `voice`, `tone`, `length`, `motivation`, `objective`, or `knowledge_asymmetry`.
 - `world.constants.combat_rules` is the only actively surfaced setup-authored world constant in the current extension contract.
 - Good-turn exemplar tagging now preserves the real completed turn mode through `_lastCompletedMode`, so combat/intimacy/advance exemplars are not silently recorded as regular.
@@ -19,7 +19,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 ## Prose Architecture
 
 - Always-on prose authority lives in the preset: Prose Kernel, active Group 5 prose style, Character Voice, and Dossier-Driven Prose.
-- The preset now owns the hidden reasoning wrapper and first-step ordering. The `_nudge` slot only injects the live per-turn deduction checklist plus post-thinking output order.
+- The preset now owns the hidden reasoning wrapper, first-step ordering, and all mode-specific deduction protocols. The `_nudge` slot only injects runtime flags such as `GRAVITY_REASON_MODE` plus post-thinking output order.
 - Divination HTML card reveals are explicitly instructed to stay in visible output before the prose scene, never inside hidden reasoning.
 - Mode-specific prose lives in World Info entries:
   - `gravity_prose_regular`
@@ -55,6 +55,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Active durable memory file: `Documentation/project_memory.md`
 - Archived memory and older planning docs: `Documentation/Old/`
 - Existing prose rollout handoff: `Documentation/v14_prose_architecture_handoff.md`
+- Current reasoning-flow reference: `Documentation/deduction_cot_architecture.md`
 
 ## Important Files
 
