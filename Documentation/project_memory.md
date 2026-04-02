@@ -1,6 +1,6 @@
 # Project Memory
 
-Updated: 2026-04-02 10:38:00 +08:00
+Updated: 2026-04-02 11:05:00 +08:00
 
 Durable working memory for Codex sessions in this repository. Update this file when system behavior, active design decisions, or important constraints change.
 
@@ -16,6 +16,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Live verification is still needed because the duplicated-CoT symptom was observed in actual play, not in an in-repo test harness. See `Documentation/handoff_2026-04-02_012931_SGT_cot_followup.md`.
 - The live `| Gravity CoT` prompt now explicitly says "Before anything else you must perform a strategic analysis," requires a one-pass fixed template inside `<think>`, and ends with `(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`. Treat that exact wrapper as the active CoT contract.
 - User preference: keep `show_thoughts: true`. Do not treat flipping it to `false` as the default CoT fix path unless the user explicitly asks to test that change.
+- Reason mode now persists across `GENERATION_STARTED` re-injections. This fixes special-turn desync where `[GRAVITY ADVANCE]` / combat / intimacy OOC guidance could still be active while `GRAVITY_REASON_MODE` silently fell back to `regular`.
 - Setup and runtime state were trimmed aggressively. Live setup now authors the opening arc, optional combat rules, and optional PC starting power. The extension no longer authors `story_kind`, `guidelines`, `voice`, `tone`, `length`, `motivation`, `objective`, or `knowledge_asymmetry`.
 - `world.constants.combat_rules` is the only actively surfaced setup-authored world constant in the current extension contract.
 - Good-turn exemplar tagging now preserves the real completed turn mode through `_lastCompletedMode`, so combat/intimacy/advance exemplars are not silently recorded as regular.

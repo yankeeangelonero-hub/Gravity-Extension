@@ -42,8 +42,9 @@ let _pendingReinforcement = null;
 let _pendingOOCInjection = null;
 let _uncappedTurn = false;
 let _currentInjectMode = 'regular';
+let _currentReasonMode = 'regular';
 let _lastCompletedMode = 'regular'; // snapshot before reset — used by exemplar flagging
-let _pendingDeductionType = 'regular'; // regular, combat, advance, intimacy
+let _pendingDeductionType = null; // one-shot override for combat, advance, intimacy
 
 // ─── Collision Resolution Tracking ───────────────────────────────────────────
 
@@ -733,7 +734,7 @@ function injectPrompt(mode) {
         const { chatMetadata } = SillyTavern.getContext();
         const exemplars = (!isIntegration && chatMetadata?.['gravity_exemplars']) || [];
         if (exemplars.length > 0) {
-            const selected = selectExemplarsForPrompt(exemplars, activeMode, _pendingDeductionType, 3);
+            const selected = selectExemplarsForPrompt(exemplars, activeMode, _currentReasonMode, 3);
             const exLines = selected.map(formatExemplarForPrompt).join('\n');
             setExtensionPrompt(`${MODULE_NAME}_exemplars`,
                 `[STYLE EXEMPLARS — the player flagged these as strong prose. Match the structural strengths that fit this turn's mode. Do not copy exact wording, imagery, or house voice.\n${exLines}]`,
@@ -1030,8 +1031,11 @@ MOVE each arrived collision to RESOLVING. SET each collision's last_manifestatio
         }
 
         // Nudge now only signals the active deduction mode; the preset owns the actual protocol.
-        const reasonMode = _pendingDeductionType || 'regular';
-        _pendingDeductionType = 'regular'; // reset after use
+        if (_pendingDeductionType) {
+            _currentReasonMode = _pendingDeductionType;
+            _pendingDeductionType = null;
+        }
+        const reasonMode = _currentReasonMode || 'regular';
 
         let nudgeText = `[SYSTEM: GRAVITY RUNTIME FLAGS
 GRAVITY_REASON_MODE: ${reasonMode}
@@ -1111,6 +1115,9 @@ async function initialize(force = false) {
     _pendingReinforcement = null;
     _pendingOOCInjection = null;
     _uncappedTurn = false;
+    _currentInjectMode = 'regular';
+    _currentReasonMode = 'regular';
+    _pendingDeductionType = null;
     _firedCollisionArrivals = new Set();
     _resolutionTracker = new Map();
 
@@ -1153,6 +1160,8 @@ async function onMessageReceived(messageId) {
     _lastCompletedMode = _currentInjectMode;
     // Reset inject mode and clear OOC injection — the special turn is over
     _currentInjectMode = 'regular';
+    _currentReasonMode = 'regular';
+    _pendingDeductionType = null;
     const context = SillyTavern.getContext();
     if (context.setExtensionPrompt) {
         context.setExtensionPrompt(`${MODULE_NAME}_ooc`, '', PROMPT_NONE, 0);
