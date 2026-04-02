@@ -25,11 +25,11 @@ let _onAdvance = null;
 let _onRevertTurn = null;
 let _onGoodTurn = null;
 let _onCombat = null;
-let _onCombatSetup = null;
+let _onPowerReview = null;
 let _onDivinationChange = null;
 let _onIntimacy = null;
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onCombatSetup, onDivinationChange, onIntimacy }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onPowerReview, onDivinationChange, onIntimacy }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
@@ -41,7 +41,7 @@ function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapte
     _onRevertTurn = onRevertTurn;
     _onGoodTurn = onGoodTurn;
     _onCombat = onCombat;
-    _onCombatSetup = onCombatSetup;
+    _onPowerReview = onPowerReview;
     _onDivinationChange = onDivinationChange;
     _onIntimacy = onIntimacy;
 }
@@ -71,6 +71,18 @@ function toArr(v) {
 function toObj(v) {
     if (v && typeof v === 'object' && !Array.isArray(v)) return v;
     return {};
+}
+
+function renderPowerLabel(entity) {
+    const hasCurrent = entity?.power != null;
+    const hasBase = entity?.power_base != null;
+    if (!hasCurrent && !hasBase) return '';
+    if (hasCurrent && hasBase) {
+        return entity.power === entity.power_base
+            ? String(entity.power)
+            : `${entity.power} (base ${entity.power_base})`;
+    }
+    return hasCurrent ? String(entity.power) : `base ${entity.power_base}`;
 }
 
 function inferExemplarCategory(text, modeHint = 'regular') {
@@ -179,8 +191,8 @@ function createPanel() {
             <button class="gl-cmd-btn" data-cmd="chapter_close" title="Close chapter"><i class="fa-solid fa-flag-checkered"></i> Close Ch.</button>
             <button class="gl-cmd-btn" data-cmd="register" title="Register/promote NPC"><i class="fa-solid fa-user-plus"></i> Register</button>
             <button class="gl-cmd-btn" data-cmd="advance" title="Yield initiative — let the world move"><i class="fa-solid fa-play"></i> Advance</button>
-            <button class="gl-cmd-btn" data-cmd="combat_setup" title="Define power scale and combat rules"><i class="fa-solid fa-shield-halved"></i> Combat Setup</button>
             <button class="gl-cmd-btn" data-cmd="combat" title="Initiate combat — fight this"><i class="fa-solid fa-burst"></i> Combat</button>
+            <button class="gl-cmd-btn" data-cmd="power_review" title="Request an OOC review of current combat power"><i class="fa-solid fa-scale-balanced"></i> Power Review</button>
             <button class="gl-cmd-btn" data-cmd="intimacy" title="Initiate intimate scene"><i class="fa-solid fa-heart"></i> Intimacy</button>
             <button class="gl-cmd-btn" data-cmd="good_turn" title="Flag good prose — paste exemplar"><i class="fa-solid fa-thumbs-up"></i> Good</button>
         </div>
@@ -214,8 +226,8 @@ function createPanel() {
             case 'chapter_close': if (_onChapterClose) _onChapterClose(); break;
             case 'register': if (_onRegister) _onRegister(); break;
             case 'advance': if (_onAdvance) _onAdvance(); break;
-            case 'combat_setup': if (_onCombatSetup) _onCombatSetup(); break;
             case 'combat': if (_onCombat) _onCombat(); break;
+            case 'power_review': if (_onPowerReview) _onPowerReview(); break;
             case 'intimacy': if (_onIntimacy) _onIntimacy(); break;
             case 'good_turn': if (_onGoodTurn) _onGoodTurn(); break;
         }
@@ -517,8 +529,19 @@ function renderPCDossier(state) {
     parts.push(`<div class="gl-dossier-header"><b>${esc(pc.name)}</b> ${badge('PC')}</div>`);
 
     // Status fields
-    if (pc.power != null) {
-        parts.push(`<div class="gl-d-row"><b>Power:</b> ${esc(String(pc.power))}</div>`);
+    if (pc.power != null || pc.power_base != null) {
+        parts.push(`<div class="gl-d-row"><b>Power:</b> ${esc(renderPowerLabel(pc))}</div>`);
+        if (pc.power_base != null && pc.power != null && pc.power !== pc.power_base) {
+            parts.push(`<div class="gl-d-row"><b>Base Power:</b> ${esc(String(pc.power_base))}</div>`);
+        }
+    }
+    if (pc.power_basis) parts.push(`<div class="gl-d-row"><b>Power Basis:</b> ${esc(pc.power_basis)}</div>`);
+    const pcAbilities = toArr(pc.abilities);
+    if (pcAbilities.length) {
+        parts.push(`<div class="gl-d-section"><b>Combat Abilities:</b></div>`);
+        for (const ability of pcAbilities) {
+            parts.push(`<div class="gl-d-detail">${esc(ability)}</div>`);
+        }
     }
     if (pc.current_scene) parts.push(`<div class="gl-d-row"><b>Scene:</b> ${esc(pc.current_scene)}</div>`);
     if (pc.location) parts.push(`<div class="gl-d-row"><b>Location:</b> ${esc(pc.location)}</div>`);
@@ -593,7 +616,17 @@ function renderCharDossier(char, state) {
 
     parts.push(`<div class="gl-dossier-header"><b>${esc(char.name || char.id)}</b> ${badge(char.tier)}</div>`);
 
-    if (char.power != null) parts.push(`<div class="gl-d-row"><b>Power:</b> ${esc(String(char.power))}</div>`);
+    if (char.power != null || char.power_base != null) {
+        parts.push(`<div class="gl-d-row"><b>Power:</b> ${esc(renderPowerLabel(char))}</div>`);
+        if (char.power_base != null && char.power != null && char.power !== char.power_base) {
+            parts.push(`<div class="gl-d-row"><b>Base Power:</b> ${esc(String(char.power_base))}</div>`);
+        }
+    }
+    if (char.power_basis) parts.push(`<div class="gl-d-row"><b>Power Basis:</b> ${esc(char.power_basis)}</div>`);
+    const charAbilities = toArr(char.abilities);
+    if (charAbilities.length) {
+        parts.push(`<div class="gl-d-row"><b>Abilities:</b> ${charAbilities.map(ability => esc(ability)).join(', ')}</div>`);
+    }
     if (char.location) parts.push(`<div class="gl-d-row"><b>Location:</b> ${esc(char.location)}</div>`);
     if (char.condition) parts.push(`<div class="gl-d-row"><b>Condition:</b> ${esc(char.condition)}</div>`);
     if (char.want) parts.push(`<div class="gl-d-row"><b>WANT:</b> ${esc(char.want)}</div>`);

@@ -56,6 +56,20 @@ function getPressurePointMeta(state, point) {
     return `fresh (${ageTx} tx)`;
 }
 
+function toList(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.filter(Boolean);
+    return [String(value)];
+}
+
+function formatPowerTag(entity) {
+    const hasCurrent = entity?.power != null;
+    const hasBase = entity?.power_base != null;
+    if (!hasCurrent && !hasBase) return '';
+    if (hasCurrent && hasBase) return ` [power:${entity.power}|base:${entity.power_base}]`;
+    return hasCurrent ? ` [power:${entity.power}]` : ` [base:${entity.power_base}]`;
+}
+
 /**
  * Render the full state view into the always-on lorebook entry.
  * @param {string} bookName
@@ -83,11 +97,16 @@ function formatStateView(state, mode = 'full') {
     for (const char of Object.values(state.characters)) {
         if (char.tier === 'UNKNOWN') continue;
         let charLine = `  ${char.tier} "${char.name || char.id}"`;
-        if (char.power != null) charLine += ` [power:${char.power}]`;
+        charLine += formatPowerTag(char);
         charLine += ` → id: ${char.id}`;
         lines.push(charLine);
         if (char.location) lines.push(`    Location: ${char.location}`);
         if (!slim && char.condition) lines.push(`    Condition: ${char.condition}`);
+        if (!slim && char.power_basis) lines.push(`    Power basis: ${char.power_basis}`);
+        if (!slim) {
+            const abilities = toList(char.abilities);
+            if (abilities.length) lines.push(`    Abilities: ${abilities.join(' | ')}`);
+        }
         if (!slim && char.intimacy_stance) {
             lines.push(`    Intimacy stance: ${char.intimacy_stance}`);
         }
@@ -166,6 +185,9 @@ function formatStateView(state, mode = 'full') {
             lines.push(`    SCENE: ${state.pc.current_scene}`);
         }
         if (state.pc.equipment) lines.push(`    Equipment: ${state.pc.equipment}`);
+        if (state.pc.power_basis) lines.push(`    Power basis: ${state.pc.power_basis}`);
+        const slimAbilities = toList(state.pc.abilities);
+        if (slimAbilities.length) lines.push(`    Abilities: ${slimAbilities.join(' | ')}`);
         const slimWounds = (state.pc.wounds && typeof state.pc.wounds === 'object') ? state.pc.wounds : {};
         if (Object.keys(slimWounds).length) {
             lines.push(`    Wounds: ${Object.entries(slimWounds).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
@@ -228,7 +250,9 @@ function formatStateView(state, mode = 'full') {
     // Constants — always shown (story framing lives here; prose rules live in the preset)
     const c = state.world.constants || {};
     const constantLines = [];
-    if (c.combat_rules) constantLines.push(`  Combat Rules: ${c.combat_rules}`);
+    if (c.power_scale) constantLines.push(`  Power Scale: ${normalizeText(c.power_scale)}`);
+    if (c.power_ceiling != null) constantLines.push(`  Power Ceiling: ${c.power_ceiling}`);
+    if (c.power_notes) constantLines.push(`  Power Notes: ${normalizeText(c.power_notes)}`);
     if (constantLines.length) {
         lines.push('');
         lines.push('CONSTANTS');
@@ -307,11 +331,14 @@ function formatStateView(state, mode = 'full') {
         if (state.pc.name) {
             lines.push('');
             let pcLine = `PC: ${state.pc.name}`;
-            if (state.pc.power != null) pcLine += ` [power:${state.pc.power}]`;
+            pcLine += formatPowerTag(state.pc);
             lines.push(pcLine);
             if (state.pc.location) lines.push(`  Location: ${state.pc.location}`);
             if (state.pc.condition) lines.push(`  Condition: ${state.pc.condition}`);
             if (state.pc.equipment) lines.push(`  Equipment: ${state.pc.equipment}`);
+            if (state.pc.power_basis) lines.push(`  Power basis: ${state.pc.power_basis}`);
+            const pcAbilities = toList(state.pc.abilities);
+            if (pcAbilities.length) lines.push(`  Abilities: ${pcAbilities.join(' | ')}`);
             // Traits — show last 10 in full mode (older are in cold storage)
             const allTraits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
             const traits = allTraits.slice(-10);
@@ -546,7 +573,12 @@ READ — set a character's read on someone (shorthand for MAP_SET on reads)
 
 MAP_SET — set a key in a map field
   > MAP_SET pc field=reputation key=tifa value="Investor. Unbearable. Has a room now." -- Reputation narrative
-  > MAP_SET world field=constants key=combat_rules value="Power 1=civilian, 3=soldier, 5=dragon" -- Set combat rules
+  > MAP_SET world field=constants key=power_scale value="1=trained but ordinary, 3=elite specialist, 5=setting-defining monster" -- Set combat power ladder
+  > MAP_SET world field=constants key=power_ceiling value=5 -- Highest credible direct-combat level in this setting
+  > SET pc field=power_base value=3 -- Earned combat level when healthy
+  > SET pc field=power value=3 -- Current effective combat level
+  > SET pc field=power_basis value="Master swordsman with real battlefield experience and disciplined footwork" -- Why the rating is justified
+  > APPEND pc field=abilities value="Fast draw and counter timing" -- Combat capability
 
 INTIMATE HISTORY — per-character map tracking sexual development over time.
   Update keys via MAP_SET after intimate scenes. These are CUMULATIVE — each update builds on previous entries.
@@ -728,6 +760,11 @@ PRIORITY ORDER — when near the cap, emit in this order:
 
 OOC COMMANDS (player types in chat):
   OOC: snapshot | rollback | rollback to #N | eval | history [id] | archive
+  OOC: power review pc
+  OOC: power review char:id
+  OOC: power review all
+  OOC: power pc 3              -- Manual current-power override
+  OOC: power base pc 3         -- Manual base-power override
 
 ═══ END LEDGER README ═══`;
 }

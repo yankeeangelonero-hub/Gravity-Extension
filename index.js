@@ -97,7 +97,6 @@ const MODE_LOREBOOK_KEYS = Object.freeze({
     advanceCore: 'gravity_mode_advance_core',
     advanceOptional: 'gravity_mode_advance_optional_examples',
     combatCore: 'gravity_mode_combat_core',
-    combatSetupCore: 'gravity_mode_combat_setup_core',
     combatOptional: 'gravity_mode_combat_optional_examples',
     intimacyCore: 'gravity_mode_intimacy_core',
     intimacyOptional: 'gravity_mode_intimacy_optional_examples',
@@ -1371,13 +1370,6 @@ async function handleSetupButton() {
     const answers = await showSetupPopup();
     if (!answers) return; // User cancelled
 
-    // Store combat rules if provided
-    if (answers.combat_rules) {
-        const { chatMetadata, saveMetadata } = SillyTavern.getContext();
-        chatMetadata['gravity_combat_rules'] = answers.combat_rules;
-        await saveMetadata();
-    }
-
     startSetup();
     showSetupPhase(getPhaseLabel());
     _pendingOOCInjection = buildSetupPrompt(answers);
@@ -1468,24 +1460,18 @@ function handleAdvanceButton() {
     insertChatMessage(`*${pcName} continues what they were doing.*`);
 }
 
-function handleCombatSetupButton() {
-    _pendingOOCInjection = buildModeInjection(
-        'GRAVITY COMBAT SETUP',
-        `The player's message contains their combat scaling reference. Read it and derive a complete narrative power ladder for this story.
-
-Assign power to the PC and all existing relevant characters. Store the scale in world.constants.combat_rules. Use full LEDGER if that is easier.
-
-Do not write prose. Do not invent mechanics. No dice, HP, modifiers, hit counters, turn order, or condition tracks. Power is narrative judgment only.`,
-        [MODE_LOREBOOK_KEYS.combatSetupCore],
-    );
-
-    injectPrompt('integration');
-}
-
 function handleCombatButton() {
     _pendingDeductionType = 'combat';
     const pcName = _currentState?.pc?.name || '{{user}}';
     const pcPower = _currentState?.pc?.power;
+    const pcPowerBase = _currentState?.pc?.power_base;
+    const pcPowerBasis = _currentState?.pc?.power_basis;
+    const pcAbilities = Array.isArray(_currentState?.pc?.abilities)
+        ? _currentState.pc.abilities
+        : (_currentState?.pc?.abilities ? [String(_currentState.pc.abilities)] : []);
+    const powerScale = _currentState?.world?.constants?.power_scale || '';
+    const powerCeiling = _currentState?.world?.constants?.power_ceiling;
+    const powerNotes = _currentState?.world?.constants?.power_notes || '';
 
     const combatCollisions = Object.values(_currentState?.collisions || {}).filter(
         c => c.mode === 'combat' && c.status !== 'RESOLVED'
@@ -1506,16 +1492,16 @@ function handleCombatButton() {
                         : gap <= -2 ? 'cannot win directly without a real advantage'
                         : gap === 1 ? 'advantaged'
                         : 'dominant';
-                    powerAssessment += `\nPC power:${pcPower} vs ${enemy.name || forceId} power:${enemy.power} | Gap:${gap} (${gapDesc})`;
+                    const enemyAbilities = Array.isArray(enemy.abilities)
+                        ? enemy.abilities
+                        : (enemy.abilities ? [String(enemy.abilities)] : []);
+                    powerAssessment += `\nPC power:${pcPower}${pcPowerBase != null ? ` (base:${pcPowerBase})` : ''} vs ${enemy.name || forceId} power:${enemy.power}${enemy.power_base != null ? ` (base:${enemy.power_base})` : ''} | Gap:${gap} (${gapDesc})`;
+                    if (enemy.power_basis) powerAssessment += `\n  ${enemy.name || forceId} basis: ${enemy.power_basis}`;
+                    if (enemyAbilities.length) powerAssessment += `\n  ${enemy.name || forceId} abilities: ${enemyAbilities.join(' | ')}`;
                 }
             }
         }
     }
-
-    const { chatMetadata } = SillyTavern.getContext();
-    const combatRules = _currentState?.world?.constants?.combat_rules
-        || chatMetadata?.['gravity_combat_rules']
-        || '';
 
     const pcWounds = _currentState?.pc?.wounds;
     let woundLine = '';
@@ -1525,13 +1511,15 @@ function handleCombatButton() {
 
     const isSetup = combatCollisions.length === 0;
     const combatDraw = drawDivination();
-    let body = `${pcName} ${isSetup ? 'initiates combat' : 'fights'}.\n\n=== COMBAT SNAPSHOT ===${powerAssessment || (pcPower != null ? `\nPC power: ${pcPower}` : '')}${woundLine}`;
-    if (combatRules) {
-        body += `\n\nCOMBAT RULES (this story):\n${combatRules}`;
-    }
-    body += `\n\n${formatDrawInstruction(combatDraw, 'The draw colors the circumstance of this exchange, not the verdict.')}\n\nJudge the exchange through logic, established advantages, terrain, wounds, enemy behavior, and power gap. No mechanics, rolls, or HP.`;
+    let body = `${pcName} ${isSetup ? 'initiates combat' : 'fights'}.\n\n=== COMBAT SNAPSHOT ===${powerAssessment || (pcPower != null ? `\nPC power: ${pcPower}${pcPowerBase != null ? ` (base:${pcPowerBase})` : ''}` : '')}${woundLine}`;
+    if (pcPowerBasis) body += `\nPC power basis: ${pcPowerBasis}`;
+    if (pcAbilities.length) body += `\nPC abilities: ${pcAbilities.join(' | ')}`;
+    if (powerScale) body += `\n\nPOWER SCALE:\n${powerScale}`;
+    if (powerCeiling != null) body += `\nPower ceiling: ${powerCeiling}`;
+    if (powerNotes) body += `\nPower notes: ${powerNotes}`;
+    body += `\n\n${formatDrawInstruction(combatDraw, 'The draw colors the circumstance of this exchange, not the verdict.')}\n\nJudge the exchange through current power gap, power basis, combat abilities, terrain, preparation, wounds, equipment, and enemy behavior. power is the current effective rating. power_base is the earned rating when healthy. No HP or turn-order mechanics.`;
     if (isSetup) {
-        body += `\n\nThis is a setup beat: CREATE the combat collision, establish forces, distance, and threat, assign power to any new enemies, and stop on the opening situation.`;
+        body += `\n\nThis is a setup beat: CREATE the combat collision, establish forces, distance, and threat, assign power_base, power, power_basis, and abilities to any important new enemies, and stop on the opening situation. No naked numbers.`;
     } else {
         body += `\n\nResolve one exchange only. Update distance or status only if the momentum genuinely shifts.`;
     }
@@ -1596,6 +1584,10 @@ Check collisions every turn. If one hits distance 0, the world interrupts the sc
 
     injectPrompt('advance');
     insertChatMessage(`*${pcName} moves closer.*`);
+}
+
+function handlePowerReviewButton() {
+    insertChatMessage('OOC: power review pc');
 }
 
 async function handleGoodTurnButton() {
@@ -1740,7 +1732,6 @@ async function handleNewLedger() {
     delete chatMetadata['gravity_ledger'];
     delete chatMetadata['gravity_cold'];
     delete chatMetadata['gravity_cold_watermarks'];
-    delete chatMetadata['gravity_combat_rules'];
     delete chatMetadata['gravity_exemplars'];
     await saveMetadata();
     resetLedger();
@@ -1787,7 +1778,7 @@ async function handleImportData(data) {
         onRevertTurn: handleRevertTurn,
         onGoodTurn: handleGoodTurnButton,
         onCombat: handleCombatButton,
-        onCombatSetup: handleCombatSetupButton,
+        onPowerReview: handlePowerReviewButton,
         onIntimacy: handleIntimacyButton,
         onDivinationChange: async (system) => {
             await setDivinationSystem(system);

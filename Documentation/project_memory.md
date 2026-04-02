@@ -18,8 +18,10 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - The live `| Gravity CoT` prompt now also includes a short style handoff: visible prose must obey the active preset prose style and any active mode prose lorebook entry for the turn. Keep style-specific policing mostly in the prose layers, not the CoT checklist.
 - User preference: keep `show_thoughts: true`. Do not treat flipping it to `false` as the default CoT fix path unless the user explicitly asks to test that change.
 - Reason mode now persists across `GENERATION_STARTED` re-injections. This fixes special-turn desync where `[GRAVITY ADVANCE]` / combat / intimacy OOC guidance could still be active while `GRAVITY_REASON_MODE` silently fell back to `regular`.
-- Setup and runtime state were trimmed aggressively. Live setup now authors the opening arc, optional combat rules, and optional PC starting power. The extension no longer authors `story_kind`, `guidelines`, `voice`, `tone`, `length`, `motivation`, `objective`, or `knowledge_asymmetry`.
-- `world.constants.combat_rules` is the only actively surfaced setup-authored world constant in the current extension contract.
+- Setup and runtime state were trimmed aggressively. Live setup now authors the opening arc plus the combat power doctrine: `world.constants.power_scale`, `world.constants.power_ceiling`, optional `world.constants.power_notes`, and the PC's `power_base`, `power`, `power_basis`, and `abilities`. The extension no longer authors `story_kind`, `guidelines`, `voice`, `tone`, `length`, `motivation`, `objective`, or `knowledge_asymmetry`.
+- The old `world.constants.combat_rules` / `gravity_combat_rules` path is retired. Combat power now uses structured state rather than freeform rules text.
+- `power` is now the current effective combat rating, `power_base` is the earned healthy rating, `power_basis` explains why the number is justified, and `abilities` describe how that rating manifests in action.
+- `OOC: power review pc|char:id|all` is now the supported re-judgment path when injuries, growth, gear changes, or new evidence should change combat power.
 - Good-turn exemplar tagging now preserves the real completed turn mode through `_lastCompletedMode`, so combat/intimacy/advance exemplars are not silently recorded as regular.
 
 ## Prose Architecture
@@ -51,7 +53,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 
 ## UI and Prompt Notes
 
-- `state-view.js` now surfaces only active world constants, which currently means `combat_rules`.
+- `state-view.js` now surfaces active power constants (`power_scale`, `power_ceiling`, `power_notes`) plus power profile fields (`power`, `power_base`, `power_basis`, `abilities`) for the PC and tracked characters.
 - `ui-panel.js` hides legacy constants from older saves so deprecated setup fields do not keep resurfacing in the interface.
 - The world panel no longer renders a `knowledge_asymmetry` section.
 - Intimacy prose guidance explicitly uses relational asymmetry and misread via the `reads` map rather than a dedicated knowledge-asymmetry state field.

@@ -87,18 +87,18 @@ The preset owns the turn-specific deduction protocols inside its dedicated CoT e
 - **Collision status**: `SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED`
 - **Collision outcomes**: `DIRECT`, `EVOLVED`, `MERGED`, `IMPLODED`, `CRASHED`
 - **Story framing**: sentence-level prose and story identity belong in preset files, lorebook entries, and the scenario/card context rather than runtime state
-- **Active setup-authored world constants**: `world.constants.combat_rules` is the only live setup-authored world constant; older framing fields such as `story_kind`, `guidelines`, `motivation`, `objective`, `length`, and `knowledge_asymmetry` are deprecated
+- **Active setup-authored world constants**: `world.constants.power_scale`, `world.constants.power_ceiling`, and optional `world.constants.power_notes` are the live setup-authored combat constants; older framing fields such as `story_kind`, `guidelines`, `motivation`, `objective`, `length`, and `knowledge_asymmetry` are deprecated
 - **Knowledge asymmetry**: model it through `reads`, `noticed_details`, summaries, and collisions rather than `world.knowledge_asymmetry`; there is no universal `blindspots` field
 - **Knowledge gaps**: `pc.knowledge_gaps` is referenced by `OOC: eval` guidance but is not a fully surfaced runtime feature yet
 - **Oracle-driven resolution**: When a collision hits distance 0, the extension starts a resolution clock with divination draws at each phase: atmosphere (turns 1-2), direct intrusion with fresh draw (turns 3-4), crash with final draw (turn 5+). Tracked via `_resolutionTracker` Map in index.js.
 - **Pressure points**: short world seams stored in `world.pressure_points`; keep them short, remove them when spent/stale, and escalate them into collisions when they gain actors + cost + forced choice
 - **Format validation only**: `consistency.js` checks structure, not gameplay rules
-- **OOC commands** in `ooc-handler.js`: `combat setup`, `snapshot`, `rollback`, `eval`, `history`, `consolidate`, etc. — these inject contextual prompts, they don't modify state directly
+- **OOC commands** in `ooc-handler.js`: `power review`, `snapshot`, `rollback`, `eval`, `history`, `consolidate`, etc. — these inject contextual prompts, they don't modify state directly
 - **Storage**: All canonical state lives in `chatMetadata` (persisted per chat by SillyTavern). Optional mode playbooks may live in importable World Info files such as `Gravity World Info.json`, but those entries are prompt guidance only; the extension remains the source of truth for state.
 
 ## Branch Context
 
-- `combat` — Combat system features (power, wounds, combat collisions)
+- `combat` — Combat system features (power, power_base, power_basis, abilities, wounds, combat collisions)
 - `prose` — Prose/narrative quality features
 - `main` — Stable releases
 - `preset-migration` — Three-layer injection architecture work
