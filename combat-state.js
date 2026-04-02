@@ -114,9 +114,20 @@ function decodeHtmlEntities(value) {
         .replace(/&gt;/g, '>');
 }
 
+function stripNarrativeForcing(reading) {
+    const text = String(reading || '').replace(/\r\n/g, '\n');
+    const marker = 'NARRATIVE FORCING:';
+    const idx = text.indexOf(marker);
+    return (idx >= 0 ? text.slice(0, idx) : text).trim();
+}
+
 function formatDrawBlock(draw, options = {}) {
     if (!draw) return '(none)';
-    const lines = [`${draw.label}: ${draw.reading}`];
+    const reading = options.stripNarrativeForcing
+        ? stripNarrativeForcing(draw.reading)
+        : String(draw.reading || '');
+    const lines = [`${draw.label}: ${reading}`];
+    if (options.guidance) lines.push(options.guidance);
     if (options.includeHtml !== false && draw.html) {
         lines.push(`Render this HTML card reveal before prose when appropriate:\n${draw.html}`);
     }
@@ -545,7 +556,10 @@ function buildCombatPrompt(state) {
     lines.push(`Runtime exchange: ${runtime.exchange}`);
     lines.push(`Difficulty mode: ${settings.mode}`);
     lines.push(`DC table: ${describeDcTable(dcTable)}`);
-    lines.push(`Spawn draw:\n${formatDrawBlock(runtime.spawn_draw)}`);
+    lines.push(`Spawn draw:\n${formatDrawBlock(runtime.spawn_draw, {
+        stripNarrativeForcing: true,
+        guidance: 'Combat setup usage: use this draw to highlight the encounter circumstance, visible leverage, spacing, terrain, initiative, exposure, and why the opening options sit at their assessed categories. It reveals the shape and pressure of the encounter; it does not force a separate event or resolve the exchange by itself.',
+    })}`);
     lines.push('');
     lines.push('PLAYER COMBAT PROFILE');
     lines.push(`  ${describeActor(pcActor)}`);
@@ -585,8 +599,15 @@ function buildCombatPrompt(state) {
     }
     if (runtime.pending_roll) {
         lines.push(`PENDING ROLL: ${formatRollSummary(runtime.pending_roll)}`);
+        if (!runtime.pending_roll.skip) {
+            lines.push(`MECHANICAL RESULT: d20 ${runtime.pending_roll.d20}${runtime.pending_roll.dc != null ? ` vs DC ${runtime.pending_roll.dc}` : ''} => ${runtime.pending_roll.resolution || (runtime.pending_roll.success ? 'SUCCESS' : 'TRANSFORM')}`);
+            lines.push('Only the d20 is compared to the DC. The draw card/hexagram/dice table result is interpretive context, not the mechanical roll total.');
+        }
         if (runtime.pending_roll.draw) {
-            lines.push(`ROLL DRAW:\n${formatDrawBlock(runtime.pending_roll.draw)}`);
+            lines.push(`ROLL DRAW:\n${formatDrawBlock(runtime.pending_roll.draw, {
+                stripNarrativeForcing: true,
+                guidance: 'Combat resolution usage: this draw colors the already-determined exchange result. It does not replace the d20/DC result or force a separate twist unrelated to the action. Never compare the draw number to the DC.',
+            })}`);
         }
     }
     if (runtime.last_resolution) {
@@ -609,6 +630,7 @@ function buildCombatPrompt(state) {
                 lines.push('Then immediately resolve the buffered player action this same turn.');
                 if (runtime.pending_action.assessment_only) {
                     lines.push('Because the buffered action had no declared category, assess it honestly after setup and then output 3-4 clickable options instead of silently ignoring it.');
+                    lines.push('Use the spawn draw to clarify the encounter frame and why those options land at their categories, not to inject a separate surprise event.');
                 } else {
                     lines.push('A pending action and pending roll payload are already stored. Use them. Do not reinterpret the spawn draw as the resolution roll.');
                     lines.push('End with the next 3-4 clickable options if combat continues.');
@@ -617,6 +639,7 @@ function buildCombatPrompt(state) {
                 lines.push(`Create combat:${runtime.combat_id} now. This is the combat container.`);
                 lines.push('Establish participants, hostiles, primary_enemy, terrain, situation, threat, and exchange.');
                 lines.push('Assign justified power_base, power, power_basis, and abilities to important new enemies.');
+                lines.push('Use the spawn draw to reveal encounter circumstance and leverage: who sees clearly, who is exposed, how the terrain is really working, and why the opening options fall where they do.');
                 lines.push('Do not resolve the first exchange yet. Stop on the opening situation and output 3-4 clickable options.');
             }
             break;
@@ -640,6 +663,8 @@ function buildCombatPrompt(state) {
             if (runtime.pending_roll?.skip) {
                 lines.push(`This action ${runtime.pending_roll.reason === 'absolute' ? 'auto-succeeds' : 'auto-fails'}. Narrate it happening. No roll interpretation is needed.`);
             } else if (runtime.pending_roll) {
+                lines.push(`Mechanical resolution is already fixed: d20 ${runtime.pending_roll.d20}${runtime.pending_roll.dc != null ? ` vs DC ${runtime.pending_roll.dc}` : ''} => ${runtime.pending_roll.resolution || (runtime.pending_roll.success ? 'SUCCESS' : 'TRANSFORM')}.`);
+                lines.push('Do not compare the draw card/hexagram/table number to the DC. The draw is interpretive only.');
                 lines.push('Interpret the combat draw explicitly.');
                 lines.push('- On success: the draw colors how the success lands.');
                 lines.push('- On transform (below DC, non-critical): do not frame it as a dead miss or null turn. The attempted action still creates motion, but reality answers with exposure, cost, redirection, or a hard opportunity. The draw determines that transformation.');
