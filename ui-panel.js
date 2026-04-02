@@ -11,6 +11,7 @@
 
 import { getFieldHistory, getEntityHistory, getArrayItemHistory } from './state-compute.js';
 import {
+    buildDcTable,
     getCombatBaseline,
     getCombatEntity,
     getCombatRuntime,
@@ -36,6 +37,31 @@ let _onCombat = null;
 let _onPowerReview = null;
 let _onDivinationChange = null;
 let _onIntimacy = null;
+
+function getCombatThresholdTable(settings) {
+    return buildDcTable(settings);
+}
+
+function renderCombatModeOptions(selectedMode) {
+    return [
+        'Cinematic',
+        'Gritty',
+        'Heroic',
+        'Survival',
+        'Custom',
+    ].map(mode => `<option value="${mode}"${selectedMode === mode ? ' selected' : ''}>${mode}</option>`).join('');
+}
+
+function syncCombatDifficultyControls() {
+    const settings = getCombatSettings();
+    const thresholds = getCombatThresholdTable(settings);
+    const commandSelect = document.getElementById('gl-cmd-combat-mode');
+    if (commandSelect) commandSelect.value = settings.mode;
+    const summary = document.getElementById('gl-cmd-combat-thresholds');
+    if (summary) {
+        summary.textContent = `HL ${thresholds['Highly likely']}+ | Avg ${thresholds.Average}+ | HU ${thresholds['Highly unlikely']}+`;
+    }
+}
 
 function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onPowerReview, onDivinationChange, onIntimacy }) {
     _onExport = onExport;
@@ -200,6 +226,13 @@ function createPanel() {
             <button class="gl-cmd-btn" data-cmd="register" title="Register/promote NPC"><i class="fa-solid fa-user-plus"></i> Register</button>
             <button class="gl-cmd-btn" data-cmd="advance" title="Yield initiative — let the world move"><i class="fa-solid fa-play"></i> Advance</button>
             <button class="gl-cmd-btn" data-cmd="combat" title="Initiate combat — fight this"><i class="fa-solid fa-burst"></i> Combat</button>
+            <label class="gl-d-row" style="display:inline-flex;align-items:center;gap:6px;margin:0 6px;" title="Combat difficulty mode">
+                <span style="font-size:11px;opacity:.8;">Difficulty</span>
+                <select class="gl-div-select" id="gl-cmd-combat-mode" style="height:26px;padding:2px 6px;">
+                    ${renderCombatModeOptions(getCombatSettings().mode)}
+                </select>
+                <span class="gl-history-time" id="gl-cmd-combat-thresholds"></span>
+            </label>
             <button class="gl-cmd-btn" data-cmd="power_review" title="Request an OOC review of current combat power"><i class="fa-solid fa-scale-balanced"></i> Power Review</button>
             <button class="gl-cmd-btn" data-cmd="intimacy" title="Initiate intimate scene"><i class="fa-solid fa-heart"></i> Intimacy</button>
             <button class="gl-cmd-btn" data-cmd="good_turn" title="Flag good prose — paste exemplar"><i class="fa-solid fa-thumbs-up"></i> Good</button>
@@ -220,6 +253,13 @@ function createPanel() {
     document.getElementById('gl-btn-new').addEventListener('click', handleNew);
     document.getElementById('gl-btn-import').addEventListener('click', handleImport);
     document.getElementById('gl-btn-export').addEventListener('click', handleExport);
+    document.getElementById('gl-cmd-combat-mode')?.addEventListener('change', async (e) => {
+        const value = e.target.value;
+        await setCombatDifficultyMode(value);
+        syncCombatDifficultyControls();
+        renderAllSections();
+        toastr.info(`Combat difficulty: ${value}`);
+    });
 
     // Command buttons
     document.getElementById('gl-cmd-bar').addEventListener('click', (e) => {
@@ -334,6 +374,7 @@ function renderAllSections() {
     if (combatModeSelect) {
         combatModeSelect.addEventListener('change', async () => {
             await setCombatDifficultyMode(combatModeSelect.value);
+            syncCombatDifficultyControls();
             renderAllSections();
             toastr.info(`Combat difficulty: ${combatModeSelect.value}`);
         });
@@ -347,8 +388,9 @@ function renderAllSections() {
             const patch = {};
             patch[kind] = value;
             await setCombatCustomDcs(patch);
+            syncCombatDifficultyControls();
             renderAllSections();
-            toastr.info('Custom combat DC updated');
+            toastr.info('Custom combat threshold updated');
         });
     });
 
@@ -384,6 +426,8 @@ function renderAllSections() {
             toastr.info('Exemplar removed');
         });
     });
+
+    syncCombatDifficultyControls();
 }
 
 // ─── Update Panel ───────────────────────────────────────────────────────────────
@@ -940,23 +984,21 @@ function renderCollisions(state) {
 function renderCombat(state) {
     const runtime = getCombatRuntime();
     const settings = getCombatSettings();
+    const thresholds = getCombatThresholdTable(settings);
     const combat = runtime ? getCombatEntity(state, runtime) : null;
     const baseline = runtime ? getCombatBaseline(state, runtime, combat) : null;
     const parts = [];
 
     parts.push(`<div class="gl-d-row"><b>Difficulty:</b>
         <select class="gl-div-select" id="gl-combat-mode">
-            <option value="Cinematic"${settings.mode === 'Cinematic' ? ' selected' : ''}>Cinematic</option>
-            <option value="Gritty"${settings.mode === 'Gritty' ? ' selected' : ''}>Gritty</option>
-            <option value="Heroic"${settings.mode === 'Heroic' ? ' selected' : ''}>Heroic</option>
-            <option value="Survival"${settings.mode === 'Survival' ? ' selected' : ''}>Survival</option>
-            <option value="Custom"${settings.mode === 'Custom' ? ' selected' : ''}>Custom</option>
+            ${renderCombatModeOptions(settings.mode)}
         </select>
     </div>`);
+    parts.push(`<div class="gl-d-row gl-history-time">Thresholds: Highly likely ${esc(thresholds['Highly likely'])}+ | Average ${esc(thresholds.Average)}+ | Highly unlikely ${esc(thresholds['Highly unlikely'])}+</div>`);
 
     if (settings.mode === 'Custom') {
         const custom = settings.custom_dcs || {};
-        parts.push(`<div class="gl-d-row"><b>Custom DCs:</b></div>`);
+        parts.push(`<div class="gl-d-row"><b>Custom thresholds:</b></div>`);
         parts.push(`<div class="gl-d-row">Highly likely <input class="gl-combat-custom-dc" data-kind="Highly likely" type="number" value="${esc(custom['Highly likely'] ?? 3)}" style="width:64px;margin-left:8px"></div>`);
         parts.push(`<div class="gl-d-row">Average <input class="gl-combat-custom-dc" data-kind="Average" type="number" value="${esc(custom.Average ?? 7)}" style="width:64px;margin-left:8px"></div>`);
         parts.push(`<div class="gl-d-row">Highly unlikely <input class="gl-combat-custom-dc" data-kind="Highly unlikely" type="number" value="${esc(custom['Highly unlikely'] ?? 12)}" style="width:64px;margin-left:8px"></div>`);
@@ -973,6 +1015,9 @@ function renderCombat(state) {
     parts.push(`<div class="gl-d-row"><b>Exchange:</b> ${esc(runtime.exchange ?? '?')}</div>`);
     if (baseline) {
         parts.push(`<div class="gl-d-row"><b>Baseline:</b> ${esc(baseline.category)}${baseline.gap != null ? ` (gap ${esc(baseline.gap)})` : ''}</div>`);
+        if (baseline.category === 'Highly likely' || baseline.category === 'Average' || baseline.category === 'Highly unlikely') {
+            parts.push(`<div class="gl-d-row"><b>Baseline threshold:</b> ${esc(thresholds[baseline.category])}+ on d20</div>`);
+        }
         if (baseline.primary_enemy) {
             parts.push(`<div class="gl-d-row"><b>Primary Enemy:</b> ${esc(baseline.primary_enemy.name || baseline.primary_enemy.id || '?')}${baseline.primary_enemy.power != null ? ` [power ${esc(baseline.primary_enemy.power)}]` : ''}</div>`);
         }
@@ -1004,7 +1049,7 @@ function renderCombat(state) {
             parts.push(`<div class="gl-d-row">${esc(roll.reason === 'absolute' ? 'Auto-success' : 'Auto-fail')} (${esc(roll.category)})</div>`);
         } else {
             if (roll.d20 != null) parts.push(`<div class="gl-d-row"><b>d20:</b> ${esc(roll.d20)}</div>`);
-            if (roll.dc != null) parts.push(`<div class="gl-d-row"><b>DC:</b> ${esc(roll.dc)}</div>`);
+            if (roll.dc != null) parts.push(`<div class="gl-d-row"><b>Threshold:</b> ${esc(roll.dc)}+ on d20</div>`);
             if (roll.category) parts.push(`<div class="gl-d-row"><b>Category:</b> ${esc(roll.category)}</div>`);
             if (roll.resolution || roll.success != null) {
                 const label = roll.resolution || (roll.success ? 'SUCCESS' : 'TRANSFORM');

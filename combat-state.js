@@ -102,7 +102,15 @@ function buildDcTable(settings = getCombatSettings()) {
 }
 
 function describeDcTable(table) {
-    return `Highly likely ${table['Highly likely']} | Average ${table.Average} | Highly unlikely ${table['Highly unlikely']}`;
+    return `Highly likely ${table['Highly likely']}+ on d20 | Average ${table.Average}+ on d20 | Highly unlikely ${table['Highly unlikely']}+ on d20`;
+}
+
+function describeSuccessThreshold(category, dc) {
+    const normalized = normalizeCategory(category);
+    if (!normalized) return 'no threshold';
+    if (normalized === 'Absolute') return 'auto-success';
+    if (normalized === 'Impossible') return 'auto-fail';
+    return `${dc}+ on d20`;
 }
 
 function decodeHtmlEntities(value) {
@@ -518,7 +526,7 @@ function formatRollSummary(roll) {
         return `No roll — ${roll.reason === 'absolute' ? 'auto-success' : 'auto-fail'} (${roll.category})`;
     }
     const parts = [`d20 ${roll.d20}`];
-    if (roll.dc != null) parts.push(`DC ${roll.dc}`);
+    if (roll.dc != null) parts.push(`target ${describeSuccessThreshold(roll.category, roll.dc)}`);
     if (roll.category) parts.push(roll.category);
     if (roll.resolution) parts.push(roll.resolution);
     else if (roll.success != null) parts.push(roll.success ? 'SUCCESS' : 'TRANSFORM');
@@ -555,7 +563,7 @@ function buildCombatPrompt(state) {
     lines.push(`Phase: ${runtime.phase}`);
     lines.push(`Runtime exchange: ${runtime.exchange}`);
     lines.push(`Difficulty mode: ${settings.mode}`);
-    lines.push(`DC table: ${describeDcTable(dcTable)}`);
+    lines.push(`Success thresholds: ${describeDcTable(dcTable)}`);
     lines.push(`Spawn draw:\n${formatDrawBlock(runtime.spawn_draw, {
         stripNarrativeForcing: true,
         guidance: 'Combat setup usage: use this draw to highlight the encounter circumstance, visible leverage, spacing, terrain, initiative, exposure, and why the opening options sit at their assessed categories. It reveals the shape and pressure of the encounter; it does not force a separate event or resolve the exchange by itself.',
@@ -580,7 +588,7 @@ function buildCombatPrompt(state) {
     }
 
     lines.push('');
-    lines.push(`BASELINE: ${baseline.category}${baseline.gap != null ? ` | power gap ${baseline.gap} (PC ${baseline.pc_power} vs enemy ${baseline.enemy_power})` : ''}`);
+    lines.push(`BASELINE: ${baseline.category}${baseline.gap != null ? ` | power gap ${baseline.gap} (PC ${baseline.pc_power} vs enemy ${baseline.enemy_power})` : ''}${baseline.category === 'Highly likely' || baseline.category === 'Average' || baseline.category === 'Highly unlikely' ? ` | threshold ${describeSuccessThreshold(baseline.category, dcTable[baseline.category])}` : ''}`);
     lines.push(`PRIMARY OPPONENT: ${describeActor(primaryEnemy)}`);
     if (hostiles.length) {
         lines.push('HOSTILES:');
@@ -600,13 +608,13 @@ function buildCombatPrompt(state) {
     if (runtime.pending_roll) {
         lines.push(`PENDING ROLL: ${formatRollSummary(runtime.pending_roll)}`);
         if (!runtime.pending_roll.skip) {
-            lines.push(`MECHANICAL RESULT: d20 ${runtime.pending_roll.d20}${runtime.pending_roll.dc != null ? ` vs DC ${runtime.pending_roll.dc}` : ''} => ${runtime.pending_roll.resolution || (runtime.pending_roll.success ? 'SUCCESS' : 'TRANSFORM')}`);
-            lines.push('Only the d20 is compared to the DC. The draw card/hexagram/dice table result is interpretive context, not the mechanical roll total.');
+            lines.push(`MECHANICAL RESULT: category ${runtime.pending_roll.category || '?'} | threshold ${describeSuccessThreshold(runtime.pending_roll.category, runtime.pending_roll.dc)} | rolled ${runtime.pending_roll.d20} => ${runtime.pending_roll.resolution || (runtime.pending_roll.success ? 'SUCCESS' : 'TRANSFORM')}`);
+            lines.push('These are compressed success thresholds, not open-ended narrative difficulty labels. Only the d20 is compared to the threshold. The draw card/hexagram/dice table result is interpretive context, not the mechanical roll total.');
         }
         if (runtime.pending_roll.draw) {
             lines.push(`ROLL DRAW:\n${formatDrawBlock(runtime.pending_roll.draw, {
                 stripNarrativeForcing: true,
-                guidance: 'Combat resolution usage: this draw colors the already-determined exchange result. It does not replace the d20/DC result or force a separate twist unrelated to the action. Never compare the draw number to the DC.',
+                guidance: 'Combat resolution usage: this draw colors the already-determined exchange result. It does not replace the d20/threshold result or force a separate twist unrelated to the action. Never compare the draw number to the threshold.',
             })}`);
         }
     }
@@ -663,11 +671,11 @@ function buildCombatPrompt(state) {
             if (runtime.pending_roll?.skip) {
                 lines.push(`This action ${runtime.pending_roll.reason === 'absolute' ? 'auto-succeeds' : 'auto-fails'}. Narrate it happening. No roll interpretation is needed.`);
             } else if (runtime.pending_roll) {
-                lines.push(`Mechanical resolution is already fixed: d20 ${runtime.pending_roll.d20}${runtime.pending_roll.dc != null ? ` vs DC ${runtime.pending_roll.dc}` : ''} => ${runtime.pending_roll.resolution || (runtime.pending_roll.success ? 'SUCCESS' : 'TRANSFORM')}.`);
-                lines.push('Do not compare the draw card/hexagram/table number to the DC. The draw is interpretive only.');
+                lines.push(`Mechanical resolution is already fixed: ${runtime.pending_roll.category || '?'} action | threshold ${describeSuccessThreshold(runtime.pending_roll.category, runtime.pending_roll.dc)} | rolled ${runtime.pending_roll.d20} => ${runtime.pending_roll.resolution || (runtime.pending_roll.success ? 'SUCCESS' : 'TRANSFORM')}.`);
+                lines.push('Do not reinterpret the threshold from the number alone. Treat the injected category as canonical, and do not compare the draw card/hexagram/table number to the threshold. The draw is interpretive only.');
                 lines.push('Interpret the combat draw explicitly.');
                 lines.push('- On success: the draw colors how the success lands.');
-                lines.push('- On transform (below DC, non-critical): do not frame it as a dead miss or null turn. The attempted action still creates motion, but reality answers with exposure, cost, redirection, or a hard opportunity. The draw determines that transformation.');
+                lines.push('- On transform (below threshold, non-critical): do not frame it as a dead miss or null turn. The attempted action still creates motion, but reality answers with exposure, cost, redirection, or a hard opportunity. The draw determines that transformation.');
                 lines.push('- On critical success: the draw amplifies the gain.');
                 lines.push('- On critical transform: the draw determines the catastrophic transformation.');
                 lines.push('- On tonal mismatch: interpret from the opposition’s perspective or as ironic contrast.');
