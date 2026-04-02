@@ -16,7 +16,7 @@ The important design change is that deduction is no longer wrapped or structured
 The preset owns the hidden reasoning protocol.
 
 - The legacy `| CoT Triggers (Gem/Claude)` helper still exists in the preset file, but it is currently disabled.
-- `| Gravity CoT` is the active Gravity thinking entry. It explicitly opens with "Before anything else you must perform a strategic analysis," then carries a literal `<think>...</think>` block, then closes with `(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`.
+- `| Gravity CoT` is the active Gravity thinking entry. It explicitly opens with "Before anything else you must perform a strategic analysis," carries a literal `<think>...</think>` block, includes a short handoff reminding the model to obey the active preset prose style plus any active mode prose lorebook entry, then closes with `(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`.
 - Prompt order places `| Gravity CoT` before the main Gravity kernel so the reasoning step is asked for first.
 - `show_thoughts` is intentionally left `true` by user preference. Do not assume the duplicated-CoT fix is "turn it off" without explicit direction.
 
