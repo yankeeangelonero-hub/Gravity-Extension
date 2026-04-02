@@ -393,7 +393,7 @@ D combat.sublevel4
 
 ---
 
-## Repository Progress - 2026-04-02
+## Repository Progress - 2026-04-03
 
 Already implemented in the repo:
 
@@ -401,14 +401,17 @@ Already implemented in the repo:
 - OOC power review is live via `OOC: power review pc|char:id|all`, with manual `power` and `power base` overrides still available.
 - Prompt/state/UI surfacing for `power_base`, `power`, `power_basis`, and `abilities` is live in setup, state view, panel dossiers, combat prompt text, and supporting docs/prompt assets.
 - Old `world.constants.combat_rules` / `gravity_combat_rules` setup flow has been stripped from the active runtime path.
+- `combat` is now a first-class entity in validation and computed state.
+- `combat-state.js` is now live and owns combat runtime state, baseline math, rolls, option parsing, and cleanup grace behavior.
+- The dedicated `_combat` injection slot is live in `index.js`.
+- Difficulty toggle settings plus configurable DC tables are live in the panel.
+- The old one-shot collision-adjacent combat runtime in `index.js` has been replaced by the new combat entity loop.
 
-Still pending from the full combat-system plan:
+Still pending / notable gaps:
 
-- Add `combat` as a first-class entity in validation and computed state.
-- Build `combat-state.js`.
-- Add the dedicated `_combat` injection slot and lifecycle wiring.
-- Add difficulty toggle settings plus configurable DC tables.
-- Replace the remaining old collision-adjacent combat runtime with the new combat entity loop.
+- Auto-detecting newly created `combat:*` entities that originate outside the combat button flow is not fully wired yet. The handoff design envisioned collision-spawned and advance-spawned auto-entry; this pass implemented the active runtime once combat mode is started.
+- Live in-app testing is still needed. Current validation is syntax-only plus JSON parse checks.
+- There is still no dedicated manual orphan-combat cleanup tool if the model leaves a `combat:*` entity behind after cleanup grace expires.
 
 ---
 

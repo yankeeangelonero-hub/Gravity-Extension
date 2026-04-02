@@ -18,6 +18,17 @@ import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, se
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
 import { checkAndRotate, buildConsolidationPrompt } from './memory-tier.js';
 import { getStateMachineField } from './state-machine.js';
+import {
+    buildCombatPrompt,
+    clearCombatRuntime,
+    getCombatBaseline,
+    getCombatRuntime,
+    handleCombatActionSelection,
+    isCombatReasonModeActive,
+    isCombatRuntimeActive,
+    processCombatAssistantTurn,
+    startCombatSetupRuntime,
+} from './combat-state.js';
 
 const MODULE_NAME = 'gravity-ledger';
 const LOG_PREFIX = '[GravityLedger]';
@@ -571,6 +582,7 @@ function getStateTarget(state, entityType, entityId) {
         char: state.characters,
         constraint: state.constraints,
         collision: state.collisions,
+        combat: state.combats,
         chapter: state.chapters,
         faction: state.factions,
     };
@@ -686,11 +698,26 @@ function injectPrompt(mode) {
     const isRegular = activeMode === 'regular';
     const isAdvance = activeMode === 'advance';
     const isIntegration = activeMode === 'integration';
+    const combatRuntimeActive = isCombatRuntimeActive();
+    const combatReasonActive = isCombatReasonModeActive();
+    const combatRuntime = getCombatRuntime();
+    if (combatRuntime?.phase === 'cleanup_grace') {
+        _uncappedTurn = true;
+    }
 
     try {
-        // State view — slim on regular turns, full on advance/integration
+        let nextReasonMode = _currentReasonMode || 'regular';
+        if (_pendingDeductionType) {
+            nextReasonMode = _pendingDeductionType;
+            _pendingDeductionType = null;
+        } else if (combatReasonActive) {
+            nextReasonMode = 'combat';
+        }
+        _currentReasonMode = nextReasonMode;
+
+        // State view — slim on regular turns, full on advance/integration or active combat
         if (_currentState) {
-            const stateView = formatStateView(_currentState, isRegular ? 'slim' : 'full');
+            const stateView = formatStateView(_currentState, isRegular && !combatRuntimeActive ? 'slim' : 'full');
             setExtensionPrompt(`${MODULE_NAME}_state`, stateView, PROMPT_IN_CHAT, 0);
         }
 
@@ -714,6 +741,22 @@ function injectPrompt(mode) {
             _pendingOOCInjection = null;
         }
 
+        const combatPromptBody = _currentState ? buildCombatPrompt(_currentState) : '';
+        if (combatPromptBody) {
+            setExtensionPrompt(
+                `${MODULE_NAME}_combat`,
+                buildModeInjection(
+                    'GRAVITY COMBAT',
+                    combatPromptBody,
+                    [MODE_LOREBOOK_KEYS.combatCore, MODE_LOREBOOK_KEYS.combatOptional, MODE_LOREBOOK_KEYS.proseCombat],
+                ),
+                PROMPT_IN_CHAT,
+                0,
+            );
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_combat`, '', PROMPT_NONE, 0);
+        }
+
         // Corrections + reinforcement
         let injection = '';
         if (_pendingCorrections.length > 0) {
@@ -733,7 +776,7 @@ function injectPrompt(mode) {
         const { chatMetadata } = SillyTavern.getContext();
         const exemplars = (!isIntegration && chatMetadata?.['gravity_exemplars']) || [];
         if (exemplars.length > 0) {
-            const selected = selectExemplarsForPrompt(exemplars, activeMode, _currentReasonMode, 3);
+            const selected = selectExemplarsForPrompt(exemplars, activeMode, nextReasonMode, 3);
             const exLines = selected.map(formatExemplarForPrompt).join('\n');
             setExtensionPrompt(`${MODULE_NAME}_exemplars`,
                 `[STYLE EXEMPLARS — the player flagged these as strong prose. Match the structural strengths that fit this turn's mode. Do not copy exact wording, imagery, or house voice.\n${exLines}]`,
@@ -755,7 +798,7 @@ function injectPrompt(mode) {
         }
 
         // Faction heartbeat — every 10 turns on regular turns only (advance/integration handle factions directly)
-        if (isRegular && _turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
+        if (isRegular && !combatReasonActive && _turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
             const factions = Object.values(_currentState.factions || {});
             if (factions.length > 0) {
                 const factionDetails = factions.map(f => {
@@ -776,7 +819,7 @@ function injectPrompt(mode) {
 
         // Dormant character check — every 15 turns on regular turns only
         const DORMANT_THRESHOLD = 20; // transactions since last activity
-        if (isRegular && _turnCounter > 0 && _turnCounter % 15 === 0 && _currentState) {
+        if (isRegular && !combatReasonActive && _turnCounter > 0 && _turnCounter % 15 === 0 && _currentState) {
             const allTx = getAllTransactions();
             const totalTx = allTx.length;
             const dormant = [];
@@ -1030,11 +1073,7 @@ MOVE each arrived collision to RESOLVING. SET each collision's last_manifestatio
         }
 
         // Nudge now only signals the active deduction mode; the preset owns the actual protocol.
-        if (_pendingDeductionType) {
-            _currentReasonMode = _pendingDeductionType;
-            _pendingDeductionType = null;
-        }
-        const reasonMode = _currentReasonMode || 'regular';
+        const reasonMode = nextReasonMode || 'regular';
 
         let nudgeText = `[SYSTEM: GRAVITY RUNTIME FLAGS
 GRAVITY_REASON_MODE: ${reasonMode}
@@ -1055,7 +1094,7 @@ You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memor
 
         // Fire regular prose trigger on regular turns only
         // (combat/intimacy/advance fire their own prose triggers via _ooc)
-        if (isRegular) {
+        if (isRegular && !combatReasonActive) {
             nudgeText += `\n\n[WORLD INFO TRIGGERS - DO NOT ECHO:\n${MODE_LOREBOOK_KEYS.proseRegular}\n]`;
         }
 
@@ -1168,6 +1207,7 @@ async function onMessageReceived(messageId) {
 
     const message = context.chat?.[messageId];
     if (!message?.mes) return;
+    let combatPrompt = null;
 
     _turnCounter++;
 
@@ -1182,7 +1222,14 @@ async function onMessageReceived(messageId) {
     // No block found
     if (!extraction.found) {
         _pendingReinforcement = getReinforcement(extraction, _turnCounter);
+        combatPrompt = await processCombatAssistantTurn(_currentState, [], message.mes);
+        if (combatPrompt) {
+            _pendingReinforcement = _pendingReinforcement
+                ? `${_pendingReinforcement}\n${combatPrompt}`
+                : combatPrompt;
+        }
         injectPrompt();
+        updatePanel(_currentState, _turnCounter);
         return;
     }
 
@@ -1198,7 +1245,14 @@ async function onMessageReceived(messageId) {
     // No transactions at all (empty block or all lines failed)
     if (extractedTransactions.length === 0 && extractionErrors.length === 0) {
         _pendingReinforcement = getReinforcement(extraction, _turnCounter);
+        combatPrompt = await processCombatAssistantTurn(_currentState, [], message.mes);
+        if (combatPrompt) {
+            _pendingReinforcement = _pendingReinforcement
+                ? `${_pendingReinforcement}\n${combatPrompt}`
+                : combatPrompt;
+        }
         injectPrompt();
+        updatePanel(_currentState, _turnCounter);
         return;
     }
 
@@ -1228,6 +1282,7 @@ async function onMessageReceived(messageId) {
     // Validate each transaction individually
     const validTxns = [];
     const validationErrors = [];
+    let committedTxns = [];
     for (let i = 0; i < extractedTransactions.length; i++) {
         const result = validateBatch([extractedTransactions[i]]);
         if (result.valid) {
@@ -1254,6 +1309,7 @@ async function onMessageReceived(messageId) {
     if (validTxns.length > 0) {
         try {
             const committed = await append(validTxns);
+            committedTxns = committed;
             _currentState = computeState(_currentState, committed);
 
             // Clear corrections that were fixed by these commits
@@ -1263,9 +1319,6 @@ async function onMessageReceived(messageId) {
             if (isSetupActive()) {
                 checkPhaseCompletion(committed, _currentState);
             }
-
-            const commitIds = committed.map(tx => tx.tx);
-            updatePanel(_currentState, _turnCounter, commitIds);
 
             if (_turnCounter % _autoSnapshotInterval === 0) {
                 await createSnapshot(_currentState, `Auto-snapshot turn ${_turnCounter}`);
@@ -1308,7 +1361,15 @@ async function onMessageReceived(messageId) {
         })));
     }
 
+    combatPrompt = await processCombatAssistantTurn(_currentState, committedTxns, message.mes);
+    if (combatPrompt) {
+        _pendingReinforcement = _pendingReinforcement
+            ? `${_pendingReinforcement}\n${combatPrompt}`
+            : combatPrompt;
+    }
+
     injectPrompt();
+    updatePanel(_currentState, _turnCounter, committedTxns.map(tx => tx.tx));
 }
 
 async function onUserMessage(messageId) {
@@ -1336,6 +1397,22 @@ Then write prose, render the choices, and end with a compact STATE block.`,
         );
         injectPrompt('advance');
         return;
+    }
+
+    if (isCombatRuntimeActive() && !/^ooc:/i.test(rawText)) {
+        const combatRuntime = getCombatRuntime();
+        if (combatRuntime?.phase === 'setup') {
+            injectPrompt('advance');
+            updatePanel(_currentState, _turnCounter);
+            return;
+        }
+
+        const combatResult = await handleCombatActionSelection(rawText, _currentState, drawDivination);
+        if (combatResult.handled) {
+            injectPrompt('advance');
+            updatePanel(_currentState, _turnCounter);
+            return;
+        }
     }
 
     const result = await processOOC(message.mes);
@@ -1460,79 +1537,19 @@ function handleAdvanceButton() {
     insertChatMessage(`*${pcName} continues what they were doing.*`);
 }
 
-function handleCombatButton() {
-    _pendingDeductionType = 'combat';
+async function handleCombatButton() {
+    const runtime = getCombatRuntime();
+    if (runtime && runtime.phase !== 'cleanup_grace') {
+        insertChatMessage('combat: custom | Average | ');
+        return;
+    }
+
     const pcName = _currentState?.pc?.name || '{{user}}';
-    const pcPower = _currentState?.pc?.power;
-    const pcPowerBase = _currentState?.pc?.power_base;
-    const pcPowerBasis = _currentState?.pc?.power_basis;
-    const pcAbilities = Array.isArray(_currentState?.pc?.abilities)
-        ? _currentState.pc.abilities
-        : (_currentState?.pc?.abilities ? [String(_currentState.pc.abilities)] : []);
-    const powerScale = _currentState?.world?.constants?.power_scale || '';
-    const powerCeiling = _currentState?.world?.constants?.power_ceiling;
-    const powerNotes = _currentState?.world?.constants?.power_notes || '';
-
-    const combatCollisions = Object.values(_currentState?.collisions || {}).filter(
-        c => c.mode === 'combat' && c.status !== 'RESOLVED'
-    );
-
-    let powerAssessment = '';
-    if (combatCollisions.length > 0 && pcPower != null) {
-        for (const col of combatCollisions) {
-            const forces = Array.isArray(col.forces) ? col.forces : [];
-            for (const force of forces) {
-                const forceId = typeof force === 'string' ? force : force.id || force.name;
-                if (!forceId || forceId === 'pc' || forceId === pcName) continue;
-                const enemy = _currentState?.characters?.[forceId];
-                if (enemy?.power != null) {
-                    const gap = pcPower - enemy.power;
-                    const gapDesc = gap === 0 ? 'equal'
-                        : gap === -1 ? 'disadvantaged but workable'
-                        : gap <= -2 ? 'cannot win directly without a real advantage'
-                        : gap === 1 ? 'advantaged'
-                        : 'dominant';
-                    const enemyAbilities = Array.isArray(enemy.abilities)
-                        ? enemy.abilities
-                        : (enemy.abilities ? [String(enemy.abilities)] : []);
-                    powerAssessment += `\nPC power:${pcPower}${pcPowerBase != null ? ` (base:${pcPowerBase})` : ''} vs ${enemy.name || forceId} power:${enemy.power}${enemy.power_base != null ? ` (base:${enemy.power_base})` : ''} | Gap:${gap} (${gapDesc})`;
-                    if (enemy.power_basis) powerAssessment += `\n  ${enemy.name || forceId} basis: ${enemy.power_basis}`;
-                    if (enemyAbilities.length) powerAssessment += `\n  ${enemy.name || forceId} abilities: ${enemyAbilities.join(' | ')}`;
-                }
-            }
-        }
-    }
-
-    const pcWounds = _currentState?.pc?.wounds;
-    let woundLine = '';
-    if (pcWounds && typeof pcWounds === 'object' && Object.keys(pcWounds).length) {
-        woundLine = `\nPC wounds: ${Object.entries(pcWounds).map(([k, v]) => `${k}: ${v}`).join(', ')}`;
-    }
-
-    const isSetup = combatCollisions.length === 0;
-    const combatDraw = drawDivination();
-    let body = `${pcName} ${isSetup ? 'initiates combat' : 'fights'}.\n\n=== COMBAT SNAPSHOT ===${powerAssessment || (pcPower != null ? `\nPC power: ${pcPower}${pcPowerBase != null ? ` (base:${pcPowerBase})` : ''}` : '')}${woundLine}`;
-    if (pcPowerBasis) body += `\nPC power basis: ${pcPowerBasis}`;
-    if (pcAbilities.length) body += `\nPC abilities: ${pcAbilities.join(' | ')}`;
-    if (powerScale) body += `\n\nPOWER SCALE:\n${powerScale}`;
-    if (powerCeiling != null) body += `\nPower ceiling: ${powerCeiling}`;
-    if (powerNotes) body += `\nPower notes: ${powerNotes}`;
-    body += `\n\n${formatDrawInstruction(combatDraw, 'The draw colors the circumstance of this exchange, not the verdict.')}\n\nJudge the exchange through current power gap, power basis, combat abilities, terrain, preparation, wounds, equipment, and enemy behavior. power is the current effective rating. power_base is the earned rating when healthy. No HP or turn-order mechanics.`;
-    if (isSetup) {
-        body += `\n\nThis is a setup beat: CREATE the combat collision, establish forces, distance, and threat, assign power_base, power, power_basis, and abilities to any important new enemies, and stop on the opening situation. No naked numbers.`;
-    } else {
-        body += `\n\nResolve one exchange only. Update distance or status only if the momentum genuinely shifts.`;
-    }
-    body += `\n\nRecord divination.last_draw in the update block. Then end with prose + compact STATE block${isSetup ? ' (or LEDGER if the creation work gets structural).' : '.'}`;
-
-    _pendingOOCInjection = buildModeInjection(
-        'GRAVITY COMBAT',
-        body,
-        [MODE_LOREBOOK_KEYS.combatCore, MODE_LOREBOOK_KEYS.combatOptional, MODE_LOREBOOK_KEYS.proseCombat],
-    );
-
+    await startCombatSetupRuntime(drawDivination());
+    _pendingDeductionType = 'combat';
     injectPrompt('advance');
-    insertChatMessage(`*${pcName} ${isSetup ? 'prepares to fight.' : 'engages in combat.'}*`);
+    updatePanel(_currentState, _turnCounter);
+    insertChatMessage(`*${pcName} prepares to fight.*`);
 }
 
 function handleIntimacyButton() {
@@ -1704,6 +1721,7 @@ async function handleRevertTurn(txIds) {
         }
 
         // Reinitialize to recompute state
+        await clearCombatRuntime();
         resetLedger();
         await initialize(true);
         toastr.success(`Reverted ${txIds.length} transactions.`);
@@ -1733,6 +1751,7 @@ async function handleNewLedger() {
     delete chatMetadata['gravity_cold'];
     delete chatMetadata['gravity_cold_watermarks'];
     delete chatMetadata['gravity_exemplars'];
+    delete chatMetadata['gravity_combat_runtime'];
     await saveMetadata();
     resetLedger();
     _pendingCorrections = [];
@@ -1751,6 +1770,7 @@ async function handleImportData(data) {
     const { chatMetadata } = SillyTavern.getContext();
     delete chatMetadata['gravity_cold'];
     delete chatMetadata['gravity_cold_watermarks'];
+    delete chatMetadata['gravity_combat_runtime'];
     await importData(data);
     _pendingCorrections = [];
     _pendingReinforcement = null;

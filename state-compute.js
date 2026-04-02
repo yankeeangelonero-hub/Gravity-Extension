@@ -10,6 +10,7 @@
  * @property {Object<string, Object>} characters
  * @property {Object<string, Object>} constraints
  * @property {Object<string, Object>} collisions
+ * @property {Object<string, Object>} combats
  * @property {Object<string, Object>} chapters
  * @property {Object<string, Object>} factions
  * @property {Object} world
@@ -51,6 +52,7 @@ function createEmptyState() {
         characters: {},
         constraints: {},
         collisions: {},
+        combats: {},
         chapters: {},
         factions: {},
         world: {
@@ -79,6 +81,7 @@ function getCollectionName(entityType) {
         char: 'characters',
         constraint: 'constraints',
         collision: 'collisions',
+        combat: 'combats',
         chapter: 'chapters',
         faction: 'factions',
         world: 'world',

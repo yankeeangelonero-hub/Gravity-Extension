@@ -50,6 +50,16 @@ const COLLISION_TRANSITIONS = {
     CRASHED:   {},  // terminal — uncontrolled collision
 };
 
+// ─── Combat Lifecycle ──────────────────────────────────────────────────────────
+// ACTIVE → RESOLVED
+
+const COMBAT_STATES = ['ACTIVE', 'RESOLVED'];
+
+const COMBAT_TRANSITIONS = {
+    ACTIVE: { advance: 'RESOLVED' },
+    RESOLVED: {},
+};
+
 // ─── Chapter Lifecycle ─────────────────────────────────────────────────────────
 // PLANNED → OPEN → CLOSING → CLOSED
 
@@ -84,6 +94,7 @@ function validateTransition(entityType, field, from, to) {
         char:       { field: 'tier', transitions: CHARACTER_TRANSITIONS, states: CHARACTER_TIERS },
         constraint: { field: 'integrity', transitions: CONSTRAINT_TRANSITIONS, states: CONSTRAINT_LEVELS },
         collision:  { field: 'status', transitions: COLLISION_TRANSITIONS, states: COLLISION_STATES },
+        combat:     { field: 'status', transitions: COMBAT_TRANSITIONS, states: COMBAT_STATES },
         chapter:    { field: 'status', transitions: CHAPTER_TRANSITIONS, states: CHAPTER_STATES },
     };
 
@@ -142,6 +153,7 @@ function getValidNextStates(entityType, currentState) {
         char:       CHARACTER_TRANSITIONS,
         constraint: CONSTRAINT_TRANSITIONS,
         collision:  COLLISION_TRANSITIONS,
+        combat:     COMBAT_TRANSITIONS,
         chapter:    CHAPTER_TRANSITIONS,
     };
 
@@ -170,6 +182,7 @@ function getStateMachineField(entityType) {
         char: 'tier',
         constraint: 'integrity',
         collision: 'status',
+        combat: 'status',
         chapter: 'status',
     };
     return fields[entityType] || null;
@@ -182,6 +195,8 @@ export {
     CONSTRAINT_TRANSITIONS,
     COLLISION_STATES,
     COLLISION_TRANSITIONS,
+    COMBAT_STATES,
+    COMBAT_TRANSITIONS,
     CHAPTER_STATES,
     CHAPTER_TRANSITIONS,
     validateTransition,

@@ -1,6 +1,6 @@
 # Project Memory
 
-Updated: 2026-04-02 13:30:12 +08:00
+Updated: 2026-04-03 00:25:06 +08:00
 
 Durable working memory for Codex sessions in this repository. Update this file when system behavior, active design decisions, or important constraints change.
 
@@ -22,6 +22,10 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - The old `world.constants.combat_rules` / `gravity_combat_rules` path is retired. Combat power now uses structured state rather than freeform rules text.
 - `power` is now the current effective combat rating, `power_base` is the earned healthy rating, `power_basis` explains why the number is justified, and `abilities` describe how that rating manifests in action.
 - `OOC: power review pc|char:id|all` is now the supported re-judgment path when injuries, growth, gear changes, or new evidence should change combat power.
+- Combat runtime is now live as a chat-metadata state machine in `combat-state.js`, with a dedicated `_combat` injection slot in `index.js`.
+- The active combat loop now supports setup/options/resolution/reassessment/cleanup phases, option clicks (`combat: option | ...`), `option N`, and explicit custom actions (`combat: custom | ...`).
+- Combat baseline math now resolves from current `power` in the extension, using difficulty modes plus `d20` and fresh draw payloads for the middle three categories; `Absolute` and `Impossible` are explicit no-roll paths.
+- `ui-panel.js` now has a dedicated Combat section with runtime visibility and difficulty controls.
 - Good-turn exemplar tagging now preserves the real completed turn mode through `_lastCompletedMode`, so combat/intimacy/advance exemplars are not silently recorded as regular.
 
 ## Prose Architecture
@@ -54,6 +58,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 ## UI and Prompt Notes
 
 - `state-view.js` now surfaces active power constants (`power_scale`, `power_ceiling`, `power_notes`) plus power profile fields (`power`, `power_base`, `power_basis`, `abilities`) for the PC and tracked characters.
+- `state-view.js` now also documents and surfaces `combat:*` entities in the prompt-facing state contract.
 - `ui-panel.js` hides legacy constants from older saves so deprecated setup fields do not keep resurfacing in the interface.
 - The world panel no longer renders a `knowledge_asymmetry` section.
 - Intimacy prose guidance explicitly uses relational asymmetry and misread via the `reads` map rather than a dedicated knowledge-asymmetry state field.

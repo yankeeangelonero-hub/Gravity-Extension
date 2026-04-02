@@ -10,6 +10,14 @@
  */
 
 import { getFieldHistory, getEntityHistory, getArrayItemHistory } from './state-compute.js';
+import {
+    getCombatBaseline,
+    getCombatEntity,
+    getCombatRuntime,
+    getCombatSettings,
+    setCombatCustomDcs,
+    setCombatDifficultyMode,
+} from './combat-state.js';
 
 const PANEL_ID = 'gravity-ledger-panel';
 const TOGGLE_ID = 'gravity-ledger-toggle';
@@ -257,6 +265,7 @@ function renderAllSections() {
         { id: 'characters', icon: 'fa-users', title: 'Cast', html: renderCharacters(_lastState) },
         { id: 'world', icon: 'fa-globe', title: 'Factions & World', html: renderWorld(_lastState) },
         { id: 'collisions', icon: 'fa-burst', title: 'Collisions', html: renderCollisions(_lastState) },
+        { id: 'combat', icon: 'fa-crosshairs', title: 'Combat', html: renderCombat(_lastState) },
         { id: 'arc', icon: 'fa-book-open', title: 'Arc & Chapters', html: renderArc(_lastState) },
         { id: 'divination', icon: 'fa-star', title: 'Divination', html: renderDivination(_lastState) },
         { id: 'exemplars', icon: 'fa-thumbs-up', title: 'Style Exemplars', html: renderExemplars() },
@@ -320,6 +329,28 @@ function renderAllSections() {
             if (_onDivinationChange) _onDivinationChange(divSelect.value);
         });
     }
+
+    const combatModeSelect = container.querySelector('#gl-combat-mode');
+    if (combatModeSelect) {
+        combatModeSelect.addEventListener('change', async () => {
+            await setCombatDifficultyMode(combatModeSelect.value);
+            renderAllSections();
+            toastr.info(`Combat difficulty: ${combatModeSelect.value}`);
+        });
+    }
+
+    container.querySelectorAll('.gl-combat-custom-dc').forEach(input => {
+        input.addEventListener('change', async () => {
+            const kind = input.dataset.kind;
+            const value = Number(input.value);
+            if (!kind || !Number.isFinite(value)) return;
+            const patch = {};
+            patch[kind] = value;
+            await setCombatCustomDcs(patch);
+            renderAllSections();
+            toastr.info('Custom combat DC updated');
+        });
+    });
 
     // Exemplar edit/remove buttons
     container.querySelectorAll('.gl-exemplar-edit').forEach(btn => {
@@ -402,7 +433,7 @@ function updatePanel(state, turn, committedTxIds) {
 
 function computeChangedKeys(prev, curr, prefix) {
     if (!prev || !curr) return;
-    for (const collection of ['characters', 'constraints', 'collisions', 'chapters', 'factions']) {
+    for (const collection of ['characters', 'constraints', 'collisions', 'combats', 'chapters', 'factions']) {
         const pc = prev[collection] || {};
         const cc = curr[collection] || {};
         for (const id of new Set([...Object.keys(pc), ...Object.keys(cc)])) {
@@ -446,6 +477,7 @@ function applyChangeHighlights() {
         if (sid === 'characters') hasChanges = [..._changedKeys].some(k => k.startsWith('characters.') || k.startsWith('constraints.') || k.startsWith('pc.'));
         if (sid === 'world') hasChanges = [..._changedKeys].some(k => k.startsWith('world.') || k.startsWith('factions.'));
         if (sid === 'collisions') hasChanges = [..._changedKeys].some(k => k.startsWith('collisions.'));
+        if (sid === 'combat') hasChanges = [..._changedKeys].some(k => k.startsWith('combats.'));
         if (sid === 'arc') hasChanges = [..._changedKeys].some(k => k.startsWith('chapters.') || k === 'story_summary');
         if (sid === 'divination') hasChanges = [..._changedKeys].some(k => k.startsWith('divination.'));
         if (hasChanges) section.querySelector('.gl-section-header')?.classList.add('gl-changed');
@@ -899,6 +931,92 @@ function renderCollisions(state) {
             if (parents.length) parts.push(`<div class="gl-d-detail"><b>From:</b> ${parents.map(p => esc(p)).join(', ')}</div>`);
             if (successors.length) parts.push(`<div class="gl-d-detail"><b>Spawned:</b> ${successors.map(s => esc(s)).join(', ')}</div>`);
             parts.push(`</div>`);
+        }
+    }
+
+    return parts.join('');
+}
+
+function renderCombat(state) {
+    const runtime = getCombatRuntime();
+    const settings = getCombatSettings();
+    const combat = runtime ? getCombatEntity(state, runtime) : null;
+    const baseline = runtime ? getCombatBaseline(state, runtime, combat) : null;
+    const parts = [];
+
+    parts.push(`<div class="gl-d-row"><b>Difficulty:</b>
+        <select class="gl-div-select" id="gl-combat-mode">
+            <option value="Cinematic"${settings.mode === 'Cinematic' ? ' selected' : ''}>Cinematic</option>
+            <option value="Gritty"${settings.mode === 'Gritty' ? ' selected' : ''}>Gritty</option>
+            <option value="Heroic"${settings.mode === 'Heroic' ? ' selected' : ''}>Heroic</option>
+            <option value="Survival"${settings.mode === 'Survival' ? ' selected' : ''}>Survival</option>
+            <option value="Custom"${settings.mode === 'Custom' ? ' selected' : ''}>Custom</option>
+        </select>
+    </div>`);
+
+    if (settings.mode === 'Custom') {
+        const custom = settings.custom_dcs || {};
+        parts.push(`<div class="gl-d-row"><b>Custom DCs:</b></div>`);
+        parts.push(`<div class="gl-d-row">Highly likely <input class="gl-combat-custom-dc" data-kind="Highly likely" type="number" value="${esc(custom['Highly likely'] ?? 3)}" style="width:64px;margin-left:8px"></div>`);
+        parts.push(`<div class="gl-d-row">Average <input class="gl-combat-custom-dc" data-kind="Average" type="number" value="${esc(custom.Average ?? 7)}" style="width:64px;margin-left:8px"></div>`);
+        parts.push(`<div class="gl-d-row">Highly unlikely <input class="gl-combat-custom-dc" data-kind="Highly unlikely" type="number" value="${esc(custom['Highly unlikely'] ?? 12)}" style="width:64px;margin-left:8px"></div>`);
+    }
+
+    if (!runtime) {
+        parts.push(`<div class="gl-empty">No active combat runtime</div>`);
+        return parts.join('');
+    }
+
+    parts.push(`<div class="gl-d-section"><b>Runtime:</b></div>`);
+    parts.push(`<div class="gl-d-row"><b>Combat ID:</b> ${esc(runtime.combat_id)}</div>`);
+    parts.push(`<div class="gl-d-row"><b>Phase:</b> ${esc(runtime.phase || '?')}</div>`);
+    parts.push(`<div class="gl-d-row"><b>Exchange:</b> ${esc(runtime.exchange ?? '?')}</div>`);
+    if (baseline) {
+        parts.push(`<div class="gl-d-row"><b>Baseline:</b> ${esc(baseline.category)}${baseline.gap != null ? ` (gap ${esc(baseline.gap)})` : ''}</div>`);
+        if (baseline.primary_enemy) {
+            parts.push(`<div class="gl-d-row"><b>Primary Enemy:</b> ${esc(baseline.primary_enemy.name || baseline.primary_enemy.id || '?')}${baseline.primary_enemy.power != null ? ` [power ${esc(baseline.primary_enemy.power)}]` : ''}</div>`);
+        }
+    }
+
+    if (combat) {
+        parts.push(`<div class="gl-d-section"><b>Combat Entity:</b></div>`);
+        parts.push(`<div class="gl-d-row"><b>Status:</b> ${esc(combat.status || 'ACTIVE')}</div>`);
+        if (combat.situation) parts.push(`<div class="gl-d-row"><b>Situation:</b> ${esc(combat.situation)}</div>`);
+        if (combat.terrain) parts.push(`<div class="gl-d-row"><b>Terrain:</b> ${esc(combat.terrain)}</div>`);
+        if (combat.threat) parts.push(`<div class="gl-d-row"><b>Threat:</b> ${esc(combat.threat)}</div>`);
+        if (combat.participants) parts.push(`<div class="gl-d-row"><b>Participants:</b> ${esc(Array.isArray(combat.participants) ? combat.participants.join(', ') : combat.participants)}</div>`);
+        if (combat.hostiles) parts.push(`<div class="gl-d-row"><b>Hostiles:</b> ${esc(Array.isArray(combat.hostiles) ? combat.hostiles.join(', ') : combat.hostiles)}</div>`);
+    } else {
+        parts.push(`<div class="gl-d-row"><b>Combat Entity:</b> not created yet</div>`);
+    }
+
+    if (runtime.pending_action) {
+        parts.push(`<div class="gl-d-section"><b>Pending Action:</b></div>`);
+        parts.push(`<div class="gl-d-row">${esc(runtime.pending_action.intent || '')}</div>`);
+        if (runtime.pending_action.declared_category) parts.push(`<div class="gl-d-row"><b>Declared:</b> ${esc(runtime.pending_action.declared_category)}</div>`);
+        if (runtime.pending_action.effective_category) parts.push(`<div class="gl-d-row"><b>Effective:</b> ${esc(runtime.pending_action.effective_category)}</div>`);
+    }
+
+    if (runtime.pending_roll || runtime.last_resolution?.roll) {
+        const roll = runtime.pending_roll || runtime.last_resolution?.roll;
+        parts.push(`<div class="gl-d-section"><b>${runtime.pending_roll ? 'Pending Roll' : 'Last Roll'}:</b></div>`);
+        if (roll.skip) {
+            parts.push(`<div class="gl-d-row">${esc(roll.reason === 'absolute' ? 'Auto-success' : 'Auto-fail')} (${esc(roll.category)})</div>`);
+        } else {
+            if (roll.d20 != null) parts.push(`<div class="gl-d-row"><b>d20:</b> ${esc(roll.d20)}</div>`);
+            if (roll.dc != null) parts.push(`<div class="gl-d-row"><b>DC:</b> ${esc(roll.dc)}</div>`);
+            if (roll.category) parts.push(`<div class="gl-d-row"><b>Category:</b> ${esc(roll.category)}</div>`);
+            if (roll.success != null) parts.push(`<div class="gl-d-row"><b>Result:</b> ${esc(roll.success ? 'Success' : 'Failure')}${roll.critical ? ` (${esc(roll.critical)} critical)` : ''}</div>`);
+            if (roll.challenge_pending) parts.push(`<div class="gl-d-row"><b>State:</b> awaiting reassessment</div>`);
+            if (roll.draw?.label) parts.push(`<div class="gl-d-row"><b>Draw:</b> ${esc(roll.draw.label)}</div>`);
+        }
+    }
+
+    const options = Array.isArray(runtime.options) ? runtime.options : [];
+    if (options.length) {
+        parts.push(`<div class="gl-d-section"><b>Stored Options:</b></div>`);
+        for (const option of options) {
+            parts.push(`<div class="gl-d-row">${esc(option.index)}. ${esc(option.label || option.intent)} <span class="gl-history-time">[${esc(option.category)}]</span></div>`);
         }
     }
 

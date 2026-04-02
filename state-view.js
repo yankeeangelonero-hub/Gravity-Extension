@@ -150,7 +150,6 @@ function formatStateView(state, mode = 'full') {
         lines.push('Collisions:');
         for (const col of allCollisions) {
             let colLine = `  ${col.name || col.id} [${col.status}] dist:${col.distance || '?'}`;
-            if (col.mode === 'combat') colLine += ' ⚔';
             colLine += ` → id: ${col.id}`;
             lines.push(colLine);
             if (slim) {
@@ -159,6 +158,21 @@ function formatStateView(state, mode = 'full') {
                     lines.push(`    ${threadLine}`);
                 }
             }
+        }
+    }
+
+    const activeCombats = Object.values(state.combats || {}).filter(combat => String(combat.status || '').toUpperCase() !== 'RESOLVED');
+    if (activeCombats.length) {
+        lines.push('');
+        lines.push('Combats:');
+        for (const combat of activeCombats) {
+            let combatLine = `  ${combat.name || combat.id} [${combat.status || 'ACTIVE'}]`;
+            if (combat.exchange != null) combatLine += ` exch:${combat.exchange}`;
+            combatLine += ` → id: ${combat.id}`;
+            lines.push(combatLine);
+            if (combat.primary_enemy) lines.push(`    Primary enemy: ${typeof combat.primary_enemy === 'object' ? combat.primary_enemy.name || combat.primary_enemy.id || '?' : combat.primary_enemy}`);
+            if (combat.situation) lines.push(`    Situation: ${combat.situation}`);
+            if (combat.terrain) lines.push(`    Terrain: ${combat.terrain}`);
         }
     }
 
@@ -282,7 +296,26 @@ function formatStateView(state, mode = 'full') {
                 for (const narrativeLine of narrativeLines) {
                     lines.push(`    ${narrativeLine}`);
                 }
-                if (col.mode === 'combat') lines.push(`    Mode: COMBAT${col.upper_hand ? ` | Upper hand: ${col.upper_hand}` : ''}`);
+            }
+        }
+
+        if (activeCombats.length) {
+            lines.push('');
+            lines.push('COMBATS');
+            for (const combat of activeCombats) {
+                lines.push(`  ⚔ ${combat.name || combat.id} [${combat.status || 'ACTIVE'}] exch:${combat.exchange || '?'} → id: ${combat.id}`);
+                if (combat.participants) {
+                    lines.push(`    Participants: ${Array.isArray(combat.participants) ? combat.participants.join(', ') : combat.participants}`);
+                }
+                if (combat.hostiles) {
+                    lines.push(`    Hostiles: ${Array.isArray(combat.hostiles) ? combat.hostiles.join(', ') : combat.hostiles}`);
+                }
+                if (combat.primary_enemy) {
+                    lines.push(`    Primary enemy: ${typeof combat.primary_enemy === 'object' ? combat.primary_enemy.name || combat.primary_enemy.id || '?' : combat.primary_enemy}`);
+                }
+                if (combat.situation) lines.push(`    Situation: ${combat.situation}`);
+                if (combat.terrain) lines.push(`    Terrain: ${combat.terrain}`);
+                if (combat.threat) lines.push(`    Threat: ${combat.threat}`);
             }
         }
 
@@ -475,6 +508,16 @@ COMMON PATHS:
   collision:id.aftermath
   collision:id.successor_collision_ids+
   collision:id.parent_collision_ids+
+  combat:id.status
+  combat:id.exchange
+  combat:id.participants
+  combat:id.hostiles
+  combat:id.primary_enemy
+  combat:id.terrain
+  combat:id.situation
+  combat:id.threat
+  combat:id.outcome
+  combat:id.aftermath
   constraint:id.integrity
   world.world_state
   world.pressure_points+
@@ -486,6 +529,7 @@ STATE MACHINES:
   char tier: UNKNOWN -> KNOWN -> TRACKED -> PRINCIPAL
   constraint integrity: STABLE -> STRESSED -> CRITICAL -> BREACHED
   collision status: SEEDED -> SIMMERING -> ACTIVE -> RESOLVING -> RESOLVED
+  combat status: ACTIVE -> RESOLVED
   chapter status: PLANNED -> OPEN -> CLOSING -> CLOSED
 For these fields, write the NEW state only. The extension will compile the transition.
 
@@ -531,7 +575,7 @@ Empty turn (nothing changed):
 SYNTAX: > [timestamp] OPERATION entity_type:entity_id key=value key="multi word" -- reason
   - One line per transaction. Each line is independent.
   - Timestamps: [Day N — HH:MM]
-  - Entity types: char, constraint, collision, chapter, faction, world, pc, divination, summary
+  - Entity types: char, constraint, collision, combat, chapter, faction, world, pc, divination, summary
   - Singletons (no :id needed): world, pc, divination, summary
   - IDs: kebab-case, stable, never change once assigned
   - Reason after -- is required, keep it brief like margin notes
@@ -543,6 +587,7 @@ CREATE — new entity
   > CREATE char:tifa name="Tifa Lockhart" tier=KNOWN -- First encounter
   > CREATE constraint:c1-steady name="The Steady One" owner_id=tifa integrity=STABLE prevents="Showing vulnerability or exhaustion" threshold="Sustained pressure from someone trusted" replacement="Regression — stillness without purpose" replacement_type=regression shedding_order=2 -- Core constraint
   > CREATE collision:trust-vs-duty name="Trust vs Duty" forces="trust,duty" status=SEEDED distance=10 details="Trust and duty are converging. Autumn's loyalty demands she tell Kenji the truth. Her mission demands she doesn't." cost="If it detonates: one of them walks away for good" target_constraint=c1-the-steady-one -- Central tension
+  > CREATE combat:alley-fight status=ACTIVE exchange=1 participants="pc,tifa,shinra-sweep" hostiles="shinra-sweep" primary_enemy="shinra-sweep" terrain="Narrow service alley with hard cover and bad firing lanes" situation="Sweep team rounds the corner while driving a wounded runner into the alley" threat="Armored rifles in close quarters with a disguised command element" -- Active combat container
   > CREATE chapter:ch1 number=1 title="Arrival" status=OPEN arc="Meeting" central_tension="Friend or foe?" -- Init chapter
 
   Constraint fields: name, owner_id, integrity, prevents, threshold, replacement, replacement_type (sophistication/displacement/depth_shift/regression), shedding_order, current_pressure
@@ -559,6 +604,7 @@ SET — overwrite a field
   > SET char:tifa field=doing value="Investigating the reactor" -- New action
   > SET collision:trust-vs-duty field=distance value=6 -- Closer after confrontation
   > SET world field=world_state value="Martial law declared" -- Major world change
+  > SET combat:alley-fight field=exchange value=2 -- New exchange begins
 
 APPEND — add to an array field
   > APPEND char:tifa field=key_moments value="[Day 1 — 22:00] Confronted Cloud about memories at the well." -- Pivotal scene
@@ -579,6 +625,9 @@ MAP_SET — set a key in a map field
   > SET pc field=power value=3 -- Current effective combat level
   > SET pc field=power_basis value="Master swordsman with real battlefield experience and disciplined footwork" -- Why the rating is justified
   > APPEND pc field=abilities value="Fast draw and counter timing" -- Combat capability
+
+COMBAT OPTION HTML — when combat mode asks for options, use this exact clickable format:
+  <span class="act" data-value="combat: option | 1 | Highly likely | Break left through the gap and take the nearest rifle offline">Break left through the gap (Highly likely)</span>
 
 INTIMATE HISTORY — per-character map tracking sexual development over time.
   Update keys via MAP_SET after intimate scenes. These are CUMULATIVE — each update builds on previous entries.
