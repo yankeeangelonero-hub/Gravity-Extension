@@ -970,7 +970,7 @@ Declare the relationship between these arrivals before writing the scene. Choose
 • CASCADE — one collision becomes the trigger or delivery vehicle for another. Both remain distinct, but their arrivals are causally linked. Name which drives which.
 • COMPOSITE — the simultaneous arrivals form a single larger event. Write one coherent converged scene. Each parent collision typically closes with outcome_type: MERGED. CREATE a composite successor collision and link parent_collision_ids / successor_collision_ids.
 
-State your choice explicitly at the start of your reasoning deduction pass (e.g., "Convergence: PARALLEL — both arrive but X foregrounds first"). The convergence draw colors the shape of the combined event.
+State your choice explicitly before writing the scene (e.g., "Convergence: PARALLEL — both arrive but X foregrounds first"). The convergence draw colors the shape of the combined event.
 
 If a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.
 
@@ -1037,7 +1037,6 @@ MOVE each arrived collision to RESOLVING. SET each collision's last_manifestatio
 GRAVITY_REASON_MODE: ${reasonMode}
 
 These flags are for hidden reasoning only. Never echo or paraphrase them in visible output.
-Run the matching deduction protocol from the preset's Gravity CoT entry. If no mode is present, default to regular.
 
 After the thinking pass closes, visible output is:
 1. Optional divination card HTML when another injection requests it
@@ -1582,7 +1581,7 @@ ${historyBlock}
 If active, write one short sensory beat and then generate 4-5 clickable choices using this exact HTML:
 <span class="act" data-value="intimate: first-person action description">Short display text</span>
 
-Check collisions every turn. If one hits distance 0, the world interrupts the scene. After the scene, resume hidden deduction + prose + STATE updates for reads, stance shifts, key moments, intimate history, and constraint pressure.`,
+Check collisions every turn. If one hits distance 0, the world interrupts the scene. After the scene, resume prose + STATE updates for reads, stance shifts, key moments, intimate history, and constraint pressure.`,
         [MODE_LOREBOOK_KEYS.intimacyCore, MODE_LOREBOOK_KEYS.intimacyOptional, MODE_LOREBOOK_KEYS.proseIntimacy],
     );
 
@@ -1841,5 +1840,7 @@ function createInputButtons() {
     document.getElementById('gl-input-skip').addEventListener('click', handleTimeskipButton);
     document.getElementById('gl-input-good').addEventListener('click', handleGoodTurnButton);
 }
+
+
 
 
