@@ -596,10 +596,22 @@ function buildCombatPrompt(state) {
         case 'setup':
             lines.push('');
             lines.push('PHASE INSTRUCTION: SETUP');
-            lines.push(`Create combat:${runtime.combat_id} now. This is the combat container.`);
-            lines.push('Establish participants, hostiles, primary_enemy, terrain, situation, threat, and exchange.');
-            lines.push('Assign justified power_base, power, power_basis, and abilities to important new enemies.');
-            lines.push('Do not resolve the first exchange yet. Stop on the opening situation and output 3-4 clickable options.');
+            if (runtime.pending_action?.setup_buffered) {
+                lines.push('Setup is incomplete, but the player already committed to an action while the combat entity was still missing or setup had not advanced.');
+                lines.push(`First create combat:${runtime.combat_id} and establish participants, hostiles, primary_enemy, terrain, situation, threat, and exchange.`);
+                lines.push('Then immediately resolve the buffered player action this same turn.');
+                if (runtime.pending_action.assessment_only) {
+                    lines.push('Because the buffered action had no declared category, assess it honestly after setup and then output 3-4 clickable options instead of silently ignoring it.');
+                } else {
+                    lines.push('A pending action and pending roll payload are already stored. Use them. Do not reinterpret the spawn draw as the resolution roll.');
+                    lines.push('End with the next 3-4 clickable options if combat continues.');
+                }
+            } else {
+                lines.push(`Create combat:${runtime.combat_id} now. This is the combat container.`);
+                lines.push('Establish participants, hostiles, primary_enemy, terrain, situation, threat, and exchange.');
+                lines.push('Assign justified power_base, power, power_basis, and abilities to important new enemies.');
+                lines.push('Do not resolve the first exchange yet. Stop on the opening situation and output 3-4 clickable options.');
+            }
             break;
         case 'awaiting_choice':
             lines.push('');
@@ -653,11 +665,14 @@ function getOptionByIndex(runtime, index) {
     return (runtime.options || []).find(option => option.index === index) || null;
 }
 
-function buildOptionAction(option, baselineCategory) {
+function buildOptionAction(option, baselineCategory, options = {}) {
     const baselineStep = categoryStep(baselineCategory);
     const chosenStep = categoryStep(option.category);
-    const maxEasyStep = baselineStep == null ? chosenStep : Math.min(CATEGORY_ORDER.length - 1, baselineStep + 1);
-    const effectiveStep = chosenStep != null && chosenStep > maxEasyStep ? maxEasyStep : chosenStep;
+    const effectiveStep = options.skipClamp
+        ? chosenStep
+        : (chosenStep != null && baselineStep != null
+            ? Math.min(chosenStep, Math.min(CATEGORY_ORDER.length - 1, baselineStep + 1))
+            : chosenStep);
     const effectiveCategory = categoryFromStep(effectiveStep);
     return {
         source: 'option',
@@ -673,7 +688,7 @@ function buildOptionAction(option, baselineCategory) {
     };
 }
 
-function buildCustomAction(intent, declaredCategory, baselineCategory) {
+function buildCustomAction(intent, declaredCategory, baselineCategory, options = {}) {
     const baselineStep = categoryStep(baselineCategory);
     const declaredStep = categoryStep(declaredCategory);
     const delta = baselineStep == null || declaredStep == null ? 0 : declaredStep - baselineStep;
@@ -684,7 +699,7 @@ function buildCustomAction(intent, declaredCategory, baselineCategory) {
         effective_category: declaredCategory,
         baseline_category: baselineCategory,
         clamped: false,
-        challenge_required: delta >= 2,
+        challenge_required: options.skipChallenge ? false : delta >= 2,
         assessment_only: false,
     };
 }
@@ -699,6 +714,62 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
     const optionText = parseCombatOptionValue(rawText);
     const optionIndex = optionText?.index ?? parseOptionIndexText(rawText);
     const explicitCustom = parseCombatCustomText(rawText);
+
+    if (next.phase === 'setup') {
+        if (optionText || optionIndex != null) {
+            const option = optionText || getOptionByIndex(next, optionIndex);
+            if (!option) return { handled: false };
+            const action = buildOptionAction(option, null, { skipClamp: true });
+            next.pending_action = {
+                ...action,
+                setup_buffered: true,
+                baseline_category: null,
+            };
+            next.pending_roll = {
+                ...buildRollPayload(action.effective_category, dcTable, drawFn),
+                baseline: null,
+                setup_buffered: true,
+            };
+            await setCombatRuntime(next);
+            return { handled: true, inject: true };
+        }
+
+        if (explicitCustom) {
+            const action = buildCustomAction(explicitCustom.intent, explicitCustom.category, null, { skipChallenge: true });
+            next.pending_action = {
+                ...action,
+                setup_buffered: true,
+                baseline_category: null,
+            };
+            next.pending_roll = {
+                ...buildRollPayload(action.effective_category, dcTable, drawFn),
+                baseline: null,
+                setup_buffered: true,
+            };
+            await setCombatRuntime(next);
+            return { handled: true, inject: true };
+        }
+
+        const setupText = normalizeText(rawText);
+        if (!setupText || /^ooc:/i.test(setupText)) {
+            return { handled: false };
+        }
+
+        next.pending_action = {
+            source: 'custom',
+            intent: setupText,
+            declared_category: null,
+            effective_category: null,
+            baseline_category: null,
+            clamped: false,
+            challenge_required: false,
+            assessment_only: true,
+            setup_buffered: true,
+        };
+        next.pending_roll = null;
+        await setCombatRuntime(next);
+        return { handled: true, inject: true };
+    }
 
     if (next.phase === 'awaiting_reassessment') {
         const reassessed = explicitCustom || optionText || (optionIndex != null ? getOptionByIndex(next, optionIndex) : null);
@@ -843,7 +914,60 @@ async function processCombatAssistantTurn(state, committedTxns, messageText) {
 
     if (runtime.phase === 'setup') {
         if (!combat) {
-            return combatCorrection('Combat is active but no combat entity was created. Create `combat:*` now before continuing.');
+            return combatCorrection(runtime.pending_action?.setup_buffered
+                ? 'Combat setup is incomplete and a player action is waiting. Create `combat:*` now, then resolve the buffered action instead of restarting setup.'
+                : 'Combat is active but no combat entity was created. Create `combat:*` now before continuing.');
+        }
+
+        if (runtime.pending_action?.setup_buffered && runtime.pending_roll) {
+            const next = {
+                ...runtime,
+                last_resolution: {
+                    exchange: runtime.exchange,
+                    action: clone(runtime.pending_action),
+                    roll: clone(runtime.pending_roll),
+                },
+            };
+
+            if (resolved) {
+                next.phase = 'cleanup_grace';
+                next.cleanup_turns_remaining = 1;
+                next.options = [];
+                next.pending_action = null;
+                next.pending_roll = null;
+                await setCombatRuntime(next);
+                if (!destroyed) {
+                    return combatCorrection('Combat is resolved. Before normal play fully resumes, write any final persistent consequences and destroy the combat entity.');
+                }
+                return null;
+            }
+
+            next.phase = 'awaiting_choice';
+            next.exchange = Math.max((runtime.exchange || 1) + 1, coerceNumber(combat?.exchange) ?? 0);
+            next.options = options;
+            next.pending_action = null;
+            next.pending_roll = null;
+            await setCombatRuntime(next);
+
+            if (!options.length) {
+                return combatCorrection('The buffered setup action resolved, but no next combat options were presented. Output 3-4 clickable combat options using the exact combat HTML format.');
+            }
+            return null;
+        }
+
+        if (runtime.pending_action?.assessment_only) {
+            const next = {
+                ...runtime,
+                options: options.length ? options : runtime.options || [],
+                pending_action: null,
+                pending_roll: null,
+                phase: 'awaiting_choice',
+            };
+            await setCombatRuntime(next);
+            if (!options.length) {
+                return combatCorrection('Combat setup completed, but the buffered uncategorized action was not turned into options. Output 3-4 clickable combat options using the exact combat HTML format.');
+            }
+            return null;
         }
 
         const next = {

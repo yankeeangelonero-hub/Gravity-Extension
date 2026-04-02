@@ -1400,13 +1400,6 @@ Then write prose, render the choices, and end with a compact STATE block.`,
     }
 
     if (isCombatRuntimeActive() && !/^ooc:/i.test(rawText)) {
-        const combatRuntime = getCombatRuntime();
-        if (combatRuntime?.phase === 'setup') {
-            injectPrompt('advance');
-            updatePanel(_currentState, _turnCounter);
-            return;
-        }
-
         const combatResult = await handleCombatActionSelection(rawText, _currentState, drawDivination);
         if (combatResult.handled) {
             injectPrompt('advance');

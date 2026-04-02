@@ -24,6 +24,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - `OOC: power review pc|char:id|all` is now the supported re-judgment path when injuries, growth, gear changes, or new evidence should change combat power.
 - Combat runtime is now live as a chat-metadata state machine in `combat-state.js`, with a dedicated `_combat` injection slot in `index.js`.
 - The active combat loop now supports setup/options/resolution/reassessment/cleanup phases, option clicks (`combat: option | ...`), `option N`, and explicit custom actions (`combat: custom | ...`).
+- Setup-phase combat clicks are now buffered instead of dropped. If the player commits to an option before the combat entity exists, the next `_combat` prompt now says to finish setup and then resolve the buffered action, rather than restarting setup or reusing the spawn draw as the action roll.
 - Combat baseline math now resolves from current `power` in the extension, using difficulty modes plus `d20` and fresh draw payloads for the middle three categories; `Absolute` and `Impossible` are explicit no-roll paths.
 - `ui-panel.js` now has a dedicated Combat section with runtime visibility and difficulty controls.
 - Good-turn exemplar tagging now preserves the real completed turn mode through `_lastCompletedMode`, so combat/intimacy/advance exemplars are not silently recorded as regular.
