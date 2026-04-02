@@ -2,7 +2,7 @@
 
 This document captures the complete combat system design for Gravity Ledger, agreed upon through iterative design discussion. It is intended as a handoff to Claude Code / Codex for implementation on the `combat` branch.
 
-## Status Update - 2026-04-02
+## Status Update - 2026-04-03
 
 This handoff predates the repository's power-doctrine refactor. The overall combat-loop vision below is still the target, but the following points now supersede older assumptions in this document:
 
@@ -10,7 +10,11 @@ This handoff predates the repository's power-doctrine refactor. The overall comb
 - Setup no longer authors `world.constants.combat_rules`. It now authors `world.constants.power_scale`, `world.constants.power_ceiling`, optional `world.constants.power_notes`, plus `power_base`, `power`, `power_basis`, and `abilities` on the PC and important combatants.
 - `power` is dynamic. `power_base` is the healthy earned rating. Severe impairment can lower `power`; lasting growth or decline can change `power_base`.
 - `OOC: power review pc|char:id|all` is the supported re-judgment path when the story earns a power change.
-- As of 2026-04-02, the repo has implemented the setup, prompt, UI, and OOC portions of this doctrine, but not yet the full `combat` entity runtime, `_combat` slot, difficulty-toggle settings, or `combat-state.js`.
+- The full combat runtime is now live in `combat-state.js`, with a dedicated `_combat` injection slot, a first-class `combat` entity type, cleanup grace behavior, and synced panel difficulty controls.
+- Difficulty is now injected from the extension as live success thresholds, not left to prompt-side numeric assumptions. The prompt assets now tell the model to trust the injected category and threshold as canonical.
+- Combat setup strips the generic divination `NARRATIVE_FORCING` text. The spawn draw now highlights encounter circumstance, leverage, visibility, spacing, terrain truth, and why opening options sit at their assessed categories.
+- Resolution outcomes are now framed as `SUCCESS`, `TRANSFORM`, `CRITICAL_SUCCESS`, and `CRITICAL_TRANSFORM`.
+- Player combat input now uses a `combat:` prefix flow: the Combat button inserts `combat: `, numbered options can be chosen with `combat:2`, and declared actions use `combat: <freeform action> DC <category>`.
 
 Use [combat-power-doctrine.md](./combat-power-doctrine.md) as the field contract for the power model referenced throughout this handoff.
 

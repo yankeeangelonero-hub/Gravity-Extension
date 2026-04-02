@@ -408,20 +408,47 @@ function parseCombatOptionValue(value, label = '') {
     };
 }
 
+function getCombatCommandBody(value) {
+    const text = decodeHtmlEntities(value);
+    const match = text.match(/^\*?combat:\s*(.*?)\*?$/i);
+    if (!match) return null;
+    return normalizeText(match[1]);
+}
+
 function parseCombatCustomText(value) {
     const text = decodeHtmlEntities(value);
-    const match = text.match(/^\*?combat:\s*custom\s*\|\s*([^|]+)\|\s*(.+?)\*?$/i);
+    const legacy = text.match(/^\*?combat:\s*custom\s*\|\s*([^|]+)\|\s*(.+?)\*?$/i);
+    if (legacy) {
+        const category = normalizeCategory(legacy[1]);
+        if (!category) return null;
+        return {
+            category,
+            intent: normalizeText(legacy[2]),
+        };
+    }
+
+    const body = getCombatCommandBody(value);
+    if (body == null || !body) return null;
+    const match = body.match(/^(.+?)\s+dc\s+(.+?)$/i);
     if (!match) return null;
-    const category = normalizeCategory(match[1]);
+    const category = normalizeCategory(match[2]);
     if (!category) return null;
     return {
         category,
-        intent: normalizeText(match[2]),
+        intent: normalizeText(match[1]),
     };
 }
 
 function parseOptionIndexText(value) {
     const match = normalizeText(value).match(/^\*?option\s+(\d+)\*?$/i);
+    if (!match) return null;
+    return Number(match[1]);
+}
+
+function parseCombatIndexText(value) {
+    const body = getCombatCommandBody(value);
+    if (body == null || !body) return null;
+    const match = body.match(/^(\d+)$/);
     if (!match) return null;
     return Number(match[1]);
 }
@@ -626,7 +653,8 @@ function buildCombatPrompt(state) {
 
     lines.push('');
     lines.push('OPTION HTML — when combat is waiting for a player choice, output 3-4 clickable options in exactly this format:');
-    lines.push('<span class="act" data-value="combat: option | 1 | Highly likely | Break left through the gap and take the nearest rifle offline">Break left through the gap (Highly likely)</span>');
+    lines.push('<span class="act" data-value="combat: option | 1 | Highly likely | Break left through the gap and take the nearest rifle offline">1. Break left through the gap (Highly likely)</span>');
+    lines.push('The player may answer with `combat:2` to pick option 2, or `combat: Break left through the gap and take the nearest rifle offline DC Highly likely` for a declared custom action.');
 
     switch (runtime.phase) {
         case 'setup':
@@ -746,17 +774,28 @@ function buildCustomAction(intent, declaredCategory, baselineCategory, options =
 }
 
 async function handleCombatActionSelection(rawText, state, drawFn) {
-    const runtime = getCombatRuntime();
-    if (!runtime) return { handled: false };
+    let runtime = getCombatRuntime();
+    const combatBody = getCombatCommandBody(rawText);
+    if (!runtime) {
+        if (combatBody == null) return { handled: false };
+        await startCombatSetupRuntime(drawFn());
+        runtime = getCombatRuntime();
+        if (!runtime) return { handled: false };
+    }
 
     const baseline = getCombatBaseline(state, runtime);
     const dcTable = buildDcTable(getCombatSettings());
     const next = clone(runtime);
     const optionText = parseCombatOptionValue(rawText);
-    const optionIndex = optionText?.index ?? parseOptionIndexText(rawText);
+    const optionIndex = optionText?.index ?? parseCombatIndexText(rawText) ?? parseOptionIndexText(rawText);
     const explicitCustom = parseCombatCustomText(rawText);
 
     if (next.phase === 'setup') {
+        if (combatBody === '') {
+            await setCombatRuntime(next);
+            return { handled: true, inject: true };
+        }
+
         if (optionText || optionIndex != null) {
             const option = optionText || getOptionByIndex(next, optionIndex);
             if (!option) return { handled: false };
@@ -791,7 +830,7 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
             return { handled: true, inject: true };
         }
 
-        const setupText = normalizeText(rawText);
+        const setupText = combatBody != null ? combatBody : normalizeText(rawText);
         if (!setupText || /^ooc:/i.test(setupText)) {
             return { handled: false };
         }
@@ -856,6 +895,10 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
         return { handled: false };
     }
 
+    if (combatBody === '') {
+        return { handled: true, inject: true };
+    }
+
     if (optionIndex != null) {
         const option = optionText || getOptionByIndex(next, optionIndex);
         if (!option) return { handled: false };
@@ -888,7 +931,7 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
         return { handled: true, inject: true };
     }
 
-    const text = normalizeText(rawText);
+    const text = combatBody != null ? combatBody : normalizeText(rawText);
     if (!text || /^ooc:/i.test(text)) {
         return { handled: false };
     }

@@ -27,7 +27,6 @@ import {
     isCombatReasonModeActive,
     isCombatRuntimeActive,
     processCombatAssistantTurn,
-    startCombatSetupRuntime,
 } from './combat-state.js';
 
 const MODULE_NAME = 'gravity-ledger';
@@ -1399,7 +1398,7 @@ Then write prose, render the choices, and end with a compact STATE block.`,
         return;
     }
 
-    if (isCombatRuntimeActive() && !/^ooc:/i.test(rawText)) {
+    if ((isCombatRuntimeActive() || /^\*?combat:/i.test(String(rawText || ''))) && !/^ooc:/i.test(rawText)) {
         const combatResult = await handleCombatActionSelection(rawText, _currentState, drawDivination);
         if (combatResult.handled) {
             injectPrompt('advance');
@@ -1531,18 +1530,7 @@ function handleAdvanceButton() {
 }
 
 async function handleCombatButton() {
-    const runtime = getCombatRuntime();
-    if (runtime && runtime.phase !== 'cleanup_grace') {
-        insertChatMessage('combat: custom | Average | ');
-        return;
-    }
-
-    const pcName = _currentState?.pc?.name || '{{user}}';
-    await startCombatSetupRuntime(drawDivination());
-    _pendingDeductionType = 'combat';
-    injectPrompt('advance');
-    updatePanel(_currentState, _turnCounter);
-    insertChatMessage(`*${pcName} prepares to fight.*`);
+    insertChatMessage('combat: ');
 }
 
 function handleIntimacyButton() {

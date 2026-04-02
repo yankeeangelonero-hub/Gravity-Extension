@@ -1,6 +1,6 @@
 # Project Memory
 
-Updated: 2026-04-03 00:25:06 +08:00
+Updated: 2026-04-03 01:26:22 +08:00
 
 Durable working memory for Codex sessions in this repository. Update this file when system behavior, active design decisions, or important constraints change.
 
@@ -23,10 +23,14 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - `power` is now the current effective combat rating, `power_base` is the earned healthy rating, `power_basis` explains why the number is justified, and `abilities` describe how that rating manifests in action.
 - `OOC: power review pc|char:id|all` is now the supported re-judgment path when injuries, growth, gear changes, or new evidence should change combat power.
 - Combat runtime is now live as a chat-metadata state machine in `combat-state.js`, with a dedicated `_combat` injection slot in `index.js`.
-- The active combat loop now supports setup/options/resolution/reassessment/cleanup phases, option clicks (`combat: option | ...`), `option N`, and explicit custom actions (`combat: custom | ...`).
+- The active combat loop now supports setup/options/resolution/reassessment/cleanup phases through a `combat:` prefix flow. The Combat button inserts `combat: `, numbered options can be chosen with `combat:2`, and declared actions use `combat: <freeform action> DC <category>`.
 - Setup-phase combat clicks are now buffered instead of dropped. If the player commits to an option before the combat entity exists, the next `_combat` prompt now says to finish setup and then resolve the buffered action, rather than restarting setup or reusing the spawn draw as the action roll.
 - Combat baseline math now resolves from current `power` in the extension, using difficulty modes plus `d20` and fresh draw payloads for the middle three categories; `Absolute` and `Impossible` are explicit no-roll paths.
-- `ui-panel.js` now has a dedicated Combat section with runtime visibility and difficulty controls.
+- Combat rolls are now framed as `SUCCESS`, `TRANSFORM`, `CRITICAL_SUCCESS`, and `CRITICAL_TRANSFORM`. Low rolls are not ordinary failure states.
+- Combat setup no longer inherits the global divination `NARRATIVE_FORCING` instruction. The spawn draw is now stripped and re-framed inside `_combat` to reveal circumstance, leverage, spacing, exposure, and why the opening options sit at their assessed categories.
+- Combat resolution now states the mechanical result explicitly in `_combat`. The prompt now says that only the `d20` is compared to the live threshold and the draw is interpretive only.
+- Combat difficulty is now framed as extension-owned success thresholds rather than bare prompt-side DC numbers. `_combat` injects the active thresholds and the live action threshold, and the prompt assets now tell the model to trust those injected numbers as canonical.
+- `ui-panel.js` now has a dedicated Combat section with runtime visibility plus synced difficulty controls in both the Combat section and the top command bar.
 - Good-turn exemplar tagging now preserves the real completed turn mode through `_lastCompletedMode`, so combat/intimacy/advance exemplars are not silently recorded as regular.
 
 ## Prose Architecture
@@ -61,6 +65,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - `state-view.js` now surfaces active power constants (`power_scale`, `power_ceiling`, `power_notes`) plus power profile fields (`power`, `power_base`, `power_basis`, `abilities`) for the PC and tracked characters.
 - `state-view.js` now also documents and surfaces `combat:*` entities in the prompt-facing state contract.
 - `ui-panel.js` hides legacy constants from older saves so deprecated setup fields do not keep resurfacing in the interface.
+- The panel command bar now exposes combat difficulty directly, with a live threshold summary (`HL`, `Avg`, `HU`) synced to chat metadata.
 - The world panel no longer renders a `knowledge_asymmetry` section.
 - Intimacy prose guidance explicitly uses relational asymmetry and misread via the `reads` map rather than a dedicated knowledge-asymmetry state field.
 

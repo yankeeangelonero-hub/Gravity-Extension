@@ -6,6 +6,19 @@ Date: 2026-04-03 00:25:06 +08:00
 
 This pass completed the combat runtime rework that had still been pending after the earlier power-doctrine migration.
 
+## Follow-Up Fixes Landed After This Handoff
+
+Several important combat-runtime fixes landed after the initial runtime commit. Treat these as part of the current live behavior:
+
+- Setup-phase combat actions are buffered correctly. If the player commits before the combat entity exists, `_combat` now says to finish setup and then resolve the buffered action instead of restarting setup.
+- Low combat rolls are now framed as `TRANSFORM`, not plain failure. Natural 1 outcomes are now `CRITICAL_TRANSFORM`.
+- Combat setup no longer inherits the generic divination `NARRATIVE_FORCING` block. The spawn draw is re-framed as encounter illumination: circumstance, leverage, visibility, spacing, terrain truth, and why the options sit at their assessed categories.
+- Combat resolution now explicitly injects the mechanical result as a fixed line. The prompt says only the `d20` is compared to the live success threshold and the draw is interpretive only.
+- Combat difficulty is now framed as extension-owned success thresholds rather than prompt-side bare DCs. `_combat` injects the live thresholds and the action threshold directly.
+- `ui-panel.js` now exposes combat difficulty in two places:
+  - the Combat section
+  - the top command bar with a live threshold summary
+
 Implemented:
 
 - `combat` is now a first-class entity type in validation and replay.
@@ -18,10 +31,10 @@ Implemented:
   - `awaiting_reassessment`
   - `cleanup_grace`
 - Player combat input parsing:
-  - `combat: option | <index> | <category> | <intent>`
-  - `option <n>`
-  - `combat: custom | <category> | <intent>`
-  - freeform combat prose during active combat becomes assessment-only instead of resolving immediately
+  - `combat: ` starts or routes combat from the player input bar
+  - `combat:<n>` picks a numbered option
+  - `combat: <freeform action> DC <category>` declares a custom action with a chosen category
+  - freeform `combat: <action>` without a category becomes assessment-only instead of resolving immediately
 - Baseline math now uses current effective `power`, never narrative `tier`
 - Middle categories roll `d20` plus a fresh draw in the extension
 - `Absolute` / `Impossible` use explicit no-roll payloads
@@ -49,16 +62,16 @@ Implemented:
 
 ### Start
 
-- Pressing the combat button with no active combat now creates combat runtime state and inserts `*<pc> prepares to fight.*`
+- Pressing the combat button now inserts `combat: ` into the input box.
 - The extension draws a spawn divination result and stores it in runtime state.
-- The `_combat` prompt instructs the model to create `combat:<runtime id>` and stop on the opening situation with 3-4 clickable combat options.
+- The `_combat` prompt instructs the model to create `combat:<runtime id>` and stop on the opening situation with 3-4 clickable numbered combat options.
 
 ### Resolution Loop
 
-- Clicked options and typed `option N` resolve immediately from the stored option list.
-- Explicit custom actions with categories resolve immediately unless the declared category is too generous versus baseline.
+- Clicked options and typed `combat:<n>` resolve immediately from the stored option list.
+- Explicit custom actions written as `combat: <freeform action> DC <category>` resolve immediately unless the declared category is too generous versus baseline.
 - Too-generous custom actions move to `awaiting_reassessment` and preserve the rolled `d20` and draw.
-- Freeform uncategorized combat text is treated as an assessment-only action; the model must turn it into explicit options before resolution.
+- Freeform uncategorized `combat: <action>` text is treated as an assessment-only action; the model must turn it into explicit options before resolution.
 
 ### Cleanup
 
@@ -87,8 +100,8 @@ Implemented:
 
 ## Recommended Next Live Test
 
-1. Start a new combat from the Combat button and confirm setup creates `combat:*` plus 3-4 clickable options.
+1. Start a new combat from the Combat button and confirm setup creates `combat:*` plus 3-4 clickable numbered options.
 2. Click an option and verify the next turn resolves one exchange and offers fresh options.
-3. Type `combat: custom | Absolute | ...` and `combat: custom | Impossible | ...` to confirm no-roll paths.
+3. Type `combat: finish him DC Absolute` and `combat: jump the wall DC Impossible` to confirm no-roll paths.
 4. Type an obviously too-generous custom category and confirm reassessment preserves the stored roll.
 5. Resolve combat without `D combat:*` once and confirm `cleanup_grace` clears runtime on the following committed turn.
