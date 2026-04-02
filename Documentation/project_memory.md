@@ -1,6 +1,6 @@
 # Project Memory
 
-Updated: 2026-04-02 01:29:31 +08:00
+Updated: 2026-04-02 10:38:00 +08:00
 
 Durable working memory for Codex sessions in this repository. Update this file when system behavior, active design decisions, or important constraints change.
 
@@ -11,8 +11,11 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - `index.js` remains the central coordinator for prompt injection, turn flow, collision resolution, pressure-point audits, and UI wiring.
 - `gravity_v14.json` plus `Gravity World Info.json` now own sentence-level prose behavior and mode-specific length guidance.
 - Gravity deduction now lives in the model's hidden reasoning/thinking pass. The extension no longer asks for a visible `---DEDUCTION---` block in normal responses.
-- `gravity_v14.json` now includes a dedicated Lucid Loom-style CoT trigger plus a separate Gravity CoT entry. On fresh turns the model must open `<think>`, pick the matching mode protocol there, close `</think>`, and only then emit visible output.
-- There is still an unresolved CoT bug in live behavior: the model may plan visibly before `<think>` or appear to think twice. See `Documentation/handoff_2026-04-02_012931_SGT_cot_followup.md`.
+- `gravity_v14.json` now uses a dedicated `| Gravity CoT` entry with a literal `<think>...</think>` block. The older helper trigger entry is still present in the preset file but currently disabled. On fresh turns the model must open `<think>`, pick the matching mode protocol there, close `</think>`, and only then emit visible output.
+- A first-pass duplicated-CoT cleanup is now in place: the kernel no longer restates the CoT output procedure, and convergence prompts no longer ask for an explicit visible declaration before the scene.
+- Live verification is still needed because the duplicated-CoT symptom was observed in actual play, not in an in-repo test harness. See `Documentation/handoff_2026-04-02_012931_SGT_cot_followup.md`.
+- The live `| Gravity CoT` prompt now explicitly says "Before anything else you must perform a strategic analysis," requires a one-pass fixed template inside `<think>`, and ends with `(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`. Treat that exact wrapper as the active CoT contract.
+- User preference: keep `show_thoughts: true`. Do not treat flipping it to `false` as the default CoT fix path unless the user explicitly asks to test that change.
 - Setup and runtime state were trimmed aggressively. Live setup now authors the opening arc, optional combat rules, and optional PC starting power. The extension no longer authors `story_kind`, `guidelines`, `voice`, `tone`, `length`, `motivation`, `objective`, or `knowledge_asymmetry`.
 - `world.constants.combat_rules` is the only actively surfaced setup-authored world constant in the current extension contract.
 - Good-turn exemplar tagging now preserves the real completed turn mode through `_lastCompletedMode`, so combat/intimacy/advance exemplars are not silently recorded as regular.
@@ -74,7 +77,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Decide whether to formalize `pc.knowledge_gaps` as a real feature or remove it from `OOC: eval`.
 - If explicit asymmetry tracking is needed, start with PC-only knowledge gaps or optional blindspots for major recurring characters rather than adding blindspots to every character.
 - Clean up remaining mojibake in docs and some source comments when it becomes worth a dedicated pass.
-- Resolve the duplicated-CoT behavior and verify every mode path (`regular`, `combat`, `advance`, `intimacy`, and integration flows) actually enters the preset CoT once with the correct mode.
+- Live-test the duplicated-CoT cleanup and verify every mode path (`regular`, `combat`, `advance`, `intimacy`, and integration flows) enters the preset CoT once with the correct mode.
 
 ## Update Rule
 

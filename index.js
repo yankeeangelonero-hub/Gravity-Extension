@@ -965,12 +965,12 @@ ${arrivalNames} have all hit distance 0 on the same turn.
 
 ${convergenceDraw.label}: ${convergenceDraw.reading}${convergenceDraw.html ? `\nRender this HTML card reveal before interpreting:\n${convergenceDraw.html}` : ''}
 
-Declare the relationship between these arrivals before writing the scene. Choose one:
+Choose the relationship between these arrivals before writing the scene. Choose one:
 • PARALLEL — they arrive at the same time but remain distinct tensions. One foregrounds first; the others are active in the same scene or immediate next beat. No forced merge.
 • CASCADE — one collision becomes the trigger or delivery vehicle for another. Both remain distinct, but their arrivals are causally linked. Name which drives which.
 • COMPOSITE — the simultaneous arrivals form a single larger event. Write one coherent converged scene. Each parent collision typically closes with outcome_type: MERGED. CREATE a composite successor collision and link parent_collision_ids / successor_collision_ids.
 
-State your choice explicitly before writing the scene (e.g., "Convergence: PARALLEL — both arrive but X foregrounds first"). The convergence draw colors the shape of the combined event.
+Do not announce this choice as visible meta text. Let the scene itself make the structure clear: PARALLEL means one arrival foregrounds while the others stay live, CASCADE means one arrival delivers the next, and COMPOSITE means the arrivals land as one merged event. The convergence draw colors the shape of the combined event.
 
 If a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.
 

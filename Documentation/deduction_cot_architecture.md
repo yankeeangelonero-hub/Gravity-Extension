@@ -15,10 +15,10 @@ The important design change is that deduction is no longer wrapped or structured
 
 The preset owns the hidden reasoning protocol.
 
-- `| CoT Triggers (Gem/Claude)` defines the `startthink`, `midthink`, `endthink`, and `endthinkmini` variables.
-- `| Gravity CoT` is the dedicated Gravity thinking entry that runs before visible output.
-- Prompt order places both CoT entries before the main Gravity kernel so the reasoning step is asked for first.
-- `show_thoughts` is currently `true`, which means backends that expose reasoning may show the thought channel.
+- The legacy `| CoT Triggers (Gem/Claude)` helper still exists in the preset file, but it is currently disabled.
+- `| Gravity CoT` is the active Gravity thinking entry. It explicitly opens with "Before anything else you must perform a strategic analysis," then carries a literal `<think>...</think>` block, then closes with `(output final narrative response. DON'T WRITE THE STRATEGIC ANALYSIS AGAIN)`.
+- Prompt order places `| Gravity CoT` before the main Gravity kernel so the reasoning step is asked for first.
+- `show_thoughts` is intentionally left `true` by user preference. Do not assume the duplicated-CoT fix is "turn it off" without explicit direction.
 
 ### Extension: `index.js`
 
@@ -98,10 +98,22 @@ The current live contract differs from the earlier prose rollout in a few ways:
 - `_nudge` no longer tells the model to open `<think>` itself or carries the checklist structure.
 - The extension no longer emits or expects a visible deduction block.
 
+## Current Wrapper Note
+
+The active `Gravity CoT` entry now uses the stronger strategic-analysis wrapper directly.
+
+Current live expectations:
+
+- before anything visible, the model is told to perform a strategic analysis
+- the analysis must use the explicit one-pass template inside `<think>`
+- after `</think>`, the prompt explicitly tells the model to output the final narrative response and not repeat the strategic analysis
+
+This wording should be preserved unless live testing proves it causes a regression.
+
 ## Known Limits
 
 - This depends on the model honoring prompt order and hidden-reasoning instructions.
-- `show_thoughts: true` may expose reasoning in clients/backends that surface thought channels.
+- Provider/back-end behavior can still vary with `show_thoughts: true`, so live verification still matters.
 - Timeskip and chapter-close still use the Prose Kernel rather than dedicated prose WI entries.
 - `pc.knowledge_gaps` is still only an `OOC: eval` hint and is not part of this reasoning architecture.
 
