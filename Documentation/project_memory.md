@@ -1,6 +1,6 @@
 # Project Memory
 
-Updated: 2026-04-02 11:16:00 +08:00
+Updated: 2026-04-02 13:30:12 +08:00
 
 Durable working memory for Codex sessions in this repository. Update this file when system behavior, active design decisions, or important constraints change.
 
@@ -62,6 +62,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Archived memory and older planning docs: `Documentation/Old/`
 - Existing prose rollout handoff: `Documentation/v14_prose_architecture_handoff.md`
 - Current reasoning-flow reference: `Documentation/deduction_cot_architecture.md`
+- `Documentation/gravity_character_card_template.md` now includes optional prewrite prompts plus a holistic card/scenario/lorebook split. Keep the card focused on dramatic behavior, the scenario focused on current relationship and structural tension, and the lorebook focused on reference/canon overflow rather than turning the card into a wiki page.
 
 ## Important Files
 
