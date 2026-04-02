@@ -1006,7 +1006,13 @@ function renderCombat(state) {
             if (roll.d20 != null) parts.push(`<div class="gl-d-row"><b>d20:</b> ${esc(roll.d20)}</div>`);
             if (roll.dc != null) parts.push(`<div class="gl-d-row"><b>DC:</b> ${esc(roll.dc)}</div>`);
             if (roll.category) parts.push(`<div class="gl-d-row"><b>Category:</b> ${esc(roll.category)}</div>`);
-            if (roll.success != null) parts.push(`<div class="gl-d-row"><b>Result:</b> ${esc(roll.success ? 'Success' : 'Failure')}${roll.critical ? ` (${esc(roll.critical)} critical)` : ''}</div>`);
+            if (roll.resolution || roll.success != null) {
+                const label = roll.resolution || (roll.success ? 'SUCCESS' : 'TRANSFORM');
+                const criticalNote = roll.critical && !String(label).startsWith('CRITICAL_')
+                    ? ` (critical ${esc(roll.critical)})`
+                    : '';
+                parts.push(`<div class="gl-d-row"><b>Result:</b> ${esc(label)}${criticalNote}</div>`);
+            }
             if (roll.challenge_pending) parts.push(`<div class="gl-d-row"><b>State:</b> awaiting reassessment</div>`);
             if (roll.draw?.label) parts.push(`<div class="gl-d-row"><b>Draw:</b> ${esc(roll.draw.label)}</div>`);
         }

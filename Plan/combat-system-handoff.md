@@ -138,7 +138,7 @@ Both are injected before the LLM writes resolution prose.
 | **Meets or beats DC** | Success. The player's intent plays out. | Draw colors HOW the success happens — the style, the flair, the collateral. |
 | **Below DC** | The situation transforms. The player's action happened but reality had its own opinion. | Draw determines the nature of the transformation. |
 | **Natural 20** | Critical success. Success that exceeds the player's intent. Something extra happens. | Draw amplifies — what bonus occurs, what unexpected advantage opens. |
-| **Natural 1** | Critical failure. The situation transforms dramatically against the player. | Draw determines the catastrophic development. |
+| **Natural 1** | Critical transform. The situation transforms dramatically against the player. | Draw determines the catastrophic development. |
 
 **The draw is always interpreted.** There are no unused draws. On clean success, the draw shapes the texture of the victory. On failure or crits, the draw drives the transformation.
 
@@ -148,7 +148,7 @@ When the draw's tone contradicts the roll outcome, **interpret the draw from the
 
 - The Sun (joy, vitality) on a nat 1 — the enemy finds their moment of triumph
 - The Tower (catastrophe) on a nat 20 — the enemy's position collapses
-- Peace on a critical failure — a false calm before something worse
+- Peace on a critical transform — a false calm before something worse
 - The Abysmal on a critical success — the PC drags the enemy down into the abyss
 
 One paragraph in the combat deduction template covers this. The rule: the draw describes the FULL scene — what everyone did, not just the player.
@@ -315,7 +315,7 @@ ROLLS THIS EXCHANGE:
   d20: {result}
   Draw: {card/hexagram name} — {brief traditional meaning}
   DC: {number, from difficulty toggle table}
-  Resolution: {SUCCESS / TRANSFORM / CRITICAL SUCCESS / CRITICAL FAILURE}
+Resolution: {SUCCESS / TRANSFORM / CRITICAL SUCCESS / CRITICAL TRANSFORM}
 
 DIRECTOR FRAMING:
 {Difficulty mode framing prompt — cinematic/gritty/heroic/survival}

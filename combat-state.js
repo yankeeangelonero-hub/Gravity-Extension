@@ -428,11 +428,13 @@ function buildRoll(drawFn) {
 
 function resolveRolledOutcome(d20, dc) {
     if (!Number.isFinite(d20) || !Number.isFinite(dc)) {
-        return { success: null, critical: null };
+        return { success: null, critical: null, resolution: null };
     }
-    if (d20 === 20) return { success: true, critical: 'success' };
-    if (d20 === 1) return { success: false, critical: 'failure' };
-    return { success: d20 >= dc, critical: null };
+    if (d20 === 20) return { success: true, critical: 'success', resolution: 'CRITICAL_SUCCESS' };
+    if (d20 === 1) return { success: false, critical: 'transform', resolution: 'CRITICAL_TRANSFORM' };
+    return d20 >= dc
+        ? { success: true, critical: null, resolution: 'SUCCESS' }
+        : { success: false, critical: null, resolution: 'TRANSFORM' };
 }
 
 function buildRollPayload(category, dcTable, drawFn) {
@@ -453,6 +455,7 @@ function buildRollPayload(category, dcTable, drawFn) {
         draw: base.draw,
         success: outcome.success,
         critical: outcome.critical,
+        resolution: outcome.resolution,
     };
 }
 
@@ -465,7 +468,8 @@ function buildChallengeRoll(drawFn) {
         dc: null,
         category: null,
         success: null,
-        critical: base.d20 === 20 ? 'success' : base.d20 === 1 ? 'failure' : null,
+        critical: base.d20 === 20 ? 'success' : base.d20 === 1 ? 'transform' : null,
+        resolution: 'PENDING_REASSESSMENT',
     };
 }
 
@@ -505,8 +509,11 @@ function formatRollSummary(roll) {
     const parts = [`d20 ${roll.d20}`];
     if (roll.dc != null) parts.push(`DC ${roll.dc}`);
     if (roll.category) parts.push(roll.category);
-    if (roll.success != null) parts.push(roll.success ? 'success' : 'failure');
-    if (roll.critical) parts.push(`critical ${roll.critical}`);
+    if (roll.resolution) parts.push(roll.resolution);
+    else if (roll.success != null) parts.push(roll.success ? 'SUCCESS' : 'TRANSFORM');
+    if (roll.critical && !String(roll.resolution || '').startsWith('CRITICAL_')) {
+        parts.push(`critical ${roll.critical}`);
+    }
     if (roll.challenge_pending) parts.push('awaiting reassessment');
     return parts.join(' | ');
 }
@@ -635,10 +642,11 @@ function buildCombatPrompt(state) {
             } else if (runtime.pending_roll) {
                 lines.push('Interpret the combat draw explicitly.');
                 lines.push('- On success: the draw colors how the success lands.');
-                lines.push('- On failure: the draw determines how the exchange transforms against the actor.');
+                lines.push('- On transform (below DC, non-critical): do not frame it as a dead miss or null turn. The attempted action still creates motion, but reality answers with exposure, cost, redirection, or a hard opportunity. The draw determines that transformation.');
                 lines.push('- On critical success: the draw amplifies the gain.');
-                lines.push('- On critical failure: the draw determines the catastrophe.');
+                lines.push('- On critical transform: the draw determines the catastrophic transformation.');
                 lines.push('- On tonal mismatch: interpret from the opposition’s perspective or as ironic contrast.');
+                lines.push('Low rolls are not ordinary "failure." They are the world forcing a new angle, trade, complication, or opening.');
                 lines.push('Record divination.last_draw in the update block for rolled exchanges.');
             }
             lines.push('If combat resolves, write status=RESOLVED plus outcome/aftermath and clean up the combat entity in the same turn if possible.');
@@ -804,6 +812,7 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
             const outcome = resolveRolledOutcome(next.pending_roll.d20, next.pending_roll.dc);
             next.pending_roll.success = outcome.success;
             next.pending_roll.critical = outcome.critical || next.pending_roll.critical || null;
+            next.pending_roll.resolution = outcome.resolution;
         }
 
         await setCombatRuntime(next);
