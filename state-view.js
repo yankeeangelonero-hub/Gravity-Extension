@@ -576,6 +576,7 @@ DISCIPLINE:
   Only write what changed materially.
   Keep doing as "action | Cost: what this neglects or risks".
   Keep knowledge_asymmetry current on KNOWN/TRACKED/PRINCIPAL characters when they are active or scene-relevant: what they know, what they do not know, what they are hiding, or what they are misreading right now.
+  If the protagonist also exists as char:<pc-id>, treat pc and char:<pc-id> as separate surfaces: pc carries immediate scene/body state, while char:<pc-id> carries the social/knowledge dossier. Updating pc.* does not update the mirrored char dossier.
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
   Use faction intel fields for remote awareness: comms_latency, last_verified_at, intel_posture, blindspots, intel_on, and false_beliefs.
   No provenance, no knowledge: distant factions and characters do not know live scene truth unless it plausibly reached them.

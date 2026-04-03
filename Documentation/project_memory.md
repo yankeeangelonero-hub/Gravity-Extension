@@ -86,6 +86,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Character dossiers now include `knowledge_asymmetry` for KNOWN / TRACKED / PRINCIPAL characters.
   - Use it as the active knowledge firewall: what a character knows, does not know, is hiding, or is misreading right now.
   - `state-view.js` now surfaces it in the prompt-facing character registry and documents `char:id.knowledge_asymmetry` in the quick reference.
+  - If the protagonist is mirrored as both `pc` and `char:<id>`, keep the mirrored `char:<id>` dossier current too. `pc.*` is the immediate body/scene surface; `char:<id>.*` is the social/knowledge dossier.
 - Lightweight information-propagation support is now in place:
   - important characters also carry `last_seen_at`
   - factions can carry `comms_latency`, `last_verified_at`, `intel_posture`, `blindspots`, `intel_on`, and `false_beliefs`
@@ -119,6 +120,11 @@ Durable working memory for Codex sessions in this repository. Update this file w
   - if the model prints plain numbered options like `3. Mark the Blitz (Average)` instead of valid clickable spans, the engine can now recover those as a fallback option table too
   - `challenge-state.js` will rehydrate a missing option table from the latest assistant message before resolving an option pick
   - this prevents assessed actions from getting stuck in `ASSESSMENT_ONLY` just because the prior options rendered but were not stored cleanly
+- `challenge-state.js` got one more cleanup pass:
+  - duplicated option-selection input record construction now lives in shared helpers
+  - repeated “clear pending state and return to awaiting_choice” transitions now use a shared helper
+  - repeated “store parsed options, persist runtime, then validate” flow now uses a shared helper
+  - behavior should be unchanged; this was a maintainability pass to reduce duplicated logic before adding another profile
 - The engine is modular enough for combat-adjacent profiles, but a future second profile should still be used to validate the abstraction before adding a more asymmetric context like intimacy.
 
 ## Documentation Layout
@@ -126,6 +132,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Active durable memory file: `Documentation/project_memory.md`
 - Archived memory and older planning docs: `Documentation/Old/`
 - Current combat behavior reference: `Documentation/combat_runtime_reference.md`
+- Knowledge asymmetry / faction intel handoff: `Documentation/knowledge_asymmetry_system_handoff.md`
 - Current challenge-engine implementation spec: `Plan/challenge-engine-implementation-spec.md`
 - Challenge-engine cleanliness review gate: `Plan/challenge-engine-implementation-spec.md` (`Cleanliness Checklist`)
 - Existing prose rollout handoff: `Documentation/v14_prose_architecture_handoff.md`
