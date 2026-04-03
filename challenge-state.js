@@ -340,6 +340,39 @@ function recoverOptionsFromLatestAssistant(runtime, profile) {
     return parsedOptions.length ? storeParsedOptions(runtime, parsedOptions) : runtime;
 }
 
+function buildUnresolvedOptionSelectionRecord(rawText, profile, optionText, optionIndex) {
+    return buildInputRecord(rawText, profile, {
+        parsed_source: 'UNRESOLVED_OPTION_SELECTION',
+        option_id: optionText?.id || null,
+        option_index: optionText?.index ?? optionIndex ?? null,
+        option_label: optionText?.label || '',
+        intent: optionText?.intent || '',
+        declared_category: optionText?.category || null,
+    });
+}
+
+function buildResolvedOptionSelectionRecord(rawText, profile, optionText, option) {
+    return buildInputRecord(rawText, profile, {
+        parsed_source: 'OPTION_SELECTION',
+        option_id: option.id || optionText?.id || null,
+        option_index: option.index,
+        option_label: option.label || option.intent || '',
+        intent: option.intent || '',
+        declared_category: option.category || null,
+    });
+}
+
+function buildAwaitingChoiceRuntime(runtime, updates = {}) {
+    return {
+        ...runtime,
+        phase: 'awaiting_choice',
+        pending_action: null,
+        pending_roll: null,
+        correction_attempts: 0,
+        ...updates,
+    };
+}
+
 function buildOptionAction(option, baselineCategory, profile, options = {}) {
     const baselineStep = categoryStepForProfile(baselineCategory, profile);
     const chosenStep = categoryStepForProfile(option.category, profile);
@@ -619,25 +652,11 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
             next = recoverOptionsFromLatestAssistant(next, profile);
             const option = resolveSelectedOption(next, optionText, optionIndex);
             if (!option) {
-                next.last_input = buildInputRecord(rawText, profile, {
-                    parsed_source: 'UNRESOLVED_OPTION_SELECTION',
-                    option_id: optionText?.id || null,
-                    option_index: optionText?.index ?? optionIndex ?? null,
-                    option_label: optionText?.label || '',
-                    intent: optionText?.intent || '',
-                    declared_category: optionText?.category || null,
-                });
+                next.last_input = buildUnresolvedOptionSelectionRecord(rawText, profile, optionText, optionIndex);
                 await setChallengeRuntime(next);
                 return { handled: false, deductionType: profile.deductionType };
             }
-            next.last_input = buildInputRecord(rawText, profile, {
-                parsed_source: 'OPTION_SELECTION',
-                option_id: option.id || optionText?.id || null,
-                option_index: option.index,
-                option_label: option.label || option.intent || '',
-                intent: option.intent || '',
-                declared_category: option.category || null,
-            });
+            next.last_input = buildResolvedOptionSelectionRecord(rawText, profile, optionText, option);
             const action = buildOptionAction(option, null, profile, { skipClamp: true });
             next.pending_action = { ...action, setup_buffered: true, baseline_category: null };
             next.phase = 'setup_buffered';
@@ -776,26 +795,12 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
         next = recoverOptionsFromLatestAssistant(next, profile);
         const option = resolveSelectedOption(next, optionText, optionIndex);
         if (!option) {
-            next.last_input = buildInputRecord(rawText, profile, {
-                parsed_source: 'UNRESOLVED_OPTION_SELECTION',
-                option_id: optionText?.id || null,
-                option_index: optionText?.index ?? optionIndex ?? null,
-                option_label: optionText?.label || '',
-                intent: optionText?.intent || '',
-                declared_category: optionText?.category || null,
-            });
+            next.last_input = buildUnresolvedOptionSelectionRecord(rawText, profile, optionText, optionIndex);
             await setChallengeRuntime(next);
             return { handled: false, deductionType: profile.deductionType };
         }
 
-        next.last_input = buildInputRecord(rawText, profile, {
-            parsed_source: 'OPTION_SELECTION',
-            option_id: option.id || optionText?.id || null,
-            option_index: option.index,
-            option_label: option.label || option.intent || '',
-            intent: option.intent || '',
-            declared_category: option.category || null,
-        });
+        next.last_input = buildResolvedOptionSelectionRecord(rawText, profile, optionText, option);
         const action = buildOptionAction(option, baseline.category, profile);
 
         if (profile.usesD20) {
@@ -906,6 +911,13 @@ async function maybeRunProfileValidation(profile, runtime, state, committedTxns)
     return null;
 }
 
+async function storeOptionsAndValidate(profile, runtime, options, state, committedTxns) {
+    const next = storeParsedOptions(runtime, options);
+    await setChallengeRuntime(next);
+    const correction = await maybeRunProfileValidation(profile, next, state, committedTxns);
+    return { runtime: next, correction };
+}
+
 function didDestroyChallengeThisTurn(runtime, committedTxns) {
     return (committedTxns || []).some(tx => tx.op === 'D' && tx.e === runtime.entity_type && tx.id === runtime.entity_id);
 }
@@ -990,7 +1002,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
                 return challengeCorrection('The buffered setup action had a fixed rolled result, but this turn did not consume it. Resolve that stored action now, use the injected threshold/d20/draw, record divination.last_draw, then offer next options if the challenge continues.', profile);
             }
 
-            const next = {
+            let next = {
                 ...runtime,
                 last_resolution: {
                     exchange: runtime.exchange,
@@ -1003,22 +1015,18 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
                 return transitionToCleanupGrace(next, profile, destroyed);
             }
 
-            next.phase = 'awaiting_choice';
-            next.exchange = Math.max((runtime.exchange || 1) + 1, coerceNumber(entity?.exchange) ?? 0);
-            next.scene_draw_active = false;
-            next.option_table_version = runtime.option_table_version || 0;
-            next.options = runtime.options || [];
-            next.pending_action = null;
-            next.pending_roll = null;
-            next.correction_attempts = 0;
-            const stored = storeParsedOptions(next, options);
-            await setChallengeRuntime(stored);
+            next = buildAwaitingChoiceRuntime(next, {
+                exchange: Math.max((runtime.exchange || 1) + 1, coerceNumber(entity?.exchange) ?? 0),
+                scene_draw_active: false,
+                option_table_version: runtime.option_table_version || 0,
+                options: runtime.options || [],
+            });
+            const { runtime: stored, correction } = await storeOptionsAndValidate(profile, next, options, state, committedTxns);
 
             if (!options.length) {
                 return challengeCorrection(`The buffered setup action resolved, but no next options were presented. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
             }
-            const validationCorrection = await maybeRunProfileValidation(profile, stored, state, committedTxns);
-            if (validationCorrection) return validationCorrection;
+            if (correction) return correction;
             return null;
         }
 
@@ -1028,18 +1036,11 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
                 await setChallengeRuntime(runtime);
                 return challengeCorrection(`Setup completed, but the buffered uncategorized action was not turned into options. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
             }
-            let next = {
-                ...runtime,
-                pending_action: null,
-                pending_roll: null,
-                phase: 'awaiting_choice',
+            const next = buildAwaitingChoiceRuntime(runtime, {
                 scene_draw_active: false,
-                correction_attempts: 0,
-            };
-            next = storeParsedOptions(next, options);
-            await setChallengeRuntime(next);
-            const validationCorrection = await maybeRunProfileValidation(profile, next, state, committedTxns);
-            if (validationCorrection) return validationCorrection;
+            });
+            const { correction } = await storeOptionsAndValidate(profile, next, options, state, committedTxns);
+            if (correction) return correction;
             return null;
         }
 
@@ -1048,18 +1049,11 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             return challengeCorrection(`Challenge is active but no options were presented. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
         }
 
-        let next = {
-            ...runtime,
-            pending_action: null,
-            pending_roll: null,
-            phase: 'awaiting_choice',
+        const next = buildAwaitingChoiceRuntime(runtime, {
             scene_draw_active: false,
-            correction_attempts: 0,
-        };
-        next = storeParsedOptions(next, options);
-        await setChallengeRuntime(next);
-        const validationCorrection = await maybeRunProfileValidation(profile, next, state, committedTxns);
-        if (validationCorrection) return validationCorrection;
+        });
+        const { correction } = await storeOptionsAndValidate(profile, next, options, state, committedTxns);
+        if (correction) return correction;
         return null;
     }
 
@@ -1069,16 +1063,11 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             await setChallengeRuntime(runtime);
             return challengeCorrection(`Challenge is active but the uncategorized action was not assessed into options. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
         }
-        let next = {
-            ...runtime,
-            pending_action: null,
-            pending_roll: null,
-            correction_attempts: 0,
-        };
-        next = storeParsedOptions(next, options);
-        await setChallengeRuntime(next);
-        const validationCorrection = await maybeRunProfileValidation(profile, next, state, committedTxns);
-        if (validationCorrection) return validationCorrection;
+        const next = buildAwaitingChoiceRuntime(runtime, {
+            phase: runtime.phase,
+        });
+        const { correction } = await storeOptionsAndValidate(profile, next, options, state, committedTxns);
+        if (correction) return correction;
         return null;
     }
 
@@ -1088,8 +1077,12 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             return challengeCorrection(`Challenge is active but no ${runtime.entity_type} entity exists. The extension auto-seeded it — check if it was destroyed.`, profile);
         }
         if (options.length) {
-            runtime = storeParsedOptions({ ...runtime, correction_attempts: 0 }, options);
-            await setChallengeRuntime(runtime);
+            const { runtime: stored, correction } = await storeOptionsAndValidate(profile, {
+                ...runtime,
+                correction_attempts: 0,
+            }, options, state, committedTxns);
+            runtime = stored;
+            if (correction) return correction;
         }
         const validationCorrection = await maybeRunProfileValidation(profile, runtime, state, committedTxns);
         if (validationCorrection) return validationCorrection;
@@ -1112,7 +1105,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             return challengeCorrection('A fixed rolled result is waiting, but this turn did not consume it. Resolve the stored action now, use the injected threshold/d20/draw, record divination.last_draw, then offer next options if the challenge continues.', profile);
         }
 
-        const next = {
+        let next = {
             ...runtime,
             last_resolution: {
                 exchange: runtime.exchange,
@@ -1126,18 +1119,15 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             return transitionToCleanupGrace(next, profile, destroyed);
         }
 
-        next.phase = 'awaiting_choice';
-        next.exchange = Math.max((runtime.exchange || 1) + 1, coerceNumber(entity?.exchange) ?? 0);
-        next.pending_action = null;
-        next.pending_roll = null;
-        const stored = storeParsedOptions(next, options);
-        await setChallengeRuntime(stored);
+        next = buildAwaitingChoiceRuntime(next, {
+            exchange: Math.max((runtime.exchange || 1) + 1, coerceNumber(entity?.exchange) ?? 0),
+        });
+        const { runtime: stored, correction } = await storeOptionsAndValidate(profile, next, options, state, committedTxns);
 
         if (!options.length) {
             return challengeCorrection(`Challenge is active but no options were presented. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
         }
-        const validationCorrection = await maybeRunProfileValidation(profile, stored, state, committedTxns);
-        if (validationCorrection) return validationCorrection;
+        if (correction) return correction;
         return null;
     }
 
