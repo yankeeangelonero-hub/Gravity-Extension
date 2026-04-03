@@ -1103,9 +1103,9 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
     // ─── Setup phase ──────────────────────────────────────────────────
     if (runtime.phase === 'setup') {
         if (!entity) {
-            // Auto-seeded entity should exist. If model destroyed it, flag it.
+            // Preserve any options the model output this turn before correcting
             if (options.length) {
-                await setChallengeRuntime({ ...runtime, options });
+                runtime.options = options;
             }
             runtime.correction_attempts = (runtime.correction_attempts || 0) + 1;
             if (runtime.correction_attempts >= 3) {

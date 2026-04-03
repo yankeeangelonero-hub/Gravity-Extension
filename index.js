@@ -1396,8 +1396,18 @@ async function onUserMessage(messageId) {
             updatePanel(_currentState, _turnCounter);
             return;
         }
-        if (challengeLocked || challengePrefix) {
-            _pendingDeductionType = getActiveChallengeDeductionType() || challengePrefix?.deductionType || 'combat';
+        if (challengeLocked) {
+            // Input could not be parsed (e.g. bare number with no stored options).
+            // Record the failed input so the prompt doesn't show stale data,
+            // and inject a correction requesting fresh options.
+            _pendingDeductionType = getActiveChallengeDeductionType() || 'combat';
+            _pendingReinforcement = `[CHALLENGE RUNTIME]\nThe player sent "${rawText.slice(0, 80)}" but the extension could not resolve it to a stored option or recognized command. Output ${getActiveProfile()?.optionCount?.[0] || 3}-${getActiveProfile()?.optionCount?.[1] || 4} clickable options using the exact HTML format so the player can choose.`;
+            injectPrompt('advance');
+            updatePanel(_currentState, _turnCounter);
+            return;
+        }
+        if (challengePrefix) {
+            _pendingDeductionType = challengePrefix.deductionType || 'combat';
             injectPrompt('advance');
             updatePanel(_currentState, _turnCounter);
             return;
