@@ -19,17 +19,18 @@ import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startS
 import { checkAndRotate, buildConsolidationPrompt } from './memory-tier.js';
 import { getStateMachineField } from './state-machine.js';
 import {
-    buildCombatPrompt,
-    clearCombatRuntime,
-    getCombatBaseline,
-    isCombatLocked,
-    getCombatRuntime,
-    handleCombatActionSelection,
-    isCombatReasonModeActive,
-    isCombatRuntimeActive,
-    processCombatAssistantTurn,
-    startCombatSetupRuntime,
-} from './combat-state.js';
+    buildChallengePrompt,
+    clearChallengeRuntime,
+    getChallengeRuntime,
+    handleChallengeActionSelection,
+    isChallengeRuntimeActive,
+    isChallengeSessionLocked,
+    getActiveProfile,
+    getActiveChallengeDeductionType,
+    processChallengeAssistantTurn,
+    startChallengeRuntime,
+} from './challenge-state.js';
+import { detectChallengePrefix } from './challenge-profiles.js';
 
 const MODULE_NAME = 'gravity-ledger';
 const LOG_PREFIX = '[GravityLedger]';
@@ -699,10 +700,11 @@ function injectPrompt(mode) {
     const isRegular = activeMode === 'regular';
     const isAdvance = activeMode === 'advance';
     const isIntegration = activeMode === 'integration';
-    const combatRuntimeActive = isCombatRuntimeActive();
-    const combatReasonActive = isCombatReasonModeActive();
-    const combatRuntime = getCombatRuntime();
-    if (combatRuntime?.phase === 'cleanup_grace') {
+    const challengeRuntimeActive = isChallengeRuntimeActive();
+    const challengeSessionLocked = isChallengeSessionLocked();
+    const challengeRuntime = getChallengeRuntime();
+    const activeProfile = getActiveProfile();
+    if (challengeRuntime?.phase === 'cleanup_grace') {
         _uncappedTurn = true;
     }
 
@@ -711,14 +713,14 @@ function injectPrompt(mode) {
         if (_pendingDeductionType) {
             nextReasonMode = _pendingDeductionType;
             _pendingDeductionType = null;
-        } else if (combatReasonActive) {
-            nextReasonMode = 'combat';
+        } else if (challengeSessionLocked && activeProfile) {
+            nextReasonMode = activeProfile.deductionType || activeProfile.kind;
         }
         _currentReasonMode = nextReasonMode;
 
-        // State view — slim on regular turns, full on advance/integration or active combat
+        // State view — slim on regular turns, full on advance/integration or active challenge
         if (_currentState) {
-            const stateView = formatStateView(_currentState, isRegular && !combatRuntimeActive ? 'slim' : 'full');
+            const stateView = formatStateView(_currentState, isRegular && !challengeRuntimeActive ? 'slim' : 'full');
             setExtensionPrompt(`${MODULE_NAME}_state`, stateView, PROMPT_IN_CHAT, 0);
         }
 
@@ -742,21 +744,23 @@ function injectPrompt(mode) {
             _pendingOOCInjection = null;
         }
 
-        const combatPromptBody = _currentState ? buildCombatPrompt(_currentState) : '';
-        if (combatPromptBody) {
+        const challengePromptBody = _currentState ? buildChallengePrompt(_currentState) : '';
+        if (challengePromptBody && activeProfile) {
             setExtensionPrompt(
-                `${MODULE_NAME}_combat`,
+                `${MODULE_NAME}_challenge`,
                 buildModeInjection(
-                    'GRAVITY COMBAT',
-                    combatPromptBody,
-                    [MODE_LOREBOOK_KEYS.combatCore, MODE_LOREBOOK_KEYS.combatOptional, MODE_LOREBOOK_KEYS.proseCombat],
+                    `GRAVITY CHALLENGE — Active ${activeProfile.displayName} Session`,
+                    challengePromptBody,
+                    Object.values(activeProfile.lorebookKeys).filter(Boolean),
                 ),
                 PROMPT_IN_CHAT,
                 0,
             );
         } else {
-            setExtensionPrompt(`${MODULE_NAME}_combat`, '', PROMPT_NONE, 0);
+            setExtensionPrompt(`${MODULE_NAME}_challenge`, '', PROMPT_NONE, 0);
         }
+        // Clear legacy combat slot if it was previously set
+        setExtensionPrompt(`${MODULE_NAME}_combat`, '', PROMPT_NONE, 0);
 
         // Corrections + reinforcement
         let injection = '';
@@ -799,7 +803,7 @@ function injectPrompt(mode) {
         }
 
         // Faction heartbeat — every 10 turns on regular turns only (advance/integration handle factions directly)
-        if (isRegular && !combatReasonActive && _turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
+        if (isRegular && !challengeSessionLocked && _turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
             const factions = Object.values(_currentState.factions || {});
             if (factions.length > 0) {
                 const factionDetails = factions.map(f => {
@@ -820,7 +824,7 @@ function injectPrompt(mode) {
 
         // Dormant character check — every 15 turns on regular turns only
         const DORMANT_THRESHOLD = 20; // transactions since last activity
-        if (isRegular && !combatReasonActive && _turnCounter > 0 && _turnCounter % 15 === 0 && _currentState) {
+        if (isRegular && !challengeSessionLocked && _turnCounter > 0 && _turnCounter % 15 === 0 && _currentState) {
             const allTx = getAllTransactions();
             const totalTx = allTx.length;
             const dormant = [];
@@ -1095,7 +1099,7 @@ You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memor
 
         // Fire regular prose trigger on regular turns only
         // (combat/intimacy/advance fire their own prose triggers via _ooc)
-        if (isRegular && !combatReasonActive) {
+        if (isRegular && !challengeSessionLocked) {
             nudgeText += `\n\n[WORLD INFO TRIGGERS - DO NOT ECHO:\n${MODE_LOREBOOK_KEYS.proseRegular}\n]`;
         }
 
@@ -1208,7 +1212,7 @@ async function onMessageReceived(messageId) {
 
     const message = context.chat?.[messageId];
     if (!message?.mes) return;
-    let combatPrompt = null;
+    let challengeCorrection = null;
 
     _turnCounter++;
 
@@ -1223,11 +1227,11 @@ async function onMessageReceived(messageId) {
     // No block found
     if (!extraction.found) {
         _pendingReinforcement = getReinforcement(extraction, _turnCounter);
-        combatPrompt = await processCombatAssistantTurn(_currentState, [], message.mes);
-        if (combatPrompt) {
+        challengeCorrection = await processChallengeAssistantTurn(_currentState, [], message.mes);
+        if (challengeCorrection) {
             _pendingReinforcement = _pendingReinforcement
-                ? `${_pendingReinforcement}\n${combatPrompt}`
-                : combatPrompt;
+                ? `${_pendingReinforcement}\n${challengeCorrection}`
+                : challengeCorrection;
         }
         injectPrompt();
         updatePanel(_currentState, _turnCounter);
@@ -1246,11 +1250,11 @@ async function onMessageReceived(messageId) {
     // No transactions at all (empty block or all lines failed)
     if (extractedTransactions.length === 0 && extractionErrors.length === 0) {
         _pendingReinforcement = getReinforcement(extraction, _turnCounter);
-        combatPrompt = await processCombatAssistantTurn(_currentState, [], message.mes);
-        if (combatPrompt) {
+        challengeCorrection = await processChallengeAssistantTurn(_currentState, [], message.mes);
+        if (challengeCorrection) {
             _pendingReinforcement = _pendingReinforcement
-                ? `${_pendingReinforcement}\n${combatPrompt}`
-                : combatPrompt;
+                ? `${_pendingReinforcement}\n${challengeCorrection}`
+                : challengeCorrection;
         }
         injectPrompt();
         updatePanel(_currentState, _turnCounter);
@@ -1362,11 +1366,11 @@ async function onMessageReceived(messageId) {
         })));
     }
 
-    combatPrompt = await processCombatAssistantTurn(_currentState, committedTxns, message.mes);
-    if (combatPrompt) {
+    challengeCorrection = await processChallengeAssistantTurn(_currentState, committedTxns, message.mes);
+    if (challengeCorrection) {
         _pendingReinforcement = _pendingReinforcement
-            ? `${_pendingReinforcement}\n${combatPrompt}`
-            : combatPrompt;
+            ? `${_pendingReinforcement}\n${challengeCorrection}`
+            : challengeCorrection;
     }
 
     injectPrompt();
@@ -1381,19 +1385,19 @@ async function onUserMessage(messageId) {
     if (!message?.mes) return;
 
     const rawText = message.mes.replace(/<[^>]+>/g, '').trim();
-    const combatLocked = isCombatLocked();
-    const explicitCombatCommand = /^\*?combat:/i.test(String(rawText || ''));
-    if ((combatLocked || explicitCombatCommand) && !/^ooc:/i.test(rawText)) {
-        const combatResult = await handleCombatActionSelection(rawText, _currentState, drawDivination);
-        if (combatResult.handled) {
-            _pendingDeductionType = 'combat';
+    const challengeLocked = isChallengeSessionLocked();
+    const challengePrefix = detectChallengePrefix(rawText);
+    if ((challengeLocked || challengePrefix) && !/^ooc:/i.test(rawText)) {
+        const challengeResult = await handleChallengeActionSelection(rawText, _currentState, drawDivination);
+        if (challengeResult.handled) {
+            _pendingDeductionType = challengeResult.kind || getActiveChallengeDeductionType() || 'combat';
             _pendingReinforcement = null;
             injectPrompt('advance');
             updatePanel(_currentState, _turnCounter);
             return;
         }
-        if (combatLocked || explicitCombatCommand) {
-            _pendingDeductionType = 'combat';
+        if (challengeLocked || challengePrefix) {
+            _pendingDeductionType = getActiveChallengeDeductionType() || challengePrefix?.deductionType || 'combat';
             injectPrompt('advance');
             updatePanel(_currentState, _turnCounter);
             return;
@@ -1401,7 +1405,8 @@ async function onUserMessage(messageId) {
     }
 
     // Detect intimacy action from st-clickable-actions (data-value starts with "intimate:")
-    if (rawText.startsWith('intimate:') || rawText.startsWith('*intimate:')) {
+    // This handles intimacy continuation when no challenge runtime is active
+    if (!challengeLocked && (rawText.startsWith('intimate:') || rawText.startsWith('*intimate:'))) {
         _pendingDeductionType = 'intimacy';
         _pendingOOCInjection = buildModeInjection(
             'GRAVITY INTIMACY - continuing intimate scene',
@@ -1542,8 +1547,8 @@ function handleAdvanceButton() {
 }
 
 async function handleCombatButton() {
-    if (!isCombatLocked()) {
-        await startCombatSetupRuntime(drawDivination());
+    if (!isChallengeSessionLocked()) {
+        await startChallengeRuntime('combat', drawDivination());
         _pendingDeductionType = 'combat';
         injectPrompt('advance');
         updatePanel(_currentState, _turnCounter);
@@ -1720,7 +1725,7 @@ async function handleRevertTurn(txIds) {
         }
 
         // Reinitialize to recompute state
-        await clearCombatRuntime();
+        await clearChallengeRuntime();
         resetLedger();
         await initialize(true);
         toastr.success(`Reverted ${txIds.length} transactions.`);
@@ -1751,6 +1756,9 @@ async function handleNewLedger() {
     delete chatMetadata['gravity_cold_watermarks'];
     delete chatMetadata['gravity_exemplars'];
     delete chatMetadata['gravity_combat_runtime'];
+    delete chatMetadata['gravity_combat_settings'];
+    delete chatMetadata['gravity_challenge_runtime'];
+    delete chatMetadata['gravity_challenge_settings'];
     await saveMetadata();
     resetLedger();
     _pendingCorrections = [];
@@ -1770,6 +1778,9 @@ async function handleImportData(data) {
     delete chatMetadata['gravity_cold'];
     delete chatMetadata['gravity_cold_watermarks'];
     delete chatMetadata['gravity_combat_runtime'];
+    delete chatMetadata['gravity_combat_settings'];
+    delete chatMetadata['gravity_challenge_runtime'];
+    delete chatMetadata['gravity_challenge_settings'];
     await importData(data);
     _pendingCorrections = [];
     _pendingReinforcement = null;
