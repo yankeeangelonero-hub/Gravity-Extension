@@ -567,6 +567,12 @@ function parseOptionIndexText(value) {
     return Number(match[1]);
 }
 
+function parseBareIndexText(value) {
+    const match = normalizeText(value).match(/^\*?(\d+)\*?$/);
+    if (!match) return null;
+    return Number(match[1]);
+}
+
 function parseCombatIndexText(value) {
     const body = getCombatCommandBody(value);
     if (body == null || !body) return null;
@@ -921,7 +927,7 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
     const dcTable = buildDcTable(getCombatSettings());
     const next = clone(runtime);
     const optionText = parseCombatOptionValue(rawText);
-    const optionIndex = optionText?.index ?? parseCombatIndexText(rawText) ?? parseOptionIndexText(rawText);
+    const optionIndex = optionText?.index ?? parseCombatIndexText(rawText) ?? parseOptionIndexText(rawText) ?? parseBareIndexText(rawText);
     const explicitCustom = parseCombatCustomText(rawText);
 
     if (next.phase === 'setup') {
@@ -1142,6 +1148,12 @@ async function processCombatAssistantTurn(state, committedTxns, messageText) {
 
     if (runtime.phase === 'setup') {
         if (!combat) {
+            if (options.length) {
+                await setCombatRuntime({
+                    ...runtime,
+                    options,
+                });
+            }
             return combatCorrection(runtime.pending_action?.setup_buffered
                 ? 'Combat setup is incomplete and a player action is waiting. Create `combat:*` now, then resolve the buffered action instead of restarting setup.'
                 : 'Combat is active but no combat entity was created. Create `combat:*` now before continuing.');
