@@ -73,6 +73,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 
 - Active durable memory file: `Documentation/project_memory.md`
 - Archived memory and older planning docs: `Documentation/Old/`
+- Current combat behavior reference: `Documentation/combat_runtime_reference.md`
 - Existing prose rollout handoff: `Documentation/v14_prose_architecture_handoff.md`
 - Current reasoning-flow reference: `Documentation/deduction_cot_architecture.md`
 - `Documentation/gravity_character_card_template.md` now includes optional prewrite prompts plus a holistic card/scenario/lorebook split. Keep the card focused on dramatic behavior, the scenario focused on current relationship and structural tension, and the lorebook focused on reference/canon overflow rather than turning the card into a wiki page.

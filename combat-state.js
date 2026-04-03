@@ -67,7 +67,13 @@ function normalizeMode(mode) {
 }
 
 function normalizeCategory(value) {
-    const text = normalizeText(value).toLowerCase();
+    const text = normalizeText(value)
+        .toLowerCase()
+        .replace(/[()[\]:.,!?]/g, ' ')
+        .replace(/\bdifficulty\b/g, ' ')
+        .replace(/\bdc\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
     if (!text) return null;
     if (text === 'absolute' || text === 'auto success' || text === 'auto-success') return 'Absolute';
     if (text === 'highly likely' || text === 'likely') return 'Highly likely';
@@ -429,7 +435,9 @@ function parseCombatCustomText(value) {
 
     const body = getCombatCommandBody(value);
     if (body == null || !body) return null;
-    const match = body.match(/^(.+?)\s+dc\s+(.+?)$/i);
+    const match = body.match(/^(.+?)\s+dc(?:\s*[:=-])?\s+(.+?)$/i)
+        || body.match(/^(.+?)\s*\|\s*(.+?)$/i)
+        || body.match(/^(.+?)\s+\((.+?)\)\s*$/i);
     if (!match) return null;
     const category = normalizeCategory(match[2]);
     if (!category) return null;
@@ -669,6 +677,8 @@ function buildCombatPrompt(state) {
                     lines.push('Use the spawn draw to clarify the encounter frame and why those options land at their categories, not to inject a separate surprise event.');
                 } else {
                     lines.push('A pending action and pending roll payload are already stored. Use them. Do not reinterpret the spawn draw as the resolution roll.');
+                    lines.push('Do not downgrade this buffered declared action into a fresh assessment step or a replacement option set first. Resolve the stored action now using the injected category, threshold, d20, and draw.');
+                    lines.push('If this buffered action was rolled, record divination.last_draw in the update block this same turn.');
                     lines.push('End with the next 3-4 clickable options if combat continues.');
                 }
             } else {
@@ -968,6 +978,14 @@ function didDestroyCombatThisTurn(runtime, committedTxns) {
     return (committedTxns || []).some(tx => tx.op === 'D' && tx.e === 'combat' && tx.id === runtime.combat_id);
 }
 
+function didRecordDivinationLastDrawThisTurn(committedTxns) {
+    return (committedTxns || []).some(tx => {
+        if (tx.e !== 'divination') return false;
+        const field = String(tx.d?.f || tx.d?.field || '').toLowerCase();
+        return field === 'last_draw';
+    });
+}
+
 function combatCorrection(message) {
     return `[COMBAT RUNTIME]\n${message}`;
 }
@@ -985,6 +1003,7 @@ async function processCombatAssistantTurn(state, committedTxns, messageText) {
     const options = parseCombatOptionsFromMessage(messageText);
     const destroyed = didDestroyCombatThisTurn(runtime, committedTxns);
     const resolved = didResolveCombatThisTurn(runtime, state, committedTxns);
+    const recordedLastDraw = didRecordDivinationLastDrawThisTurn(committedTxns);
     const combat = getCombatEntity(state, runtime);
 
     if (runtime.phase === 'cleanup_grace') {
@@ -1005,6 +1024,10 @@ async function processCombatAssistantTurn(state, committedTxns, messageText) {
         }
 
         if (runtime.pending_action?.setup_buffered && runtime.pending_roll) {
+            if (!runtime.pending_roll.skip && !recordedLastDraw && !resolved) {
+                return combatCorrection('The buffered setup action had a fixed rolled result, but this turn did not consume it. Resolve that stored action now, use the injected threshold/d20/draw, record divination.last_draw, then offer next options if combat continues.');
+            }
+
             const next = {
                 ...runtime,
                 last_resolution: {
@@ -1098,6 +1121,10 @@ async function processCombatAssistantTurn(state, committedTxns, messageText) {
     }
 
     if (runtime.phase === 'awaiting_resolution') {
+        if (!runtime.pending_roll?.skip && !recordedLastDraw && !resolved) {
+            return combatCorrection('Combat has a fixed rolled result waiting, but this turn did not consume it. Resolve the stored action now, use the injected threshold/d20/draw, record divination.last_draw, then offer next options if combat continues.');
+        }
+
         const next = {
             ...runtime,
             last_resolution: {
