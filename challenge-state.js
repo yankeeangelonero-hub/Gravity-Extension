@@ -125,6 +125,39 @@ function normalizeCategoryForProfile(value, profile) {
     return null;
 }
 
+function extractCategoryFromText(value, profile) {
+    const exact = normalizeCategoryForProfile(value, profile);
+    if (exact) return exact;
+
+    const text = normalizeText(value).toLowerCase();
+    if (!text || !profile) return null;
+
+    const candidates = [];
+    for (const category of profile.categories || []) {
+        candidates.push({ resolved: category, phrase: category });
+    }
+
+    if (profile.kind === 'combat') {
+        candidates.push({ resolved: 'Highly likely', phrase: 'likely' });
+        candidates.push({ resolved: 'Highly unlikely', phrase: 'unlikely' });
+        candidates.push({ resolved: 'Average', phrase: 'standard' });
+        candidates.push({ resolved: 'Average', phrase: 'even' });
+        candidates.push({ resolved: 'Absolute', phrase: 'auto success' });
+        candidates.push({ resolved: 'Absolute', phrase: 'auto-success' });
+        candidates.push({ resolved: 'Impossible', phrase: 'auto fail' });
+        candidates.push({ resolved: 'Impossible', phrase: 'auto-fail' });
+    }
+
+    candidates.sort((a, b) => b.phrase.length - a.phrase.length);
+    for (const candidate of candidates) {
+        const escaped = candidate.phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+        const pattern = new RegExp(`(^|\\b)${escaped}(\\b|$)`, 'i');
+        if (pattern.test(text)) return candidate.resolved;
+    }
+
+    return null;
+}
+
 function categoryStepForProfile(category, profile) {
     if (!category || !profile) return null;
     const normalized = normalizeCategoryForProfile(category, profile);
@@ -474,7 +507,7 @@ function parseChallengeCustomText(rawText, profile, options = {}) {
         || body.match(/^(.+?)\s*,\s*(.+?)$/i)
         || body.match(/^(.+?)\s+\((.+?)\)\s*$/i);
     if (!match) return null;
-    const category = normalizeCategoryForProfile(match[2], profile);
+    const category = extractCategoryFromText(match[2], profile);
     if (!category) return null;
     return { category, intent: normalizeText(match[1]) };
 }
