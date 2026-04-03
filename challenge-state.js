@@ -513,13 +513,13 @@ function parseChallengeCustomText(rawText, profile, options = {}) {
 }
 
 function parseOptionIndexText(value) {
-    const match = normalizeText(value).match(/^\*?option\s+(\d+)\*?$/i);
+    const match = normalizeText(value).match(/^\*?option\s+(\d+)(?:[.)])?\*?$/i);
     if (!match) return null;
     return Number(match[1]);
 }
 
 function parseBareIndexText(value) {
-    const match = normalizeText(value).match(/^\*?(\d+)\*?$/);
+    const match = normalizeText(value).match(/^\*?(\d+)(?:[.)])?\*?$/);
     if (!match) return null;
     return Number(match[1]);
 }
@@ -527,7 +527,7 @@ function parseBareIndexText(value) {
 function parseChallengeIndexText(rawText, profile) {
     const body = getChallengeCommandBody(rawText, profile);
     if (body == null || !body) return null;
-    const match = body.match(/^(\d+)$/);
+    const match = body.match(/^(\d+)(?:[.)])?$/);
     if (!match) return null;
     return Number(match[1]);
 }
