@@ -776,14 +776,27 @@ All 6 items completed:
 
 ### What was implemented from Phase 2
 
-5 of 7 items completed:
+5 of 7 items completed. Phase 2 is **not fully complete** — the two deferred
+items are required before this phase can be marked done.
+
 1. Combat runtime logic moved into the engine ✓
 2. Auto-seed `combat:*` via system `CR` transaction through `append()` ✓
    - Transaction tagged with `r: 'system:challenge-engine:auto-seed'`
    - `MUST_CREATE_ENTITY` is now always `false`; replaced by `MUST_FILL_ENTITY_FIELDS`
-3. Stable option ids — **deferred** (current index-based options preserved)
-4. Setup phase split into `setup_opening`/`setup_buffered` — **deferred**
-   (current single `setup` phase with `pending_action.setup_buffered` flag preserved)
+3. Stable option ids — **not yet implemented**. The spec requires
+   `opt-e{exchange}-v{option_table_version}-n{index}` format (line 367).
+   Without this, option resolution still depends on the model consistently
+   numbering options, which the spec identified as a reliability risk (line 96).
+   Must be completed before Phase 2 is closed.
+4. Setup phase split into `setup_opening`/`setup_buffered` — **not yet
+   implemented**. The spec defines these as distinct phases with different
+   mechanics (lines 262-317), including explicit rules for when roll generation
+   should be deferred during `setup_buffered`. The current implementation uses
+   a single `setup` phase with `pending_action.setup_buffered` as a flag,
+   which conflates the two. This is a reliability gap: the engine cannot
+   distinguish "model has not established opening yet" from "model established
+   opening but player input arrived" without the phase split. Must be completed
+   before Phase 2 is closed.
 5. `CHALLENGE_*` packets emitted with `KIND: combat` ✓
 6. Scene draw expires after setup via `scene_draw_active` flag ✓
 7. Post-turn validation tightened with `correction_attempts` counter ✓
@@ -801,15 +814,17 @@ All 6 items completed:
 3. Settings namespaced to `gravity_challenge_settings.combat` ✓
    - Legacy `gravity_combat_settings` read as fallback
 4. Deduction type routing from `profile.deductionType` ✓
-   - `_pendingDeductionType` set from `challengeResult.kind`
+   - Engine returns `profile.deductionType` in the result object
+   - `_pendingDeductionType` set from `challengeResult.deductionType`
    - Sticky latch uses `activeProfile.deductionType` instead of hardcoded `'combat'`
+   - `getActiveChallengeDeductionType()` derives from the active profile
 
 ### Decisions that deviated from this spec
 
-1. **`scene_draw_active` instead of `scene_draw_expired`**: The spec recommended
-   `scene_draw_expired`. The implementation uses `scene_draw_active` (true during
-   setup, false after) because positive flags are less error-prone than negated
-   ones. The behavior is identical.
+1. **`scene_draw_active`**: The implementation uses `scene_draw_active` as the
+   spec defines at line 211. This is not a deviation — it follows the spec's
+   canonical naming. The architecture doc used the older `scene_draw_expired`
+   name which this spec supersedes.
 
 2. **No entity type registration**: The spec's Phase 1 mentioned keeping `combat:*`.
    No changes were made to `consistency.js`, `state-compute.js`, or
@@ -840,12 +855,18 @@ All 6 items completed:
    - Replace with `startChallengeRuntime('intimacy', drawDivination())`
 4. Extract shared utilities to `challenge-utils.js`
 
-### What remains deferred
+### What must be completed before Phase 2 is closed
 
-- Stable option IDs (`opt-e{exchange}-v{version}-n{index}`)
-- Setup phase split into `setup_opening` / `setup_buffered`
-- Entity type unification (`challenge:*` replacing `combat:*`)
-- Removing the `combat-state.js` facade (after ui-panel.js migrated)
+- Stable option IDs (`opt-e{exchange}-v{option_table_version}-n{index}`) with
+  `option_table_version` increment on each new table (spec lines 355-375)
+- Setup phase split into `setup_opening` / `setup_buffered` with distinct
+  mechanics for roll deferral and buffered-action assessment (spec lines 262-317)
+
+### What remains deferred to later phases
+
+- Entity type unification (`challenge:*` replacing `combat:*`) — Phase 5
+- Removing the `combat-state.js` facade — after ui-panel.js migrated
+- Intimacy profile — Phase 4
 
 ## Non-Goals
 

@@ -1390,7 +1390,7 @@ async function onUserMessage(messageId) {
     if ((challengeLocked || challengePrefix) && !/^ooc:/i.test(rawText)) {
         const challengeResult = await handleChallengeActionSelection(rawText, _currentState, drawDivination);
         if (challengeResult.handled) {
-            _pendingDeductionType = challengeResult.kind || getActiveChallengeDeductionType() || 'combat';
+            _pendingDeductionType = challengeResult.deductionType || getActiveChallengeDeductionType() || 'combat';
             _pendingReinforcement = null;
             injectPrompt('advance');
             updatePanel(_currentState, _turnCounter);

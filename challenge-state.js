@@ -826,7 +826,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
                 parsed_source: 'ENTER_CHALLENGE',
             });
             await setChallengeRuntime(next);
-            return { handled: true, inject: true, kind: profile.kind };
+            return { handled: true, inject: true, deductionType: profile.deductionType };
         }
 
         if (optionText || optionIndex != null) {
@@ -849,7 +849,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
                 };
             }
             await setChallengeRuntime(next);
-            return { handled: true, inject: true, kind: profile.kind };
+            return { handled: true, inject: true, deductionType: profile.deductionType };
         }
 
         if (explicitCustom) {
@@ -868,7 +868,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
                 };
             }
             await setChallengeRuntime(next);
-            return { handled: true, inject: true, kind: profile.kind };
+            return { handled: true, inject: true, deductionType: profile.deductionType };
         }
 
         const setupText = commandBody != null ? commandBody : normalizeText(rawText);
@@ -894,7 +894,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
         };
         next.pending_roll = null;
         await setChallengeRuntime(next);
-        return { handled: true, inject: true, kind: profile.kind };
+        return { handled: true, inject: true, deductionType: profile.deductionType };
     }
 
     // ─── Awaiting reassessment ────────────────────────────────────────
@@ -906,7 +906,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
                 intent: commandBody != null ? commandBody : normalizeText(rawText),
             });
             await setChallengeRuntime(next);
-            return { handled: true, inject: true, kind: profile.kind };
+            return { handled: true, inject: true, deductionType: profile.deductionType };
         }
 
         next.last_input = explicitCustom
@@ -951,7 +951,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
         }
 
         await setChallengeRuntime(next);
-        return { handled: true, inject: true, kind: profile.kind };
+        return { handled: true, inject: true, deductionType: profile.deductionType };
     }
 
     // ─── Not awaiting_choice → bail ───────────────────────────────────
@@ -965,7 +965,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
             parsed_source: 'REENTER_CHALLENGE',
         });
         await setChallengeRuntime(next);
-        return { handled: true, inject: true, kind: profile.kind };
+        return { handled: true, inject: true, deductionType: profile.deductionType };
     }
 
     if (optionIndex != null) {
@@ -992,7 +992,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
         }
         next.phase = 'awaiting_resolution';
         await setChallengeRuntime(next);
-        return { handled: true, inject: true, kind: profile.kind };
+        return { handled: true, inject: true, deductionType: profile.deductionType };
     }
 
     if (explicitCustom) {
@@ -1018,7 +1018,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
         }
 
         await setChallengeRuntime(next);
-        return { handled: true, inject: true, kind: profile.kind };
+        return { handled: true, inject: true, deductionType: profile.deductionType };
     }
 
     const text = commandBody != null ? commandBody : normalizeText(rawText);
@@ -1044,7 +1044,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
     next.pending_roll = null;
     next.phase = 'awaiting_choice';
     await setChallengeRuntime(next);
-    return { handled: true, inject: true, kind: profile.kind };
+    return { handled: true, inject: true, deductionType: profile.deductionType };
 }
 
 // ─── Post-Turn Processing ─────────────────────────────────────────────────────
