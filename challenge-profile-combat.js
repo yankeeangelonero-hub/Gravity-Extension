@@ -6,29 +6,9 @@
  * The generic engine delegates to these hooks at every domain-specific decision point.
  */
 
+import { coerceNumber, normalizeText, toList } from './challenge-shared.js';
+
 // ─── Private Helpers ──────────────────────────────────────────────────────────
-
-function coerceNumber(value) {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-    if (typeof value !== 'string') return null;
-    const match = value.match(/-?\d+(?:\.\d+)?/);
-    if (!match) return null;
-    const parsed = Number(match[0]);
-    return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeText(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim();
-}
-
-function toList(value) {
-    if (!value) return [];
-    if (Array.isArray(value)) return value.filter(Boolean);
-    return String(value)
-        .split(',')
-        .map(part => normalizeText(part))
-        .filter(Boolean);
-}
 
 function resolveStateCharacter(state, ref) {
     if (!state || !ref) return null;
@@ -181,6 +161,16 @@ const combatProfile = Object.freeze({
     entityType: 'combat',
 
     categories: ['Impossible', 'Highly unlikely', 'Average', 'Highly likely', 'Absolute'],
+    categoryAliases: Object.freeze([
+        Object.freeze({ phrase: 'likely', category: 'Highly likely' }),
+        Object.freeze({ phrase: 'unlikely', category: 'Highly unlikely' }),
+        Object.freeze({ phrase: 'standard', category: 'Average' }),
+        Object.freeze({ phrase: 'even', category: 'Average' }),
+        Object.freeze({ phrase: 'auto success', category: 'Absolute' }),
+        Object.freeze({ phrase: 'auto-success', category: 'Absolute' }),
+        Object.freeze({ phrase: 'auto fail', category: 'Impossible' }),
+        Object.freeze({ phrase: 'auto-fail', category: 'Impossible' }),
+    ]),
     autoSuccess: 'Absolute',
     autoFail: 'Impossible',
 
@@ -446,7 +436,29 @@ const combatProfile = Object.freeze({
     },
 
     validateTurn(runtime, state, committedTxns) {
-        return null;
+        const entity = state?.combats?.[runtime?.entity_id];
+        if (!entity) return null;
+
+        const postSetup = runtime?.phase === 'awaiting_choice'
+            || runtime?.phase === 'awaiting_resolution'
+            || runtime?.phase === 'awaiting_reassessment'
+            || runtime?.phase === 'cleanup_grace';
+
+        if (!postSetup) return null;
+
+        const missing = [];
+        if (!entity.hostiles || (Array.isArray(entity.hostiles) && entity.hostiles.length === 0)) {
+            missing.push('hostiles');
+        }
+        if (!entity.primary_enemy) {
+            missing.push('primary_enemy');
+        }
+        if (!entity.situation) {
+            missing.push('situation');
+        }
+
+        if (!missing.length) return null;
+        return `Combat is active but the combat container is missing required field${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}. Update combat:${runtime.entity_id} before continuing.`;
     },
 
     initProfileState(state) {

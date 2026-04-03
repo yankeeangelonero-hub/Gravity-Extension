@@ -770,6 +770,44 @@ completion ledger.
 
 Completed: `3d7db38` on `codex-v13-state-delta` (2026-04-03)
 
+### Addendum — 2026-04-03 cleanliness audit
+
+Audit and cleanup pass against the cleanliness checklist. Changes:
+
+- **Bug fix: options after resolution now go through `storeParsedOptions`**.
+  Previously `processChallengeAssistantTurn` stored raw parsed options after a
+  successful `awaiting_resolution` turn (`next.options = options`), skipping
+  stable ID assignment and `option_table_version` increment. All other paths
+  already used `storeParsedOptions`.
+
+- **Bug fix: profile `validateTurn` is no longer structurally dead**. The
+  hook was placed after all phase-specific branches, each of which returned
+  early. It now runs inline at the end of `awaiting_choice` (normal) and
+  after `awaiting_resolution` advances to `awaiting_choice`, where field
+  validation is most valuable. The orphaned bottom-of-function block was
+  removed.
+
+- **Utility duplication removed from combat profile**. `coerceNumber`,
+  `normalizeText`, `toList` were defined locally in
+  `challenge-profile-combat.js` despite `challenge-shared.js` exporting
+  identical versions. The profile now imports from the shared module.
+  No circular dependency exists because `challenge-shared.js` is a leaf.
+
+- **Dead code removed**. An unreachable `assessment_only` block in the
+  setup section of `processChallengeAssistantTurn` was removed — the
+  preceding `setup_buffered && !pending_roll` block already catches every
+  assessment-only setup action. A dead sub-expression in the reassessment
+  option lookup (`optionText?.id ? getOptionById(...)`) was also removed.
+
+- **Empty section headers removed**. Vestigial banners left from code
+  extraction to `challenge-input.js`, `challenge-mechanics.js`, and
+  `challenge-shared.js` were cleaned up.
+
+- **Cleanup-grace transition extracted to helper**. The identical
+  `phase = 'cleanup_grace'` pattern (unlock, clear tactical state, return
+  correction) was written three times. Extracted to
+  `transitionToCleanupGrace(runtime, profile, destroyed)`.
+
 ### What was built
 
 Phases 1 and 2 were implemented together as one coherent unit. Phase 3 routing
@@ -852,11 +890,9 @@ items are required before this phase can be marked done.
    No changes were made to `consistency.js`, `state-compute.js`, or
    `state-machine.js` since the combat entity type already exists.
 
-3. **Utility duplication**: `coerceNumber`, `normalizeText`, `toList` are
-   duplicated between `challenge-state.js` and `challenge-profile-combat.js`.
-   This avoids a circular dependency (profile cannot import from engine that
-   imports from profile registry). Should be extracted to `challenge-utils.js`
-   when the second profile is added.
+3. **Utility duplication resolved**: `coerceNumber`, `normalizeText`, `toList`
+   were previously duplicated in `challenge-profile-combat.js`. Now imported
+   from `challenge-shared.js` (a leaf module with no circular dependency risk).
 
 4. **Intimacy continuation fallback preserved**: The `intimate:` continuation
    block in `index.js` (~line 1407) was kept as a fallback for when no challenge
@@ -910,3 +946,85 @@ The implementation is successful when:
 5. The same engine can run at least one second profile without combat-specific
    branching in the engine core.
 6. Old chats with `combat:*` remain readable and auditable.
+
+## Cleanliness Checklist
+
+Use this before attaching a second profile such as intimacy, race, chase, or debate.
+
+### Engine Boundaries
+
+- [ ] `challenge-state.js` owns runtime orchestration, not domain doctrine.
+- [ ] Generic parsing helpers live outside the engine core.
+- [ ] Generic math and threshold helpers live outside the engine core.
+- [ ] No `profile.kind === 'combat'` special cases remain in the engine.
+- [ ] The engine does not hard-code combat-only fields such as `primary_enemy`, `hostiles`, or `wounds` outside profile hooks or generic entity references.
+
+### Profile Contract
+
+- [ ] Every domain-specific decision is profile-owned:
+  - baseline
+  - setup guidance
+  - draw usage guidance
+  - actor formatting
+  - resolution detection
+  - validation
+- [ ] The profile contract is explicit enough that a second profile can implement it without copying combat logic.
+- [ ] `validateTurn()` is meaningful, not a stub, for any active profile.
+- [ ] `deductionType` is profile-owned and not inferred from `kind`.
+
+### Input and Options
+
+- [ ] All player input goes through one normalized path into `CHALLENGE_INPUT`.
+- [ ] Option selection works through stable ids, not only indexes.
+- [ ] Bare numeric picks, punctuated picks, and prefixed picks all resolve through the same option table.
+- [ ] Custom declared actions and uncategorized freeform actions are clearly separated.
+- [ ] “No declared category” always means assess-first, not resolve-first.
+
+### Mechanics
+
+- [ ] The extension is the sole owner of thresholds, roll generation, and result locking.
+- [ ] The model never has to derive live numbers from prompt prose.
+- [ ] `MUST_OUTPUT_OPTIONS` is used only when options are required immediately.
+- [ ] `OUTPUT_OPTIONS_IF_CONTINUES` covers post-resolution follow-up choices.
+- [ ] Scene draw and roll draw are clearly separated in responsibility.
+- [ ] Scene draw expires after setup and does not bleed into later exchanges.
+
+### Runtime State
+
+- [ ] Lock ownership is extension-side, not model-side.
+- [ ] Phase names match actual runtime behavior.
+- [ ] Setup buffering is a real phase/state rule, not just a hidden flag hack.
+- [ ] Cleanup behavior is explicit and does not trap the user in challenge mode.
+- [ ] Active difficulty changes propagate into the current runtime when appropriate.
+
+### Ledger and Entity Handling
+
+- [ ] The runtime entity is seeded by the extension, not recreated by the model.
+- [ ] Duplicate `create` attempts against the active entity are sanitized or corrected.
+- [ ] The runtime entity stays minimal and tactical, not dossier-like.
+- [ ] Important hostile or opponent capability data lives on the right entity and is machine-usable.
+- [ ] Resolution and cleanup move lasting consequences out of the runtime container into persistent state.
+
+### Validation and Recovery
+
+- [ ] Missing entity, missing options, and unconsumed locked rolls all have explicit correction paths.
+- [ ] Forced recovery behavior is defined per phase.
+- [ ] A malformed turn cannot silently advance the runtime.
+- [ ] The engine does not keep stale input after a failed parse or selection.
+- [ ] A resolved challenge reliably unlocks and clears.
+
+### Second-Profile Readiness
+
+- [ ] Adding a new profile does not require editing generic parser or math code.
+- [ ] Adding a new profile does not require combat-specific terminology in prompt packets.
+- [ ] A new profile can choose different aliases, thresholds, or even no-d20 flow through profile config and hooks.
+- [ ] A new profile can use different result semantics without touching engine internals.
+
+### Practical Gate
+
+You are clean enough to add another context when:
+
+- [ ] a second profile can be added by creating a new `challenge-profile-*.js`
+- [ ] registering it in `challenge-profiles.js`
+- [ ] updating prompt assets for that profile
+- [ ] without changing the engine except for genuinely generic improvements

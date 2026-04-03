@@ -76,6 +76,39 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - The panel command bar now exposes combat difficulty directly, with a live threshold summary (`HL`, `Avg`, `HU`) synced to chat metadata.
 - The world panel no longer renders a `knowledge_asymmetry` section.
 - Intimacy prose guidance explicitly uses relational asymmetry and misread via the `reads` map rather than a dedicated knowledge-asymmetry state field.
+- Player-supplied manual divination rolls are now supported as a one-shot override:
+  - `1d22 = 17` / `rolled 17 on 1d22` feeds the next Arcana draw
+  - `2d10 = 13` feeds the next Classic draw
+  - `1d64 = 37` feeds the next I Ching draw
+  - the manual result is consumed by the next `drawDivination()` call and rendered as canonical divination input instead of a fresh extension roll
+- Assistant `---STATE---`, `---LEDGER---`, and any visible deduction/debug blocks are no longer stripped from the chat message after parsing.
+  - The extension now parses against a cleaned local copy while leaving the raw assistant output visible for debugging.
+- Character dossiers now include `knowledge_asymmetry` for KNOWN / TRACKED / PRINCIPAL characters.
+  - Use it as the active knowledge firewall: what a character knows, does not know, is hiding, or is misreading right now.
+  - `state-view.js` now surfaces it in the prompt-facing character registry and documents `char:id.knowledge_asymmetry` in the quick reference.
+
+## Challenge Engine Notes
+
+- The generic challenge runtime now has extracted helper modules:
+  - `challenge-shared.js` for shared text/clone/draw helpers
+  - `challenge-mechanics.js` for categories, thresholds, and roll math
+  - `challenge-input.js` for command, option, and custom-action parsing
+- `challenge-state.js` remains the orchestrator, but no longer owns the generic parsing/math helper implementations directly.
+- Combat-specific category aliases (`likely`, `unlikely`, `standard`, `even`, `auto success`, `auto fail`) now live on the combat profile via `categoryAliases` instead of hard-coded `profile.kind === 'combat'` logic in the engine.
+- The challenge task packet is cleaner on resolution turns:
+  - `MUST_OUTPUT_OPTIONS` is now reserved for setup/assessment turns
+  - `OUTPUT_OPTIONS_IF_CONTINUES` covers follow-up options after a resolved exchange
+- `challenge-profile-combat.js` now uses `validateTurn()` conservatively after setup to catch missing `hostiles`, `primary_enemy`, or `situation` on the combat container.
+- Stable option ids are now actually honored on selection:
+  - the engine resolves option picks against the stored option table by id first
+  - stale raw parsed click payloads no longer bypass stored option state
+- Profile validation now runs on the main active post-setup paths, including setup exits, awaiting choice, awaiting resolution, and awaiting reassessment.
+- Challenge option recovery is now more tolerant when a player picks from an assessed option set:
+  - `challenge-input.js` now parses clickable `<span class="act" ...>` options even if attributes are reordered or single-quoted
+  - if the model prints plain numbered options like `3. Mark the Blitz (Average)` instead of valid clickable spans, the engine can now recover those as a fallback option table too
+  - `challenge-state.js` will rehydrate a missing option table from the latest assistant message before resolving an option pick
+  - this prevents assessed actions from getting stuck in `ASSESSMENT_ONLY` just because the prior options rendered but were not stored cleanly
+- The engine is modular enough for combat-adjacent profiles, but a future second profile should still be used to validate the abstraction before adding a more asymmetric context like intimacy.
 
 ## Documentation Layout
 
@@ -83,6 +116,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Archived memory and older planning docs: `Documentation/Old/`
 - Current combat behavior reference: `Documentation/combat_runtime_reference.md`
 - Current challenge-engine implementation spec: `Plan/challenge-engine-implementation-spec.md`
+- Challenge-engine cleanliness review gate: `Plan/challenge-engine-implementation-spec.md` (`Cleanliness Checklist`)
 - Existing prose rollout handoff: `Documentation/v14_prose_architecture_handoff.md`
 - Current reasoning-flow reference: `Documentation/deduction_cot_architecture.md`
 - `Documentation/gravity_character_card_template.md` now includes optional prewrite prompts plus a holistic card/scenario/lorebook split. Keep the card focused on dramatic behavior, the scenario focused on current relationship and structural tension, and the lorebook focused on reference/canon overflow rather than turning the card into a wiki page.

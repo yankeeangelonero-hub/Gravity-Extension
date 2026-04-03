@@ -58,6 +58,7 @@ let _currentInjectMode = 'regular';
 let _currentReasonMode = 'regular';
 let _lastCompletedMode = 'regular'; // snapshot before reset — used by exemplar flagging
 let _pendingDeductionType = null; // one-shot override for combat, advance, intimacy
+let _pendingManualDivination = null; // one-shot player-supplied divination roll
 
 // ─── Collision Resolution Tracking ───────────────────────────────────────────
 
@@ -564,11 +565,140 @@ async function setDivinationSystem(system) {
     await saveMetadata();
 }
 
+function getNarrativeForcingText(source = 'extension') {
+    if (source === 'manual') {
+        return 'NARRATIVE FORCING: The draw must visibly alter the scene — not just color the mood. Something HAPPENS because of this draw. A person appears, a plan fails, a door opens, a body drops, a truth surfaces. The draw is not a metaphor — it is an event. Find the coolest, most unexpected intersection with the current scene and MAKE IT HAPPEN in the prose.\nDO NOT call any dice tool or function. DO NOT use the D&D Dice tool. The number above came from the player\'s manual roll — it IS the result. Just use it.';
+    }
+    return NARRATIVE_FORCING;
+}
+
+function normalizeManualArcanaIndex(rawResult) {
+    const result = Number(rawResult);
+    if (!Number.isInteger(result)) return null;
+    if (result >= 1 && result <= 22) return result - 1;
+    if (result >= 0 && result <= 21) return result;
+    return null;
+}
+
+function parseManualDivinationOverride(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return null;
+
+    const arcanaPatterns = [
+        /\b(?:1d22|d22)\b\s*(?:=|:|->|=>)\s*(\d{1,2})\b/i,
+        /\b(?:1d22|d22)\b\s*\(\s*(\d{1,2})\s*\)/i,
+        /\brolled?\s*(\d{1,2})\s*(?:on|from)\s*(?:1d22|d22)\b/i,
+    ];
+    for (const pattern of arcanaPatterns) {
+        const match = raw.match(pattern);
+        if (!match) continue;
+        const manualResult = Number(match[1]);
+        const num = normalizeManualArcanaIndex(manualResult);
+        if (num == null) continue;
+        return {
+            system: 'arcana',
+            num,
+            sourceText: `1d22 = ${manualResult}${manualResult >= 1 && manualResult <= 22 ? ` -> #${num}` : ''}`,
+        };
+    }
+
+    const classicPatterns = [
+        /\b(?:2d10|1d10\s*\+\s*1d10)\b\s*(?:=|:|->|=>)\s*(\d{1,2})\b/i,
+        /\b(?:2d10|1d10\s*\+\s*1d10)\b\s*\(\s*(\d{1,2})\s*\)/i,
+        /\brolled?\s*(\d{1,2})\s*(?:on|from)\s*(?:2d10|1d10\s*\+\s*1d10)\b/i,
+    ];
+    for (const pattern of classicPatterns) {
+        const match = raw.match(pattern);
+        if (!match) continue;
+        const total = Number(match[1]);
+        if (!Number.isInteger(total) || total < 2 || total > 20) continue;
+        return {
+            system: 'classic',
+            num: total,
+            sourceText: `2d10 = ${total}`,
+        };
+    }
+
+    const iChingPatterns = [
+        /\b(?:1d64|d64)\b\s*(?:=|:|->|=>)\s*(\d{1,2})\b/i,
+        /\b(?:1d64|d64)\b\s*\(\s*(\d{1,2})\s*\)/i,
+        /\brolled?\s*(\d{1,2})\s*(?:on|from)\s*(?:1d64|d64)\b/i,
+    ];
+    for (const pattern of iChingPatterns) {
+        const match = raw.match(pattern);
+        if (!match) continue;
+        const num = Number(match[1]);
+        if (!Number.isInteger(num) || num < 1 || num > 64) continue;
+        return {
+            system: 'iching',
+            num,
+            sourceText: `1d64 = ${num}`,
+        };
+    }
+
+    return null;
+}
+
+function consumeManualDivinationOverride() {
+    const manual = _pendingManualDivination;
+    _pendingManualDivination = null;
+    return manual;
+}
+
+function buildIChingDraw(num, source = 'extension', sourceText = '') {
+    const prefix = source === 'manual' && sourceText ? `MANUAL ROLL: ${sourceText}\n` : '';
+    return {
+        system: 'iching',
+        label: 'THE I CHING DREW',
+        num,
+        reading: `${prefix}Hexagram ${num} â€” interpret per the æ˜“çµŒ King Wen sequence (1=ä¹¾, 2=å¤, 3=å±¯... 64=æœªæ¸ˆ). You know the æ˜“çµŒ. From the number derive: hexagram symbol, Chinese name, English translation, core situational reading. ${ICHING_TRIGRAMS}\n${getNarrativeForcingText(source)}`,
+        html: `<div style="background:linear-gradient(180deg,#0a0a0a 0%,#1a1008 100%);border:1px solid #8b7355;border-radius:4px;padding:20px;margin:16px auto;max-width:280px;text-align:center;"><div style="color:#8b7355;font-size:0.7em;letter-spacing:4px;text-transform:uppercase;">æ˜“çµŒ Â· The Book of Changes</div><div style="color:#f0e6d3;font-size:1.4em;margin:12px 0 4px 0;">[HEXAGRAM NAME]</div><div style="color:#8b7355;font-size:0.9em;font-style:italic;">[English] Â· ${num}</div><div style="width:40px;height:1px;background:#8b7355;margin:12px auto;"></div><div style="color:#a89070;font-size:0.85em;line-height:1.5;">[One-line situational reading]</div></div>`,
+    };
+}
+
+function buildClassicDraw(total, source = 'extension', sourceText = '', d1 = null, d2 = null) {
+    const prefix = source === 'manual' && sourceText ? `MANUAL ROLL: ${sourceText}\n` : '';
+    const rollLine = Number.isInteger(d1) && Number.isInteger(d2)
+        ? `${d1} + ${d2} = ${total}`
+        : `Total = ${total}`;
+    return {
+        system: 'classic',
+        label: 'THE DICE ROLLED',
+        num: total,
+        reading: `${prefix}${rollLine}\n${CLASSIC_TABLE}\n${getNarrativeForcingText(source)}`,
+        html: '',
+    };
+}
+
+function buildArcanaDraw(num, source = 'extension', sourceText = '') {
+    const cardName = ARCANA_TABLE[num].split(' â€” ')[0];
+    const cardMeaning = ARCANA_TABLE[num].split(' â€” ')[1] || '';
+    const prefix = source === 'manual' && sourceText ? `MANUAL ROLL: ${sourceText}\n` : '';
+    return {
+        system: 'arcana',
+        label: 'THE ARCANA DREW',
+        num,
+        reading: `${prefix}#${num} â€” ${ARCANA_TABLE[num]}\nUSE THIS EXACT CARD. Do not override or pick a different one.\n${getNarrativeForcingText(source)}`,
+        html: `<div style="background:linear-gradient(180deg,#0a0a1a 0%,#1a0a2e 100%);border:1px solid #d4af37;border-radius:8px;padding:20px;margin:16px auto;max-width:280px;text-align:center;box-shadow:0 0 15px rgba(212,175,55,0.2);"><div style="color:#d4af37;font-size:0.75em;letter-spacing:3px;text-transform:uppercase;">The Arcana</div><div style="color:#f0e6d3;font-size:1.8em;margin:12px 0 4px 0;font-weight:bold;">${cardName}</div><div style="color:#d4af37;font-size:0.9em;font-style:italic;">${ARCANA_ROMAN[num]}</div><div style="width:40px;height:1px;background:#d4af37;margin:12px auto;"></div><div style="color:#a89070;font-size:0.85em;line-height:1.4;">${cardMeaning}</div></div>`,
+    };
+}
+
 /**
  * Draw from the active divination system.
  * @returns {{ system: string, label: string, num: number, reading: string, html: string }}
  */
 function drawDivination() {
+    const manual = consumeManualDivinationOverride();
+    if (manual?.system === 'iching') {
+        return buildIChingDraw(manual.num, 'manual', manual.sourceText);
+    }
+    if (manual?.system === 'classic') {
+        return buildClassicDraw(manual.num, 'manual', manual.sourceText);
+    }
+    if (manual?.system === 'arcana') {
+        return buildArcanaDraw(manual.num, 'manual', manual.sourceText);
+    }
+
     const system = getActiveDivinationSystem();
 
     if (system === 'iching' || system === 'i_ching' || system === 'i ching') {
@@ -1170,6 +1300,7 @@ After the thinking pass closes, visible output is:
 - Structural turns or explicit cleanup/setup instructions: ---LEDGER--- (full command block, no line limit)${_uncappedTurn ? ' (UNCAPPED - full cleanup allowed)' : ''}
 
 Update current_scene, location, and condition when they materially change or the scene would be hard to reconstruct without them.
+Knowledge firewall: characters only act on what their reads, noticed details, and knowledge_asymmetry make plausible. Hidden facts stay hidden until learned, revealed, or inferred honestly.
 CLEANUP (REMOVE/DESTROY): max 3 per regular turn. Save bulk for eval or chapter close.
 
 You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memory.]`;
@@ -1238,6 +1369,7 @@ async function initialize(force = false) {
     _currentInjectMode = 'regular';
     _currentReasonMode = 'regular';
     _pendingDeductionType = null;
+    _pendingManualDivination = null;
     _firedCollisionArrivals = new Set();
     _resolutionTracker = new Map();
 
@@ -1295,16 +1427,12 @@ async function onMessageReceived(messageId) {
 
     // Extract update block (compact STATE or canonical LEDGER)
     const extraction = extractUpdateBlock(message.mes);
-
-    // Strip block from displayed message
-    if (extraction.found) {
-        message.mes = extraction.cleanedMessage;
-    }
+    const cleanedAssistantMessage = extraction.found ? extraction.cleanedMessage : message.mes;
 
     // No block found
     if (!extraction.found) {
         _pendingReinforcement = getReinforcement(extraction, _turnCounter);
-        challengeCorrection = await processChallengeAssistantTurn(_currentState, [], message.mes);
+        challengeCorrection = await processChallengeAssistantTurn(_currentState, [], cleanedAssistantMessage);
         if (challengeCorrection) {
             _pendingReinforcement = _pendingReinforcement
                 ? `${_pendingReinforcement}\n${challengeCorrection}`
@@ -1453,7 +1581,7 @@ async function onMessageReceived(messageId) {
             `\n[CHALLENGE RUNTIME]\nThe extension already seeded ${runtime?.entity_type || 'challenge'}:${runtime?.entity_id || ''}. Do not create it again. Only set or update its fields.`;
     }
 
-    challengeCorrection = await processChallengeAssistantTurn(_currentState, committedTxns, message.mes);
+    challengeCorrection = await processChallengeAssistantTurn(_currentState, committedTxns, cleanedAssistantMessage);
     if (challengeCorrection) {
         _pendingReinforcement = _pendingReinforcement
             ? `${_pendingReinforcement}\n${challengeCorrection}`
@@ -1472,6 +1600,10 @@ async function onUserMessage(messageId) {
     if (!message?.mes) return;
 
     const rawText = message.mes.replace(/<[^>]+>/g, '').trim();
+    const manualDivinationOverride = parseManualDivinationOverride(rawText);
+    if (manualDivinationOverride) {
+        _pendingManualDivination = manualDivinationOverride;
+    }
     const challengeLocked = isChallengeSessionLocked();
     const challengePrefix = detectChallengePrefix(rawText);
     if ((challengeLocked || challengePrefix) && !/^ooc:/i.test(rawText)) {

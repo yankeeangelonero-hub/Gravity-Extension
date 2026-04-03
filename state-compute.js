@@ -76,6 +76,16 @@ function createEmptyState() {
     };
 }
 
+function normalizeCharacterKnowledgeAsymmetry(state) {
+    for (const char of Object.values(state.characters || {})) {
+        const tier = String(char?.tier || '').toUpperCase();
+        if (!['KNOWN', 'TRACKED', 'PRINCIPAL'].includes(tier)) continue;
+        if (char.knowledge_asymmetry === undefined || char.knowledge_asymmetry === null) {
+            char.knowledge_asymmetry = '';
+        }
+    }
+}
+
 function getCollectionName(entityType) {
     const map = {
         char: 'characters',
@@ -326,6 +336,8 @@ function computeState(snapshot, transactions) {
             applyTransaction(state, tx);
         }
     }
+
+    normalizeCharacterKnowledgeAsymmetry(state);
 
     return state;
 }

@@ -102,6 +102,9 @@ function formatStateView(state, mode = 'full') {
         lines.push(charLine);
         if (char.location) lines.push(`    Location: ${char.location}`);
         if (!slim && char.condition) lines.push(`    Condition: ${char.condition}`);
+        if (char.knowledge_asymmetry !== undefined) {
+            lines.push(`    Knowledge asymmetry: ${normalizeText(char.knowledge_asymmetry) || '(unset)'}`);
+        }
         if (!slim && char.power_basis) lines.push(`    Power basis: ${char.power_basis}`);
         if (!slim) {
             const abilities = toList(char.abilities);
@@ -471,6 +474,7 @@ scene: "Where. Who's present. What's happening. Emotional atmosphere."
 pc.location: "where the PC is now"
 pc.condition: "physical and emotional state"
 char:elena.condition: "steady, watchful"
+char:elena.knowledge_asymmetry: "Knows the PC is armed, does not know who sent them, is hiding that she already warned the owner"
 collision:trust-vs-duty.distance: 4
 constraint:c1.integrity: STRESSED
 char:elena.reads.pc: "Cautious ally"
@@ -495,6 +499,7 @@ COMMON PATHS:
   char:id.location
   char:id.condition
   char:id.doing
+  char:id.knowledge_asymmetry
   char:id.reads.pc
   collision:id.name
   collision:id.forces
@@ -541,6 +546,7 @@ If a turn gets structurally complicated, switch to a full ---LEDGER--- block ins
 DISCIPLINE:
   Only write what changed materially.
   Keep doing as "action | Cost: what this neglects or risks".
+  Keep knowledge_asymmetry current on KNOWN/TRACKED/PRINCIPAL characters: what they know, what they do not know, what they are hiding, or what they are misreading right now.
   Every live collision needs a story capsule: what is converging, who or what is caught in it, what it costs, and the forced choice looming.
   When a collision presses into the scene, update collision:id.last_manifestation with the concrete current expression.
   Pressure points are seeds, not history. If a seam fired, resolved, or became a collision, REMOVE it.

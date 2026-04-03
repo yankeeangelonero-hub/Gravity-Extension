@@ -11,6 +11,39 @@
 
 import { append } from './ledger-store.js';
 import { getProfile, detectChallengePrefix } from './challenge-profiles.js';
+import {
+    clone,
+    normalizeText,
+    coerceNumber,
+    formatDrawBlock,
+    boolText,
+    mechanicsValue,
+} from './challenge-shared.js';
+import {
+    normalizeCategoryForProfile,
+    categoryStepForProfile,
+    categoryFromStepForProfile,
+    buildDcTable,
+    describeDcTable,
+    describeSuccessThreshold,
+    summarizeDrawForMechanics,
+    getRollStateLabel,
+    resolveRolledOutcome,
+    buildRollPayload,
+    buildChallengeRoll,
+    formatRollSummary,
+} from './challenge-mechanics.js';
+import {
+    getChallengeCommandBody,
+    parseChallengeOptionValue,
+    parseChallengeCustomText,
+    parseOptionIndexText,
+    parseBareIndexText,
+    parseChallengeIndexText,
+    parseChallengeOptionsFromMessage,
+    storeParsedOptions,
+    buildInputRecord,
+} from './challenge-input.js';
 
 const CHALLENGE_RUNTIME_KEY = 'gravity_challenge_runtime';
 const CHALLENGE_SETTINGS_KEY = 'gravity_challenge_settings';
@@ -21,212 +54,6 @@ const LEGACY_COMBAT_SETTINGS_KEY = 'gravity_combat_settings';
 
 function getContext() {
     return SillyTavern.getContext ? SillyTavern.getContext() : {};
-}
-
-function clone(value) {
-    if (value == null) return value;
-    try {
-        return structuredClone(value);
-    } catch {
-        return JSON.parse(JSON.stringify(value));
-    }
-}
-
-function normalizeText(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim();
-}
-
-function toList(value) {
-    if (!value) return [];
-    if (Array.isArray(value)) return value.filter(Boolean);
-    return String(value)
-        .split(',')
-        .map(part => normalizeText(part))
-        .filter(Boolean);
-}
-
-function coerceNumber(value) {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-    if (typeof value !== 'string') return null;
-    const match = value.match(/-?\d+(?:\.\d+)?/);
-    if (!match) return null;
-    const parsed = Number(match[0]);
-    return Number.isFinite(parsed) ? parsed : null;
-}
-
-function decodeHtmlEntities(value) {
-    return String(value || '')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>');
-}
-
-function stripNarrativeForcing(reading) {
-    const text = String(reading || '').replace(/\r\n/g, '\n');
-    const marker = 'NARRATIVE FORCING:';
-    const idx = text.indexOf(marker);
-    return (idx >= 0 ? text.slice(0, idx) : text).trim();
-}
-
-function formatDrawBlock(draw, options = {}) {
-    if (!draw) return '(none)';
-    const reading = options.stripNarrativeForcing
-        ? stripNarrativeForcing(draw.reading)
-        : String(draw.reading || '');
-    const lines = [`${draw.label}: ${reading}`];
-    if (options.guidance) lines.push(options.guidance);
-    if (options.includeHtml !== false && draw.html) {
-        lines.push(`Render this HTML card reveal before prose when appropriate:\n${draw.html}`);
-    }
-    return lines.join('\n');
-}
-
-function boolText(value) {
-    return value ? 'true' : 'false';
-}
-
-function mechanicsValue(value) {
-    if (value == null || value === '') return 'NONE';
-    return String(value).replace(/\s+/g, ' ').trim();
-}
-
-// ─── Category Arithmetic (profile-parameterized) ──────────────────────────────
-
-function normalizeCategoryForProfile(value, profile) {
-    const text = normalizeText(value)
-        .toLowerCase()
-        .replace(/[()[\]:.,!?]/g, ' ')
-        .replace(/\bdifficulty\b/g, ' ')
-        .replace(/\bdc\b/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    if (!text) return null;
-
-    // Exact match (case-insensitive)
-    for (const cat of profile.categories) {
-        if (cat.toLowerCase() === text) return cat;
-    }
-
-    // Combat-specific aliases for backward compatibility
-    if (profile.kind === 'combat') {
-        if (text === 'likely') return 'Highly likely';
-        if (text === 'unlikely') return 'Highly unlikely';
-        if (text === 'standard' || text === 'even') return 'Average';
-        if (text === 'auto success' || text === 'auto-success') return 'Absolute';
-        if (text === 'auto fail' || text === 'auto-fail') return 'Impossible';
-    }
-
-    // Auto-success/fail aliases (generic)
-    if (text === 'auto success' || text === 'auto-success') return profile.autoSuccess;
-    if (text === 'auto fail' || text === 'auto-fail') return profile.autoFail;
-
-    return null;
-}
-
-function extractCategoryFromText(value, profile) {
-    const exact = normalizeCategoryForProfile(value, profile);
-    if (exact) return exact;
-
-    const text = normalizeText(value).toLowerCase();
-    if (!text || !profile) return null;
-
-    const candidates = [];
-    for (const category of profile.categories || []) {
-        candidates.push({ resolved: category, phrase: category });
-    }
-
-    if (profile.kind === 'combat') {
-        candidates.push({ resolved: 'Highly likely', phrase: 'likely' });
-        candidates.push({ resolved: 'Highly unlikely', phrase: 'unlikely' });
-        candidates.push({ resolved: 'Average', phrase: 'standard' });
-        candidates.push({ resolved: 'Average', phrase: 'even' });
-        candidates.push({ resolved: 'Absolute', phrase: 'auto success' });
-        candidates.push({ resolved: 'Absolute', phrase: 'auto-success' });
-        candidates.push({ resolved: 'Impossible', phrase: 'auto fail' });
-        candidates.push({ resolved: 'Impossible', phrase: 'auto-fail' });
-    }
-
-    candidates.sort((a, b) => b.phrase.length - a.phrase.length);
-    for (const candidate of candidates) {
-        const escaped = candidate.phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
-        const pattern = new RegExp(`(^|\\b)${escaped}(\\b|$)`, 'i');
-        if (pattern.test(text)) return candidate.resolved;
-    }
-
-    return null;
-}
-
-function categoryStepForProfile(category, profile) {
-    if (!category || !profile) return null;
-    const normalized = normalizeCategoryForProfile(category, profile);
-    if (!normalized) return null;
-    const idx = profile.categories.indexOf(normalized);
-    return idx >= 0 ? idx : null;
-}
-
-function categoryFromStepForProfile(step, profile) {
-    if (!Number.isFinite(step) || !profile) return null;
-    const safe = Math.max(0, Math.min(profile.categories.length - 1, Math.round(step)));
-    return profile.categories[safe];
-}
-
-// ─── DC / Threshold Helpers ───────────────────────────────────────────────────
-
-function buildDcTable(mode, profile, customDcs = null) {
-    if (!profile) return {};
-    const defaultTable = profile.thresholdTables[profile.defaultMode]
-        ? clone(profile.thresholdTables[profile.defaultMode])
-        : {};
-
-    if (mode === 'Custom') {
-        const merged = { ...defaultTable };
-        for (const [rawCategory, rawValue] of Object.entries(customDcs || {})) {
-            const category = normalizeCategoryForProfile(rawCategory, profile);
-            const dc = coerceNumber(rawValue);
-            if (!category || dc == null) continue;
-            if (category === profile.autoSuccess || category === profile.autoFail) continue;
-            merged[category] = dc;
-        }
-        return merged;
-    }
-
-    const table = profile.thresholdTables[mode];
-    if (table) return clone(table);
-    return defaultTable;
-}
-
-function describeDcTable(table) {
-    return Object.entries(table)
-        .map(([cat, dc]) => `${cat}=${dc}+`)
-        .join(' | ');
-}
-
-function describeSuccessThreshold(category, dc, profile) {
-    if (!profile) {
-        // Fallback for simple cases
-        if (dc == null) return 'no threshold';
-        return `${dc}+ on d20`;
-    }
-    const normalized = normalizeCategoryForProfile(category, profile);
-    if (!normalized) return 'no threshold';
-    if (normalized === profile.autoSuccess) return 'auto-success';
-    if (normalized === profile.autoFail) return 'auto-fail';
-    return dc != null ? `${dc}+ on d20` : 'no threshold';
-}
-
-function summarizeDrawForMechanics(draw) {
-    if (!draw) return 'NONE';
-    const reading = stripNarrativeForcing(draw.reading).split('\n').map(part => normalizeText(part)).filter(Boolean)[0];
-    return normalizeText(reading || draw.label || 'NONE') || 'NONE';
-}
-
-function getRollStateLabel(roll) {
-    if (!roll) return 'NONE';
-    if (roll.challenge_pending) return 'PENDING_REASSESSMENT';
-    if (roll.skip) return roll.reason === 'absolute' ? 'AUTO_SUCCESS' : 'AUTO_FAIL';
-    return 'ROLLED';
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -274,6 +101,14 @@ async function setChallengeDifficultyMode(kind, mode) {
     const settings = getChallengeSettings(kind);
     settings.mode = validMode;
     await setChallengeSettings(kind, settings);
+
+    const runtime = getChallengeRuntime();
+    if (runtime?.kind === kind && runtime.difficulty_mode !== validMode) {
+        await setChallengeRuntime({
+            ...runtime,
+            difficulty_mode: validMode,
+        });
+    }
 }
 
 async function setChallengeCustomDcs(kind, customDcs) {
@@ -281,6 +116,14 @@ async function setChallengeCustomDcs(kind, customDcs) {
     settings.mode = 'Custom';
     settings.custom_dcs = { ...settings.custom_dcs, ...customDcs };
     await setChallengeSettings(kind, settings);
+
+    const runtime = getChallengeRuntime();
+    if (runtime?.kind === kind && runtime.difficulty_mode !== 'Custom') {
+        await setChallengeRuntime({
+            ...runtime,
+            difficulty_mode: 'Custom',
+        });
+    }
 }
 
 // ─── Runtime CRUD ─────────────────────────────────────────────────────────────
@@ -451,167 +294,6 @@ async function startChallengeRuntime(kind, sceneDraw) {
     return runtime;
 }
 
-// ─── Input Parsing ────────────────────────────────────────────────────────────
-
-function getChallengeCommandBody(rawText, profile) {
-    const text = decodeHtmlEntities(rawText);
-    const escaped = profile.inputPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const match = text.match(new RegExp(`^\\*?${escaped}:\\s*(.*?)\\*?$`, 'i'));
-    if (!match) return null;
-    return normalizeText(match[1]);
-}
-
-function parseChallengeOptionValue(value, label, profile) {
-    const text = decodeHtmlEntities(value);
-    const escaped = profile.optionPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const withId = text.match(new RegExp(`^\\*?${escaped}:\\s*option\\s*\\|\\s*([^|]+)\\|\\s*(\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
-    if (withId) {
-        const category = normalizeCategoryForProfile(withId[3], profile);
-        if (!category) return null;
-        return {
-            id: normalizeText(withId[1]),
-            index: Number(withId[2]),
-            category,
-            intent: normalizeText(withId[4]),
-            label: normalizeText(decodeHtmlEntities(label)) || normalizeText(withId[4]),
-        };
-    }
-    const legacy = text.match(new RegExp(`^\\*?${escaped}:\\s*option\\s*\\|\\s*(\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
-    if (!legacy) return null;
-    const category = normalizeCategoryForProfile(legacy[2], profile);
-    if (!category) return null;
-    return {
-        id: null,
-        index: Number(legacy[1]),
-        category,
-        intent: normalizeText(legacy[3]),
-        label: normalizeText(decodeHtmlEntities(label)) || normalizeText(legacy[3]),
-    };
-}
-
-function parseChallengeCustomText(rawText, profile, options = {}) {
-    const text = decodeHtmlEntities(rawText);
-    const escaped = profile.inputPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const legacy = text.match(new RegExp(`^\\*?${escaped}:\\s*custom\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
-    if (legacy) {
-        const category = normalizeCategoryForProfile(legacy[1], profile);
-        if (!category) return null;
-        return { category, intent: normalizeText(legacy[2]) };
-    }
-
-    const body = getChallengeCommandBody(rawText, profile)
-        ?? (options.allowBare ? normalizeText(rawText) : null);
-    if (body == null || !body) return null;
-    const match = body.match(/^(.+?)\s+dc(?:\s*[:=-])?\s+(.+?)$/i)
-        || body.match(/^(.+?)\s*\|\s*(.+?)$/i)
-        || body.match(/^(.+?)\s*,\s*(.+?)$/i)
-        || body.match(/^(.+?)\s+\((.+?)\)\s*$/i);
-    if (!match) return null;
-    const category = extractCategoryFromText(match[2], profile);
-    if (!category) return null;
-    return { category, intent: normalizeText(match[1]) };
-}
-
-function parseOptionIndexText(value) {
-    const match = normalizeText(value).match(/^\*?option\s+(\d+)(?:[.)])?\*?$/i);
-    if (!match) return null;
-    return Number(match[1]);
-}
-
-function parseBareIndexText(value) {
-    const match = normalizeText(value).match(/^\*?(\d+)(?:[.)])?\*?$/);
-    if (!match) return null;
-    return Number(match[1]);
-}
-
-function parseChallengeIndexText(rawText, profile) {
-    const body = getChallengeCommandBody(rawText, profile);
-    if (body == null || !body) return null;
-    const match = body.match(/^(\d+)(?:[.)])?$/);
-    if (!match) return null;
-    return Number(match[1]);
-}
-
-function parseChallengeOptionsFromMessage(text, profile) {
-    const options = [];
-    const pattern = /<span[^>]*class="act"[^>]*data-value="([^"]+)"[^>]*>(.*?)<\/span>/gi;
-    let match;
-    while ((match = pattern.exec(String(text || ''))) !== null) {
-        const parsed = parseChallengeOptionValue(match[1], match[2], profile);
-        if (parsed) options.push(parsed);
-    }
-    return options.sort((a, b) => a.index - b.index);
-}
-
-function storeParsedOptions(runtime, options) {
-    if (!options?.length) return clone(runtime);
-    const nextVersion = (Number(runtime?.option_table_version) || 0) + 1;
-    return {
-        ...clone(runtime),
-        option_table_version: nextVersion,
-        options: options.map(option => ({
-            ...option,
-            id: option.id || `opt-e${runtime?.exchange || 1}-v${nextVersion}-${option.index}`,
-            table_version: nextVersion,
-        })),
-    };
-}
-
-// ─── Roll Math ────────────────────────────────────────────────────────────────
-
-function buildRoll(drawFn) {
-    const d20 = Math.floor(Math.random() * 20) + 1;
-    return { d20, draw: clone(drawFn()) };
-}
-
-function resolveRolledOutcome(d20, dc, profile) {
-    if (!Number.isFinite(d20) || !Number.isFinite(dc)) {
-        return { success: null, critical: null, resolution: null };
-    }
-    const labels = profile?.resultLabels || { success: 'SUCCESS', fail: 'TRANSFORM', critSuccess: 'CRITICAL_SUCCESS', critFail: 'CRITICAL_TRANSFORM' };
-    if (d20 === 20) return { success: true, critical: 'success', resolution: labels.critSuccess };
-    if (d20 === 1) return { success: false, critical: 'transform', resolution: labels.critFail };
-    return d20 >= dc
-        ? { success: true, critical: null, resolution: labels.success }
-        : { success: false, critical: null, resolution: labels.fail };
-}
-
-function buildRollPayload(category, dcTable, drawFn, profile) {
-    const normalized = normalizeCategoryForProfile(category, profile);
-    if (normalized === profile?.autoSuccess) {
-        return { skip: true, reason: 'absolute', category: normalized };
-    }
-    if (normalized === profile?.autoFail) {
-        return { skip: true, reason: 'impossible', category: normalized };
-    }
-    const base = buildRoll(drawFn);
-    const dc = dcTable[normalized];
-    const outcome = resolveRolledOutcome(base.d20, dc, profile);
-    return {
-        category: normalized,
-        dc,
-        d20: base.d20,
-        draw: base.draw,
-        success: outcome.success,
-        critical: outcome.critical,
-        resolution: outcome.resolution,
-    };
-}
-
-function buildChallengeRoll(drawFn) {
-    const base = buildRoll(drawFn);
-    return {
-        challenge_pending: true,
-        d20: base.d20,
-        draw: base.draw,
-        dc: null,
-        category: null,
-        success: null,
-        critical: base.d20 === 20 ? 'success' : base.d20 === 1 ? 'transform' : null,
-        resolution: 'PENDING_REASSESSMENT',
-    };
-}
-
 // ─── Action Builders ──────────────────────────────────────────────────────────
 
 function getOptionByIndex(runtime, index) {
@@ -621,6 +303,41 @@ function getOptionByIndex(runtime, index) {
 function getOptionById(runtime, id) {
     if (!id) return null;
     return (runtime.options || []).find(option => option.id === id) || null;
+}
+
+function resolveSelectedOption(runtime, parsedOption, optionIndex) {
+    const hasStoredOptions = Array.isArray(runtime?.options) && runtime.options.length > 0;
+    if (parsedOption?.id) {
+        const byId = getOptionById(runtime, parsedOption.id);
+        if (byId) return byId;
+        if (!hasStoredOptions) return parsedOption;
+    }
+    if (optionIndex != null) {
+        const byIndex = getOptionByIndex(runtime, optionIndex);
+        if (byIndex) return byIndex;
+    }
+    return !hasStoredOptions && parsedOption ? parsedOption : null;
+}
+
+function getLatestAssistantMessageText() {
+    const { chat } = getContext();
+    if (!Array.isArray(chat)) return '';
+    for (let i = chat.length - 1; i >= 0; i -= 1) {
+        const message = chat[i];
+        if (!message || message.is_user || message.is_system) continue;
+        if (typeof message.mes === 'string' && message.mes.trim()) {
+            return message.mes;
+        }
+    }
+    return '';
+}
+
+function recoverOptionsFromLatestAssistant(runtime, profile) {
+    if (Array.isArray(runtime?.options) && runtime.options.length) return runtime;
+    const latestAssistantMessage = getLatestAssistantMessageText();
+    if (!latestAssistantMessage) return runtime;
+    const parsedOptions = parseChallengeOptionsFromMessage(latestAssistantMessage, profile);
+    return parsedOptions.length ? storeParsedOptions(runtime, parsedOptions) : runtime;
 }
 
 function buildOptionAction(option, baselineCategory, profile, options = {}) {
@@ -661,23 +378,6 @@ function buildCustomAction(intent, declaredCategory, baselineCategory, profile, 
         clamped: false,
         challenge_required: options.skipChallenge ? false : (challengeThreshold != null && delta >= challengeThreshold),
         assessment_only: false,
-    };
-}
-
-// ─── Input Record ─────────────────────────────────────────────────────────────
-
-function buildInputRecord(rawText, profile, overrides = {}) {
-    return {
-        raw_message: normalizeText(decodeHtmlEntities(rawText)),
-        explicit_prefix: new RegExp(`^\\*?${profile.inputPrefix}:`, 'i').test(String(rawText || '')),
-        parsed_source: 'UNKNOWN',
-        option_id: null,
-        option_index: null,
-        option_label: '',
-        intent: '',
-        declared_category: null,
-        assessment_only: false,
-        ...overrides,
     };
 }
 
@@ -744,7 +444,6 @@ function buildChallengeMechanicsBlock(runtime, profile, settings, dcTable, basel
     }
 
     const needsOptions = runtime?.phase === 'awaiting_choice'
-        || runtime?.phase === 'awaiting_resolution'
         || runtime?.phase === 'setup_opening'
         || runtime?.phase === 'setup_buffered';
     lines.push(`NEXT_OPTIONS_REQUIRED: ${needsOptions ? 'true' : 'false'}`);
@@ -762,8 +461,8 @@ function buildChallengeTaskBlock(runtime, profile, entity) {
     const mustResolveExchange = runtime?.phase === 'awaiting_resolution' || mustResolveBuffered;
     const mustOutputOptions = setupOpening
         || setupBuffered
-        || (runtime?.phase === 'awaiting_choice' && (needsAssessment || !(runtime?.options || []).length))
-        || runtime?.phase === 'awaiting_resolution';
+        || (runtime?.phase === 'awaiting_choice' && (needsAssessment || !(runtime?.options || []).length));
+    const outputOptionsIfContinues = runtime?.phase === 'awaiting_resolution' || mustResolveBuffered;
     const optionRange = profile?.optionCount || [3, 4];
 
     let turnObjective = 'NONE';
@@ -796,7 +495,7 @@ function buildChallengeTaskBlock(runtime, profile, entity) {
     lines.push(`MUST_OUTPUT_OPTIONS: ${boolText(mustOutputOptions)}`);
     lines.push(`OPTION_1_CAPTURES_PLAYER_INTENT: ${boolText(needsAssessment)}`);
     lines.push(`OPTION_COUNT: ${optionRange[0]}-${optionRange[1]}`);
-    lines.push(`OUTPUT_OPTIONS_IF_CONTINUES: ${boolText(runtime?.phase === 'awaiting_resolution' || mustResolveBuffered)}`);
+    lines.push(`OUTPUT_OPTIONS_IF_CONTINUES: ${boolText(outputOptionsIfContinues)}`);
     lines.push(`MUST_PRESERVE_ROLL: ${boolText(runtime?.phase === 'awaiting_reassessment')}`);
     if (profile.usesD20) {
         lines.push(`MUST_RECORD_LAST_DRAW: ${boolText(!!roll?.draw && !roll?.skip && mustResolveExchange)}`);
@@ -826,22 +525,6 @@ function formatActionSummary(action) {
     return parts.join(' | ');
 }
 
-function formatRollSummary(roll) {
-    if (!roll) return '(none)';
-    if (roll.skip) {
-        return `No roll — ${roll.reason === 'absolute' ? 'auto-success' : 'auto-fail'} (${roll.category})`;
-    }
-    const parts = [`d20 ${roll.d20}`];
-    if (roll.dc != null) parts.push(`target ${roll.dc}+ on d20`);
-    if (roll.category) parts.push(roll.category);
-    if (roll.resolution) parts.push(roll.resolution);
-    else if (roll.success != null) parts.push(roll.success ? 'SUCCESS' : 'TRANSFORM');
-    if (roll.critical && !String(roll.resolution || '').startsWith('CRITICAL_')) {
-        parts.push(`critical ${roll.critical}`);
-    }
-    if (roll.challenge_pending) parts.push('awaiting reassessment');
-    return parts.join(' | ');
-}
 
 function buildPromptOptionsBlock(options) {
     if (!options?.length) return '(none stored)';
@@ -915,7 +598,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
     const baseline = profile.getBaseline(state, getChallengeEntity(state, runtime));
     const settings = getChallengeSettings(profile.kind);
     const dcTable = buildDcTable(runtime.difficulty_mode || settings.mode || profile.defaultMode, profile, settings.custom_dcs);
-    const next = clone(runtime);
+    let next = clone(runtime);
     const optionText = parseChallengeOptionValue(rawText, '', profile);
     const optionIndex = optionText?.index ?? parseChallengeIndexText(rawText, profile) ?? parseOptionIndexText(rawText) ?? parseBareIndexText(rawText);
     const explicitCustom = parseChallengeCustomText(rawText, profile, {
@@ -933,7 +616,8 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
         }
 
         if (optionText || optionIndex != null) {
-            const option = optionText || getOptionById(next, optionText?.id) || getOptionByIndex(next, optionIndex);
+            next = recoverOptionsFromLatestAssistant(next, profile);
+            const option = resolveSelectedOption(next, optionText, optionIndex);
             if (!option) {
                 next.last_input = buildInputRecord(rawText, profile, {
                     parsed_source: 'UNRESOLVED_OPTION_SELECTION',
@@ -1017,7 +701,8 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
 
     // ─── Awaiting reassessment ────────────────────────────────────────
     if (next.phase === 'awaiting_reassessment') {
-        const reassessed = explicitCustom || optionText || (optionText?.id ? getOptionById(next, optionText.id) : null) || (optionIndex != null ? getOptionByIndex(next, optionIndex) : null);
+        next = recoverOptionsFromLatestAssistant(next, profile);
+        const reassessed = explicitCustom || resolveSelectedOption(next, optionText, optionIndex);
         if (!reassessed) {
             next.last_input = buildInputRecord(rawText, profile, {
                 parsed_source: 'REASSESSMENT_PENDING',
@@ -1088,7 +773,8 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
     }
 
     if (optionIndex != null) {
-        const option = optionText || getOptionById(next, optionText?.id) || getOptionByIndex(next, optionIndex);
+        next = recoverOptionsFromLatestAssistant(next, profile);
+        const option = resolveSelectedOption(next, optionText, optionIndex);
         if (!option) {
             next.last_input = buildInputRecord(rawText, profile, {
                 parsed_source: 'UNRESOLVED_OPTION_SELECTION',
@@ -1179,6 +865,46 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
 }
 
 // ─── Post-Turn Processing ─────────────────────────────────────────────────────
+
+async function transitionToCleanupGrace(runtime, profile, destroyed) {
+    const next = {
+        ...runtime,
+        phase: 'cleanup_grace',
+        locked: false,
+        cleanup_turns_remaining: 1,
+        options: [],
+        pending_action: null,
+        pending_roll: null,
+        correction_attempts: 0,
+    };
+    await setChallengeRuntime(next);
+    if (!destroyed) {
+        return challengeCorrection(
+            `Challenge is resolved. Before normal play fully resumes, write any final persistent consequences and destroy the ${runtime.entity_type} entity.`,
+            profile,
+        );
+    }
+    return null;
+}
+
+async function maybeRunProfileValidation(profile, runtime, state, committedTxns) {
+    if (!profile?.validateTurn) return null;
+    const correction = profile.validateTurn(runtime, state, committedTxns);
+    if (!correction) return null;
+
+    const next = {
+        ...runtime,
+        correction_attempts: (runtime.correction_attempts || 0) + 1,
+    };
+    if (next.correction_attempts < 3) {
+        await setChallengeRuntime(next);
+        return challengeCorrection(correction, profile);
+    }
+
+    next.correction_attempts = 0;
+    await setChallengeRuntime(next);
+    return null;
+}
 
 function didDestroyChallengeThisTurn(runtime, committedTxns) {
     return (committedTxns || []).some(tx => tx.op === 'D' && tx.e === runtime.entity_type && tx.id === runtime.entity_id);
@@ -1274,18 +1000,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             };
 
             if (resolved) {
-                next.phase = 'cleanup_grace';
-                next.locked = false;
-                next.cleanup_turns_remaining = 1;
-                next.options = [];
-                next.pending_action = null;
-                next.pending_roll = null;
-                next.correction_attempts = 0;
-                await setChallengeRuntime(next);
-                if (!destroyed) {
-                    return challengeCorrection(`Challenge is resolved. Before normal play fully resumes, write any final persistent consequences and destroy the ${runtime.entity_type} entity.`, profile);
-                }
-                return null;
+                return transitionToCleanupGrace(next, profile, destroyed);
             }
 
             next.phase = 'awaiting_choice';
@@ -1296,11 +1011,14 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             next.pending_action = null;
             next.pending_roll = null;
             next.correction_attempts = 0;
-            await setChallengeRuntime(storeParsedOptions(next, options));
+            const stored = storeParsedOptions(next, options);
+            await setChallengeRuntime(stored);
 
             if (!options.length) {
                 return challengeCorrection(`The buffered setup action resolved, but no next options were presented. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
             }
+            const validationCorrection = await maybeRunProfileValidation(profile, stored, state, committedTxns);
+            if (validationCorrection) return validationCorrection;
             return null;
         }
 
@@ -1320,24 +1038,8 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             };
             next = storeParsedOptions(next, options);
             await setChallengeRuntime(next);
-            return null;
-        }
-
-        if (runtime.pending_action?.assessment_only) {
-            if (!options.length) {
-                await setChallengeRuntime(runtime);
-                return challengeCorrection(`Setup completed, but the buffered uncategorized action was not turned into options. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
-            }
-            let next = {
-                ...runtime,
-                pending_action: null,
-                pending_roll: null,
-                phase: 'awaiting_choice',
-                scene_draw_active: false,
-                correction_attempts: 0,
-            };
-            next = storeParsedOptions(next, options);
-            await setChallengeRuntime(next);
+            const validationCorrection = await maybeRunProfileValidation(profile, next, state, committedTxns);
+            if (validationCorrection) return validationCorrection;
             return null;
         }
 
@@ -1356,6 +1058,8 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
         };
         next = storeParsedOptions(next, options);
         await setChallengeRuntime(next);
+        const validationCorrection = await maybeRunProfileValidation(profile, next, state, committedTxns);
+        if (validationCorrection) return validationCorrection;
         return null;
     }
 
@@ -1373,6 +1077,8 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
         };
         next = storeParsedOptions(next, options);
         await setChallengeRuntime(next);
+        const validationCorrection = await maybeRunProfileValidation(profile, next, state, committedTxns);
+        if (validationCorrection) return validationCorrection;
         return null;
     }
 
@@ -1382,8 +1088,11 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             return challengeCorrection(`Challenge is active but no ${runtime.entity_type} entity exists. The extension auto-seeded it — check if it was destroyed.`, profile);
         }
         if (options.length) {
-            await setChallengeRuntime(storeParsedOptions({ ...runtime, correction_attempts: 0 }, options));
+            runtime = storeParsedOptions({ ...runtime, correction_attempts: 0 }, options);
+            await setChallengeRuntime(runtime);
         }
+        const validationCorrection = await maybeRunProfileValidation(profile, runtime, state, committedTxns);
+        if (validationCorrection) return validationCorrection;
         return null;
     }
 
@@ -1414,64 +1123,32 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
         };
 
         if (resolved) {
-            next.phase = 'cleanup_grace';
-            next.locked = false;
-            next.cleanup_turns_remaining = 1;
-            next.options = [];
-            next.pending_action = null;
-            next.pending_roll = null;
-            await setChallengeRuntime(next);
-            if (!destroyed) {
-                return challengeCorrection(`Challenge is resolved. Before normal play fully resumes, write any final persistent consequences and destroy the ${runtime.entity_type} entity.`, profile);
-            }
-            return null;
+            return transitionToCleanupGrace(next, profile, destroyed);
         }
 
         next.phase = 'awaiting_choice';
         next.exchange = Math.max((runtime.exchange || 1) + 1, coerceNumber(entity?.exchange) ?? 0);
-        next.options = options;
         next.pending_action = null;
         next.pending_roll = null;
-        await setChallengeRuntime(next);
+        const stored = storeParsedOptions(next, options);
+        await setChallengeRuntime(stored);
 
         if (!options.length) {
             return challengeCorrection(`Challenge is active but no options were presented. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
         }
+        const validationCorrection = await maybeRunProfileValidation(profile, stored, state, committedTxns);
+        if (validationCorrection) return validationCorrection;
         return null;
     }
 
     // ─── Awaiting reassessment ────────────────────────────────────────
     if (runtime.phase === 'awaiting_reassessment') {
         if (resolved) {
-            const next = {
-                ...runtime,
-                phase: 'cleanup_grace',
-                locked: false,
-                cleanup_turns_remaining: 1,
-                correction_attempts: 0,
-            };
-            await setChallengeRuntime(next);
-            if (!destroyed) {
-                return challengeCorrection(`Challenge is resolved. Before normal play fully resumes, write any final persistent consequences and destroy the ${runtime.entity_type} entity.`, profile);
-            }
-            return null;
+            return transitionToCleanupGrace(runtime, profile, destroyed);
         }
+        const validationCorrection = await maybeRunProfileValidation(profile, runtime, state, committedTxns);
+        if (validationCorrection) return validationCorrection;
         return null;
-    }
-
-    // ─── Profile-specific validation ──────────────────────────────────
-    if (profile.validateTurn) {
-        const correction = profile.validateTurn(runtime, state, committedTxns);
-        if (correction) {
-            runtime.correction_attempts = (runtime.correction_attempts || 0) + 1;
-            if (runtime.correction_attempts >= 3) {
-                runtime.correction_attempts = 0;
-                await setChallengeRuntime(runtime);
-                return null; // Give up after 3 attempts
-            }
-            await setChallengeRuntime(runtime);
-            return challengeCorrection(correction, profile);
-        }
     }
 
     return null;
