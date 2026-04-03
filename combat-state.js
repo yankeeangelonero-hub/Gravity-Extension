@@ -141,6 +141,37 @@ function boolText(value) {
     return value ? 'true' : 'false';
 }
 
+function buildCombatInputRecord(rawText, overrides = {}) {
+    return {
+        raw_message: normalizeText(decodeHtmlEntities(rawText)),
+        explicit_combat_prefix: /^\*?combat:/i.test(String(rawText || '')),
+        parsed_source: 'UNKNOWN',
+        option_index: null,
+        option_label: '',
+        intent: '',
+        declared_category: null,
+        assessment_only: false,
+        ...overrides,
+    };
+}
+
+function buildCombatInputBlock(runtime) {
+    const input = runtime?.last_input || null;
+    const lines = ['[COMBAT_INPUT]'];
+    lines.push(`HAS_INPUT: ${boolText(!!input)}`);
+    lines.push(`PARSED_BY_EXTENSION: true`);
+    lines.push(`RAW_MESSAGE: ${mechanicsValue(input?.raw_message)}`);
+    lines.push(`EXPLICIT_COMBAT_PREFIX: ${boolText(!!input?.explicit_combat_prefix)}`);
+    lines.push(`PARSED_SOURCE: ${mechanicsValue(input?.parsed_source)}`);
+    lines.push(`OPTION_INDEX: ${mechanicsValue(input?.option_index)}`);
+    lines.push(`OPTION_LABEL: ${mechanicsValue(input?.option_label)}`);
+    lines.push(`INTENT: ${mechanicsValue(input?.intent)}`);
+    lines.push(`DECLARED_CATEGORY: ${mechanicsValue(input?.declared_category)}`);
+    lines.push(`ASSESSMENT_ONLY: ${boolText(!!input?.assessment_only)}`);
+    lines.push('[/COMBAT_INPUT]');
+    return lines.join('\n');
+}
+
 function buildCombatMechanicsBlock(runtime, settings, dcTable, baseline) {
     const action = runtime?.pending_action || null;
     const roll = runtime?.pending_roll || null;
@@ -341,6 +372,7 @@ async function startCombatSetupRuntime(spawnDraw) {
         pending_action: null,
         pending_roll: null,
         last_resolution: null,
+        last_input: null,
         cleanup_turns_remaining: 0,
     };
     await setCombatRuntime(runtime);
@@ -714,11 +746,13 @@ function buildCombatPrompt(state) {
         .filter(Boolean);
 
     const lines = [];
+    lines.push(buildCombatInputBlock(runtime));
+    lines.push('');
     lines.push(buildCombatMechanicsBlock(runtime, settings, dcTable, baseline));
     lines.push('');
     lines.push(buildCombatTaskBlock(runtime, combat));
     lines.push('');
-    lines.push('Read COMBAT_MECHANICS and COMBAT_TASK first. They are the canonical extension-owned combat facts and obligations for this turn.');
+    lines.push('Read COMBAT_INPUT, COMBAT_MECHANICS, and COMBAT_TASK first. They are the canonical extension-owned combat input, facts, and obligations for this turn.');
     lines.push('');
     lines.push(`Combat runtime is active for combat:${runtime.combat_id}.`);
     lines.push(`Combat lock: ${runtime.locked ? 'engaged' : 'released'}`);
@@ -932,6 +966,9 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
 
     if (next.phase === 'setup') {
         if (combatBody === '') {
+            next.last_input = buildCombatInputRecord(rawText, {
+                parsed_source: 'ENTER_COMBAT',
+            });
             await setCombatRuntime(next);
             return { handled: true, inject: true };
         }
@@ -939,6 +976,13 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
         if (optionText || optionIndex != null) {
             const option = optionText || getOptionByIndex(next, optionIndex);
             if (!option) return { handled: false };
+            next.last_input = buildCombatInputRecord(rawText, {
+                parsed_source: 'OPTION_SELECTION',
+                option_index: option.index,
+                option_label: option.label || option.intent || '',
+                intent: option.intent || '',
+                declared_category: option.category || null,
+            });
             const action = buildOptionAction(option, null, { skipClamp: true });
             next.pending_action = {
                 ...action,
@@ -955,6 +999,11 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
         }
 
         if (explicitCustom) {
+            next.last_input = buildCombatInputRecord(rawText, {
+                parsed_source: 'CUSTOM_DECLARED',
+                intent: explicitCustom.intent || '',
+                declared_category: explicitCustom.category || null,
+            });
             const action = buildCustomAction(explicitCustom.intent, explicitCustom.category, null, { skipChallenge: true });
             next.pending_action = {
                 ...action,
@@ -975,6 +1024,11 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
             return { handled: false };
         }
 
+        next.last_input = buildCombatInputRecord(rawText, {
+            parsed_source: 'FREEFORM_ASSESSMENT',
+            intent: setupText,
+            assessment_only: true,
+        });
         next.pending_action = {
             source: 'custom',
             intent: setupText,
@@ -994,12 +1048,30 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
     if (next.phase === 'awaiting_reassessment') {
         const reassessed = explicitCustom || optionText || (optionIndex != null ? getOptionByIndex(next, optionIndex) : null);
         if (!reassessed) {
+            next.last_input = buildCombatInputRecord(rawText, {
+                parsed_source: 'REASSESSMENT_PENDING',
+                intent: combatBody != null ? combatBody : normalizeText(rawText),
+            });
+            await setCombatRuntime(next);
             return {
                 handled: true,
                 inject: true,
             };
         }
 
+        next.last_input = explicitCustom
+            ? buildCombatInputRecord(rawText, {
+                parsed_source: 'CUSTOM_REASSESSMENT',
+                intent: explicitCustom.intent || next.pending_action?.intent || '',
+                declared_category: explicitCustom.category || null,
+            })
+            : buildCombatInputRecord(rawText, {
+                parsed_source: 'OPTION_REASSESSMENT',
+                option_index: reassessed.index,
+                option_label: reassessed.label || reassessed.intent || '',
+                intent: reassessed.intent || '',
+                declared_category: reassessed.category || null,
+            });
         const action = explicitCustom
             ? buildCustomAction(explicitCustom.intent || next.pending_action?.intent || '', explicitCustom.category, baseline.category)
             : buildOptionAction(reassessed, baseline.category);
@@ -1036,6 +1108,10 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
     }
 
     if (combatBody === '') {
+        next.last_input = buildCombatInputRecord(rawText, {
+            parsed_source: 'REENTER_COMBAT',
+        });
+        await setCombatRuntime(next);
         return { handled: true, inject: true };
     }
 
@@ -1043,6 +1119,13 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
         const option = optionText || getOptionByIndex(next, optionIndex);
         if (!option) return { handled: false };
 
+        next.last_input = buildCombatInputRecord(rawText, {
+            parsed_source: 'OPTION_SELECTION',
+            option_index: option.index,
+            option_label: option.label || option.intent || '',
+            intent: option.intent || '',
+            declared_category: option.category || null,
+        });
         const action = buildOptionAction(option, baseline.category);
         const roll = buildRollPayload(action.effective_category, dcTable, drawFn);
         roll.baseline = baseline.category;
@@ -1054,6 +1137,11 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
     }
 
     if (explicitCustom) {
+        next.last_input = buildCombatInputRecord(rawText, {
+            parsed_source: 'CUSTOM_DECLARED',
+            intent: explicitCustom.intent || '',
+            declared_category: explicitCustom.category || null,
+        });
         const action = buildCustomAction(explicitCustom.intent, explicitCustom.category, baseline.category);
         next.pending_action = action;
 
@@ -1076,6 +1164,11 @@ async function handleCombatActionSelection(rawText, state, drawFn) {
         return { handled: false };
     }
 
+    next.last_input = buildCombatInputRecord(rawText, {
+        parsed_source: 'FREEFORM_ASSESSMENT',
+        intent: text,
+        assessment_only: true,
+    });
     next.pending_action = {
         source: 'custom',
         intent: text,
