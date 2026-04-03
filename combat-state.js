@@ -168,6 +168,7 @@ function buildCombatInputBlock(runtime) {
     lines.push(`INTENT: ${mechanicsValue(input?.intent)}`);
     lines.push(`DECLARED_CATEGORY: ${mechanicsValue(input?.declared_category)}`);
     lines.push(`ASSESSMENT_ONLY: ${boolText(!!input?.assessment_only)}`);
+    lines.push(`RESOLUTION_REQUEST: ${input?.assessment_only ? 'ASSESS_FIRST' : (input ? 'RESOLVE_IF_ALLOWED' : 'NONE')}`);
     lines.push('[/COMBAT_INPUT]');
     return lines.join('\n');
 }
@@ -175,7 +176,9 @@ function buildCombatInputBlock(runtime) {
 function buildCombatMechanicsBlock(runtime, settings, dcTable, baseline) {
     const action = runtime?.pending_action || null;
     const roll = runtime?.pending_roll || null;
+    const outcomeLocked = !!(roll && !action?.assessment_only);
     const lines = ['[COMBAT_MECHANICS]'];
+    lines.push('MATH_OWNER: EXTENSION');
     lines.push(`PHASE: ${mechanicsValue(runtime?.phase)}`);
     lines.push(`COMBAT_LOCKED: ${runtime?.locked ? 'true' : 'false'}`);
     lines.push(`COMBAT_ID: ${mechanicsValue(runtime?.combat_id)}`);
@@ -193,9 +196,11 @@ function buildCombatMechanicsBlock(runtime, settings, dcTable, baseline) {
     lines.push(`EFFECTIVE_CATEGORY: ${mechanicsValue(action?.effective_category)}`);
     lines.push(`ACTION_THRESHOLD: ${mechanicsValue(describeSuccessThreshold(roll?.category || action?.effective_category, roll?.dc ?? dcTable[action?.effective_category]))}`);
     lines.push(`ROLL_STATE: ${getRollStateLabel(roll)}`);
-    lines.push(`RESOLUTION_LOCKED: ${roll && !action?.assessment_only ? 'true' : 'false'}`);
+    lines.push(`RESOLUTION_LOCKED: ${outcomeLocked ? 'true' : 'false'}`);
+    lines.push(`SUCCESS_DECIDED_BY_EXTENSION: ${outcomeLocked ? 'true' : 'false'}`);
     lines.push(`D20_RESULT: ${mechanicsValue(roll?.d20)}`);
     lines.push(`RESULT: ${mechanicsValue(roll?.resolution || (roll?.success === true ? 'SUCCESS' : roll?.success === false ? 'TRANSFORM' : null))}`);
+    lines.push(`SUCCESS_STATE: ${roll?.success === true ? 'SUCCESS' : roll?.success === false ? 'TRANSFORM' : 'NONE'}`);
     lines.push(`ROLL_DRAW_ROLE: ${roll?.draw ? 'interpretive_only' : 'NONE'}`);
     lines.push(`ROLL_DRAW: ${summarizeDrawForMechanics(roll?.draw)}`);
     lines.push(`RECORD_LAST_DRAW: ${roll?.skip ? 'false' : roll?.draw ? 'true' : 'false'}`);
@@ -237,9 +242,12 @@ function buildCombatTaskBlock(runtime, combat) {
     lines.push(`MUST_CREATE_ENTITY: ${boolText(!combat)}`);
     lines.push(`MUST_ESTABLISH_OPENING: ${boolText(runtime?.phase === 'setup')}`);
     lines.push(`MUST_ASSESS_ACTION_TO_OPTIONS: ${boolText(needsAssessment)}`);
+    lines.push(`MUST_NOT_RESOLVE_EXCHANGE: ${boolText(needsAssessment || runtime?.phase === 'awaiting_choice')}`);
     lines.push(`MUST_RESOLVE_BUFFERED_ACTION: ${boolText(mustResolveBuffered)}`);
     lines.push(`MUST_RESOLVE_EXCHANGE: ${boolText(mustResolveExchange)}`);
     lines.push(`MUST_OUTPUT_OPTIONS: ${boolText(mustOutputOptions)}`);
+    lines.push(`OPTION_1_CAPTURES_PLAYER_INTENT: ${boolText(needsAssessment)}`);
+    lines.push('OPTION_COUNT: 3-4');
     lines.push(`OUTPUT_OPTIONS_IF_COMBAT_CONTINUES: ${boolText(runtime?.phase === 'awaiting_resolution' || mustResolveBuffered)}`);
     lines.push(`MUST_PRESERVE_ROLL: ${boolText(runtime?.phase === 'awaiting_reassessment')}`);
     lines.push(`MUST_RECORD_LAST_DRAW: ${boolText(!!roll?.draw && !roll?.skip && mustResolveExchange)}`);
@@ -752,7 +760,8 @@ function buildCombatPrompt(state) {
     lines.push('');
     lines.push(buildCombatTaskBlock(runtime, combat));
     lines.push('');
-    lines.push('Read COMBAT_INPUT, COMBAT_MECHANICS, and COMBAT_TASK first. They are the canonical extension-owned combat input, facts, and obligations for this turn.');
+    lines.push('Read COMBAT_INPUT, COMBAT_MECHANICS, and COMBAT_TASK first. They are the canonical extension-owned combat input, facts, math, and obligations for this turn.');
+    lines.push('The extension alone decides combat math. If SUCCESS_DECIDED_BY_EXTENSION is true, do not judge success or transform yourself. Narrate the injected RESULT.');
     lines.push('');
     lines.push(`Combat runtime is active for combat:${runtime.combat_id}.`);
     lines.push(`Combat lock: ${runtime.locked ? 'engaged' : 'released'}`);
@@ -860,7 +869,7 @@ function buildCombatPrompt(state) {
                 lines.push('The player typed a freeform combat action without a category.');
                 lines.push('Do not resolve it yet.');
                 lines.push('Assess that action against the baseline and output 3-4 clickable options.');
-                lines.push('The first option should capture the player’s intended move with your judged category if it is credible.');
+                lines.push('COMBAT_INPUT already contains the intended move. The first option should capture that intent with your judged category if it is credible.');
             } else {
                 lines.push('Combat is active but no valid option list is stored.');
                 lines.push('Output 3-4 clickable combat options using the exact combat HTML format.');
@@ -875,6 +884,7 @@ function buildCombatPrompt(state) {
             } else if (runtime.pending_roll) {
                 lines.push(`Mechanical resolution is already fixed: ${runtime.pending_roll.category || '?'} action | threshold ${describeSuccessThreshold(runtime.pending_roll.category, runtime.pending_roll.dc)} | rolled ${runtime.pending_roll.d20} => ${runtime.pending_roll.resolution || (runtime.pending_roll.success ? 'SUCCESS' : 'TRANSFORM')}.`);
                 lines.push('Do not reinterpret the threshold from the number alone. Treat the injected category as canonical, and do not compare the draw card/hexagram/table number to the threshold. The draw is interpretive only.');
+                lines.push('Do not decide success or transform yourself. The extension already decided it.');
                 lines.push('Interpret the combat draw explicitly.');
                 lines.push('- On success: the draw colors how the success lands.');
                 lines.push('- On transform (below threshold, non-critical): do not frame it as a dead miss or null turn. The attempted action still creates motion, but reality answers with exposure, cost, redirection, or a hard opportunity. The draw determines that transformation.');
