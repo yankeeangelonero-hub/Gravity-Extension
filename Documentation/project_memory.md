@@ -34,6 +34,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Combat now runs through the generic challenge engine (`challenge-state.js`) with the combat facade (`combat-state.js`) preserved for UI/backward compatibility.
 - The combat prompt contract now uses `CHALLENGE_INPUT`, `CHALLENGE_MECHANICS`, and `CHALLENGE_TASK`. Older `COMBAT_*` packet language in prompt assets was replaced.
 - Setup is now split into `setup_opening` and `setup_buffered` in runtime state. Scene draws stay active through setup and expire only once setup successfully exits into live exchange play.
+- If the player does not declare a combat difficulty category, the runtime is intentionally assess-first, not resolve-first: the model should convert the move into options and option 1 should capture the player's intent with the assessed category.
 - Challenge options now carry stamped ids plus an `option_table_version` internally so the runtime can track option tables more safely across turns.
 - Custom combat thresholds now work through challenge settings (`mode = Custom` plus `custom_dcs`) instead of silently falling back to the default table.
 - The extension now rewrites duplicate `create` operations targeting the already-seeded active challenge entity into field updates before commit. This protects the seeded combat container from being overwritten if the model tries to recreate it.

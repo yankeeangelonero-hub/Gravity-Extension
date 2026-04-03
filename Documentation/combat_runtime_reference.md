@@ -71,6 +71,12 @@ Supported input:
 - plain freeform text while combat is locked
   Also routes as combat input, even without the prefix.
 
+Important fallback rule:
+- no declared category means assess-first, not resolve-first
+- the model should judge the move and turn it into options
+- option 1 should capture the player's intended action with the model's assessed category
+- the extension should only roll once the action is categorized and chosen
+
 ## Packets
 
 Combat now uses the generic challenge packets:
