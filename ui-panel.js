@@ -1011,6 +1011,7 @@ function renderCombat(state) {
 
     parts.push(`<div class="gl-d-section"><b>Runtime:</b></div>`);
     parts.push(`<div class="gl-d-row"><b>Combat ID:</b> ${esc(runtime.combat_id)}</div>`);
+    parts.push(`<div class="gl-d-row"><b>Lock:</b> ${esc(runtime.locked ? 'engaged' : 'released')}</div>`);
     parts.push(`<div class="gl-d-row"><b>Phase:</b> ${esc(runtime.phase || '?')}</div>`);
     parts.push(`<div class="gl-d-row"><b>Exchange:</b> ${esc(runtime.exchange ?? '?')}</div>`);
     if (baseline) {

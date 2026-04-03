@@ -119,6 +119,107 @@ function describeSuccessThreshold(category, dc) {
     return `${dc}+ on d20`;
 }
 
+function summarizeDrawForMechanics(draw) {
+    if (!draw) return 'NONE';
+    const reading = stripNarrativeForcing(draw.reading).split('\n').map(part => normalizeText(part)).filter(Boolean)[0];
+    return normalizeText(reading || draw.label || 'NONE') || 'NONE';
+}
+
+function mechanicsValue(value) {
+    if (value == null || value === '') return 'NONE';
+    return String(value).replace(/\s+/g, ' ').trim();
+}
+
+function getRollStateLabel(roll) {
+    if (!roll) return 'NONE';
+    if (roll.challenge_pending) return 'PENDING_REASSESSMENT';
+    if (roll.skip) return roll.reason === 'absolute' ? 'AUTO_SUCCESS' : 'AUTO_FAIL';
+    return 'ROLLED';
+}
+
+function boolText(value) {
+    return value ? 'true' : 'false';
+}
+
+function buildCombatMechanicsBlock(runtime, settings, dcTable, baseline) {
+    const action = runtime?.pending_action || null;
+    const roll = runtime?.pending_roll || null;
+    const lines = ['[COMBAT_MECHANICS]'];
+    lines.push(`PHASE: ${mechanicsValue(runtime?.phase)}`);
+    lines.push(`COMBAT_LOCKED: ${runtime?.locked ? 'true' : 'false'}`);
+    lines.push(`COMBAT_ID: ${mechanicsValue(runtime?.combat_id)}`);
+    lines.push(`RUNTIME_EXCHANGE: ${mechanicsValue(runtime?.exchange)}`);
+    lines.push(`DIFFICULTY_MODE: ${mechanicsValue(settings?.mode)}`);
+    lines.push(`SUCCESS_THRESHOLDS: Highly likely=${dcTable['Highly likely']}+ | Average=${dcTable.Average}+ | Highly unlikely=${dcTable['Highly unlikely']}+`);
+    lines.push(`SPAWN_DRAW_ROLE: setup_circumstance_only`);
+    lines.push(`SPAWN_DRAW: ${summarizeDrawForMechanics(runtime?.spawn_draw)}`);
+    lines.push(`ACTION_SOURCE: ${mechanicsValue(action?.source ? String(action.source).toUpperCase() : null)}`);
+    lines.push(`ACTION_STATE: ${action ? (action.assessment_only ? 'ASSESSMENT_ONLY' : (action.setup_buffered ? 'BUFFERED' : 'DECLARED')) : 'NONE'}`);
+    lines.push(`ACTION_INTENT: ${mechanicsValue(action?.intent)}`);
+    lines.push(`DECLARED_CATEGORY: ${mechanicsValue(action?.declared_category)}`);
+    lines.push(`BASELINE_CATEGORY: ${mechanicsValue(action?.baseline_category || baseline?.category)}`);
+    lines.push(`BASELINE_THRESHOLD: ${mechanicsValue(describeSuccessThreshold(baseline?.category, dcTable[baseline?.category]))}`);
+    lines.push(`EFFECTIVE_CATEGORY: ${mechanicsValue(action?.effective_category)}`);
+    lines.push(`ACTION_THRESHOLD: ${mechanicsValue(describeSuccessThreshold(roll?.category || action?.effective_category, roll?.dc ?? dcTable[action?.effective_category]))}`);
+    lines.push(`ROLL_STATE: ${getRollStateLabel(roll)}`);
+    lines.push(`RESOLUTION_LOCKED: ${roll && !action?.assessment_only ? 'true' : 'false'}`);
+    lines.push(`D20_RESULT: ${mechanicsValue(roll?.d20)}`);
+    lines.push(`RESULT: ${mechanicsValue(roll?.resolution || (roll?.success === true ? 'SUCCESS' : roll?.success === false ? 'TRANSFORM' : null))}`);
+    lines.push(`ROLL_DRAW_ROLE: ${roll?.draw ? 'interpretive_only' : 'NONE'}`);
+    lines.push(`ROLL_DRAW: ${summarizeDrawForMechanics(roll?.draw)}`);
+    lines.push(`RECORD_LAST_DRAW: ${roll?.skip ? 'false' : roll?.draw ? 'true' : 'false'}`);
+    lines.push(`NEXT_OPTIONS_REQUIRED: ${runtime?.phase === 'awaiting_choice' || runtime?.phase === 'awaiting_resolution' || (runtime?.phase === 'setup' && !!action) ? 'true' : 'false'}`);
+    lines.push('[/COMBAT_MECHANICS]');
+    return lines.join('\n');
+}
+
+function buildCombatTaskBlock(runtime, combat) {
+    const action = runtime?.pending_action || null;
+    const roll = runtime?.pending_roll || null;
+    const setupBuffered = runtime?.phase === 'setup' && !!action?.setup_buffered;
+    const needsAssessment = !!action?.assessment_only;
+    const mustResolveBuffered = setupBuffered && !needsAssessment;
+    const mustResolveExchange = runtime?.phase === 'awaiting_resolution' || mustResolveBuffered;
+    const mustOutputOptions = runtime?.phase === 'setup'
+        || (runtime?.phase === 'awaiting_choice' && (needsAssessment || !(runtime?.options || []).length))
+        || runtime?.phase === 'awaiting_resolution';
+
+    let turnObjective = 'NONE';
+    if (runtime?.phase === 'setup') {
+        turnObjective = setupBuffered
+            ? (needsAssessment ? 'SETUP_AND_ASSESS' : 'SETUP_AND_RESOLVE_BUFFERED_ACTION')
+            : 'SETUP_OPENING';
+    } else if (runtime?.phase === 'awaiting_choice') {
+        turnObjective = needsAssessment ? 'ASSESS_ACTION_TO_OPTIONS' : 'WAIT_FOR_PLAYER_CHOICE';
+    } else if (runtime?.phase === 'awaiting_resolution') {
+        turnObjective = 'RESOLVE_EXCHANGE';
+    } else if (runtime?.phase === 'awaiting_reassessment') {
+        turnObjective = 'REASSESS_DIFFICULTY';
+    } else if (runtime?.phase === 'cleanup_grace') {
+        turnObjective = 'CLEANUP_AND_EXIT';
+    }
+
+    const lines = ['[COMBAT_TASK]'];
+    lines.push(`TURN_OBJECTIVE: ${turnObjective}`);
+    lines.push(`INPUT_MODE: ${runtime?.locked ? 'LOCKED_COMBAT' : 'PREFIX_ONLY'}`);
+    lines.push(`PLAYER_MESSAGE_IS_COMBAT_INPUT: ${boolText(!!runtime?.locked || action?.source === 'custom' || action?.source === 'option')}`);
+    lines.push(`MUST_CREATE_ENTITY: ${boolText(!combat)}`);
+    lines.push(`MUST_ESTABLISH_OPENING: ${boolText(runtime?.phase === 'setup')}`);
+    lines.push(`MUST_ASSESS_ACTION_TO_OPTIONS: ${boolText(needsAssessment)}`);
+    lines.push(`MUST_RESOLVE_BUFFERED_ACTION: ${boolText(mustResolveBuffered)}`);
+    lines.push(`MUST_RESOLVE_EXCHANGE: ${boolText(mustResolveExchange)}`);
+    lines.push(`MUST_OUTPUT_OPTIONS: ${boolText(mustOutputOptions)}`);
+    lines.push(`OUTPUT_OPTIONS_IF_COMBAT_CONTINUES: ${boolText(runtime?.phase === 'awaiting_resolution' || mustResolveBuffered)}`);
+    lines.push(`MUST_PRESERVE_ROLL: ${boolText(runtime?.phase === 'awaiting_reassessment')}`);
+    lines.push(`MUST_RECORD_LAST_DRAW: ${boolText(!!roll?.draw && !roll?.skip && mustResolveExchange)}`);
+    lines.push(`MUST_WRITE_LASTING_CONSEQUENCES: ${boolText(runtime?.phase === 'cleanup_grace')}`);
+    lines.push(`MUST_DESTROY_COMBAT_ENTITY: ${boolText(runtime?.phase === 'cleanup_grace')}`);
+    lines.push(`ALLOW_NEW_COMBAT_OPTIONS: ${boolText(runtime?.phase !== 'cleanup_grace')}`);
+    lines.push(`UPDATE_BLOCK_HINT: ${runtime?.phase === 'cleanup_grace' ? 'LEDGER_PREFERRED' : 'STATE_OK_UNLESS_STRUCTURALLY_COMPLEX'}`);
+    lines.push('[/COMBAT_TASK]');
+    return lines.join('\n');
+}
+
 function decodeHtmlEntities(value) {
     return String(value || '')
         .replace(/&quot;/g, '"')
@@ -184,9 +285,18 @@ async function setCombatCustomDcs(customDcs) {
     await setCombatSettings(settings);
 }
 
+function normalizeRuntime(runtime) {
+    if (!runtime || typeof runtime !== 'object') return null;
+    const normalized = clone(runtime) || {};
+    if (typeof normalized.locked !== 'boolean') {
+        normalized.locked = normalized.phase !== 'cleanup_grace';
+    }
+    return normalized;
+}
+
 function getCombatRuntime() {
     const { chatMetadata } = getContext();
-    return clone(chatMetadata?.[RUNTIME_KEY] || null);
+    return normalizeRuntime(chatMetadata?.[RUNTIME_KEY] || null);
 }
 
 async function setCombatRuntime(runtime) {
@@ -205,10 +315,13 @@ function isCombatRuntimeActive() {
     return !!getCombatRuntime();
 }
 
-function isCombatReasonModeActive() {
+function isCombatLocked() {
     const runtime = getCombatRuntime();
-    if (!runtime) return false;
-    return runtime.phase !== 'cleanup_grace';
+    return !!runtime?.locked;
+}
+
+function isCombatReasonModeActive() {
+    return isCombatLocked();
 }
 
 function makeCombatId() {
@@ -218,6 +331,7 @@ function makeCombatId() {
 async function startCombatSetupRuntime(spawnDraw) {
     const settings = getCombatSettings();
     const runtime = {
+        locked: true,
         combat_id: makeCombatId(),
         phase: 'setup',
         exchange: 1,
@@ -594,7 +708,14 @@ function buildCombatPrompt(state) {
         .filter(Boolean);
 
     const lines = [];
+    lines.push(buildCombatMechanicsBlock(runtime, settings, dcTable, baseline));
+    lines.push('');
+    lines.push(buildCombatTaskBlock(runtime, combat));
+    lines.push('');
+    lines.push('Read COMBAT_MECHANICS and COMBAT_TASK first. They are the canonical extension-owned combat facts and obligations for this turn.');
+    lines.push('');
     lines.push(`Combat runtime is active for combat:${runtime.combat_id}.`);
+    lines.push(`Combat lock: ${runtime.locked ? 'engaged' : 'released'}`);
     lines.push(`Phase: ${runtime.phase}`);
     lines.push(`Runtime exchange: ${runtime.exchange}`);
     lines.push(`Difficulty mode: ${settings.mode}`);
@@ -639,6 +760,9 @@ function buildCombatPrompt(state) {
     if (runtime.pending_action) {
         lines.push('');
         lines.push(`PENDING ACTION: ${formatActionSummary(runtime.pending_action)}`);
+        if (runtime.pending_action.source === 'custom') {
+            lines.push('This turn came from a custom combat command. The action intent has already been parsed into COMBAT_MECHANICS and PENDING ACTION. Do not treat the player message as a regular prose turn.');
+        }
     }
     if (runtime.pending_roll) {
         lines.push(`PENDING ROLL: ${formatRollSummary(runtime.pending_roll)}`);
@@ -786,7 +910,7 @@ function buildCustomAction(intent, declaredCategory, baselineCategory, options =
 async function handleCombatActionSelection(rawText, state, drawFn) {
     let runtime = getCombatRuntime();
     const combatBody = getCombatCommandBody(rawText);
-    if (!runtime) {
+    if (!runtime || (!runtime.locked && combatBody != null)) {
         if (combatBody == null) return { handled: false };
         await startCombatSetupRuntime(drawFn());
         runtime = getCombatRuntime();
@@ -1039,6 +1163,7 @@ async function processCombatAssistantTurn(state, committedTxns, messageText) {
 
             if (resolved) {
                 next.phase = 'cleanup_grace';
+                next.locked = false;
                 next.cleanup_turns_remaining = 1;
                 next.options = [];
                 next.pending_action = null;
@@ -1136,6 +1261,7 @@ async function processCombatAssistantTurn(state, committedTxns, messageText) {
 
         if (resolved) {
             next.phase = 'cleanup_grace';
+            next.locked = false;
             next.cleanup_turns_remaining = 1;
             next.options = [];
             next.pending_action = null;
@@ -1165,6 +1291,7 @@ async function processCombatAssistantTurn(state, committedTxns, messageText) {
             const next = {
                 ...runtime,
                 phase: 'cleanup_grace',
+                locked: false,
                 cleanup_turns_remaining: 1,
             };
             await setCombatRuntime(next);
@@ -1195,6 +1322,7 @@ export {
     setCombatRuntime,
     clearCombatRuntime,
     isCombatRuntimeActive,
+    isCombatLocked,
     isCombatReasonModeActive,
     startCombatSetupRuntime,
     getCombatEntity,

@@ -22,11 +22,13 @@ import {
     buildCombatPrompt,
     clearCombatRuntime,
     getCombatBaseline,
+    isCombatLocked,
     getCombatRuntime,
     handleCombatActionSelection,
     isCombatReasonModeActive,
     isCombatRuntimeActive,
     processCombatAssistantTurn,
+    startCombatSetupRuntime,
 } from './combat-state.js';
 
 const MODULE_NAME = 'gravity-ledger';
@@ -1378,8 +1380,27 @@ async function onUserMessage(messageId) {
     const message = context.chat?.[messageId];
     if (!message?.mes) return;
 
-    // Detect intimacy action from st-clickable-actions (data-value starts with "intimate:")
     const rawText = message.mes.replace(/<[^>]+>/g, '').trim();
+    const combatLocked = isCombatLocked();
+    const explicitCombatCommand = /^\*?combat:/i.test(String(rawText || ''));
+    if ((combatLocked || explicitCombatCommand) && !/^ooc:/i.test(rawText)) {
+        const combatResult = await handleCombatActionSelection(rawText, _currentState, drawDivination);
+        if (combatResult.handled) {
+            _pendingDeductionType = 'combat';
+            _pendingReinforcement = null;
+            injectPrompt('advance');
+            updatePanel(_currentState, _turnCounter);
+            return;
+        }
+        if (combatLocked || explicitCombatCommand) {
+            _pendingDeductionType = 'combat';
+            injectPrompt('advance');
+            updatePanel(_currentState, _turnCounter);
+            return;
+        }
+    }
+
+    // Detect intimacy action from st-clickable-actions (data-value starts with "intimate:")
     if (rawText.startsWith('intimate:') || rawText.startsWith('*intimate:')) {
         _pendingDeductionType = 'intimacy';
         _pendingOOCInjection = buildModeInjection(
@@ -1396,15 +1417,6 @@ Then write prose, render the choices, and end with a compact STATE block.`,
         );
         injectPrompt('advance');
         return;
-    }
-
-    if ((isCombatRuntimeActive() || /^\*?combat:/i.test(String(rawText || ''))) && !/^ooc:/i.test(rawText)) {
-        const combatResult = await handleCombatActionSelection(rawText, _currentState, drawDivination);
-        if (combatResult.handled) {
-            injectPrompt('advance');
-            updatePanel(_currentState, _turnCounter);
-            return;
-        }
     }
 
     const result = await processOOC(message.mes);
@@ -1530,6 +1542,12 @@ function handleAdvanceButton() {
 }
 
 async function handleCombatButton() {
+    if (!isCombatLocked()) {
+        await startCombatSetupRuntime(drawDivination());
+        _pendingDeductionType = 'combat';
+        injectPrompt('advance');
+        updatePanel(_currentState, _turnCounter);
+    }
     insertChatMessage('combat: ');
 }
 
