@@ -6,6 +6,24 @@ Date: 2026-04-03 00:25:06 +08:00
 
 This pass completed the combat runtime rework that had still been pending after the earlier power-doctrine migration.
 
+## Addendum - Challenge Engine Follow-Up
+
+The combat runtime described below has since been migrated onto the generic
+challenge engine.
+
+Current live interpretation:
+- `combat-state.js` is now a compatibility facade over `challenge-state.js`
+- prompt packets are now `CHALLENGE_INPUT`, `CHALLENGE_MECHANICS`, and `CHALLENGE_TASK`
+- combat setup is now split into `setup_opening` and `setup_buffered`
+- the extension auto-seeds the active `combat:*` entity and the model should not create it again
+- stored combat options now carry ids plus `option_table_version`
+- duplicate `create combat:<active-id>` lines are rewritten into updates before commit
+- custom threshold mode now works through the generic challenge settings path
+
+Use this handoff for the broad combat-loop history, but use
+[combat_runtime_reference.md](/D:/claude/Gravity%20Preset/Gravity-Extension/Documentation/combat_runtime_reference.md)
+for the current live runtime contract.
+
 ## Follow-Up Fixes Landed After This Handoff
 
 Several important combat-runtime fixes landed after the initial runtime commit. Treat these as part of the current live behavior:

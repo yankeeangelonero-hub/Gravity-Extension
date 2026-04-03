@@ -203,13 +203,13 @@ const combatProfile = Object.freeze({
         critFail: 'CRITICAL_TRANSFORM',
     }),
 
-    phases: ['setup', 'awaiting_choice', 'awaiting_resolution', 'awaiting_reassessment', 'cleanup_grace'],
+    phases: ['setup_opening', 'setup_buffered', 'awaiting_choice', 'awaiting_resolution', 'awaiting_reassessment', 'cleanup_grace'],
 
     optionCount: [3, 4],
     optionPrefix: 'combat',
 
     seedFields: Object.freeze({ kind: 'combat', status: 'ACTIVE', exchange: 1 }),
-    modelFields: ['participants', 'hostiles', 'primary_opponent', 'terrain', 'situation', 'threat'],
+    modelFields: ['participants', 'hostiles', 'primary_enemy', 'terrain', 'situation', 'threat'],
     resolutionFields: ['outcome', 'aftermath'],
 
     lorebookKeys: Object.freeze({
@@ -290,6 +290,7 @@ const combatProfile = Object.freeze({
         if (entity) {
             lines.push('');
             lines.push(`COMBAT ENTITY (${entity.id || runtime.entity_id})`);
+            lines.push('  This combat container already exists. Do not create it again; only set or update its fields.');
             if (entity.status) lines.push(`  Status: ${entity.status}`);
             if (entity.exchange != null) lines.push(`  Ledger exchange: ${entity.exchange}`);
             if (entity.situation) lines.push(`  Situation: ${entity.situation}`);
@@ -300,7 +301,7 @@ const combatProfile = Object.freeze({
             if (entity.primary_enemy) lines.push(`  Primary enemy field: ${typeof entity.primary_enemy === 'object' ? JSON.stringify(entity.primary_enemy) : entity.primary_enemy}`);
         } else {
             lines.push('');
-            lines.push('The extension auto-seeded the combat entity. Fill its fields this turn.');
+            lines.push('The extension auto-seeded the combat entity. Do not create it again. Fill its fields this turn.');
         }
 
         lines.push('');
@@ -345,16 +346,18 @@ const combatProfile = Object.freeze({
 
         lines.push('');
         lines.push('OPTION HTML — when combat is waiting for a player choice, output 3-4 clickable options in exactly this format:');
-        lines.push('<span class="act" data-value="combat: option | 1 | Highly likely | Break left through the gap and take the nearest rifle offline">1. Break left through the gap (Highly likely)</span>');
+        lines.push('<span class="act" data-value="combat: option | opt-e1-v1-1 | 1 | Highly likely | Break left through the gap and take the nearest rifle offline">1. Break left through the gap (Highly likely)</span>');
         lines.push('The player may answer with `combat:2` to pick option 2, or `combat: Break left through the gap and take the nearest rifle offline DC Highly likely` for a declared custom action.');
 
         // Phase instructions
         switch (runtime.phase) {
-            case 'setup':
+            case 'setup_opening':
+            case 'setup_buffered':
                 lines.push('');
                 lines.push('PHASE INSTRUCTION: SETUP');
-                if (runtime.pending_action?.setup_buffered) {
+                if (runtime.phase === 'setup_buffered' || runtime.pending_action?.setup_buffered) {
                     lines.push('Setup is incomplete, but the player already committed to an action while setup had not advanced.');
+                    lines.push(`combat:${runtime.entity_id} already exists. Do not create it again.`);
                     lines.push(`Fill combat:${runtime.entity_id} fields: participants, hostiles, primary_enemy, terrain, situation, threat, and exchange.`);
                     lines.push('Then immediately resolve the buffered player action this same turn.');
                     if (runtime.pending_action.assessment_only) {
@@ -367,7 +370,7 @@ const combatProfile = Object.freeze({
                         lines.push('End with the next 3-4 clickable options if combat continues.');
                     }
                 } else {
-                    lines.push(`The extension auto-seeded combat:${runtime.entity_id}. Fill its fields now.`);
+                    lines.push(`The extension auto-seeded combat:${runtime.entity_id}. Do not create it again.`);
                     lines.push('Establish participants, hostiles, primary_enemy, terrain, situation, threat, and exchange.');
                     lines.push('Assign justified power_base, power, power_basis, and abilities to important new enemies.');
                     lines.push('Use the scene draw to reveal encounter circumstance and leverage: who sees clearly, who is exposed, how the terrain is really working, and why the opening options fall where they do.');
@@ -435,7 +438,7 @@ const combatProfile = Object.freeze({
     },
 
     setupGuidance() {
-        return 'Fill entity fields: participants, hostiles, primary_opponent, terrain, situation, threat, exchange. Assign justified power_base, power, power_basis, and abilities to important new enemies.';
+        return 'The extension already seeded the combat entity. Do not create it again. Fill entity fields: participants, hostiles, primary_enemy, terrain, situation, threat, exchange. Assign justified power_base, power, power_basis, and abilities to important new enemies.';
     },
 
     cleanupGuidance() {

@@ -1,6 +1,6 @@
 # Project Memory
 
-Updated: 2026-04-03 01:26:22 +08:00
+Updated: 2026-04-03 16:02:00 +08:00
 
 Durable working memory for Codex sessions in this repository. Update this file when system behavior, active design decisions, or important constraints change.
 
@@ -31,6 +31,13 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Combat resolution now states the mechanical result explicitly in `_combat`. The prompt now says that only the `d20` is compared to the live threshold and the draw is interpretive only.
 - Combat difficulty is now framed as extension-owned success thresholds rather than bare prompt-side DC numbers. `_combat` injects the active thresholds and the live action threshold, and the prompt assets now tell the model to trust those injected numbers as canonical.
 - `ui-panel.js` now has a dedicated Combat section with runtime visibility plus synced difficulty controls in both the Combat section and the top command bar.
+- Combat now runs through the generic challenge engine (`challenge-state.js`) with the combat facade (`combat-state.js`) preserved for UI/backward compatibility.
+- The combat prompt contract now uses `CHALLENGE_INPUT`, `CHALLENGE_MECHANICS`, and `CHALLENGE_TASK`. Older `COMBAT_*` packet language in prompt assets was replaced.
+- Setup is now split into `setup_opening` and `setup_buffered` in runtime state. Scene draws stay active through setup and expire only once setup successfully exits into live exchange play.
+- Challenge options now carry stamped ids plus an `option_table_version` internally so the runtime can track option tables more safely across turns.
+- Custom combat thresholds now work through challenge settings (`mode = Custom` plus `custom_dcs`) instead of silently falling back to the default table.
+- The extension now rewrites duplicate `create` operations targeting the already-seeded active challenge entity into field updates before commit. This protects the seeded combat container from being overwritten if the model tries to recreate it.
+- When locked challenge input cannot be resolved to a stored option, the runtime now records the failed input instead of leaving stale `CHALLENGE_INPUT` in prompt state.
 - Good-turn exemplar tagging now preserves the real completed turn mode through `_lastCompletedMode`, so combat/intimacy/advance exemplars are not silently recorded as regular.
 
 ## Prose Architecture
@@ -74,6 +81,7 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Active durable memory file: `Documentation/project_memory.md`
 - Archived memory and older planning docs: `Documentation/Old/`
 - Current combat behavior reference: `Documentation/combat_runtime_reference.md`
+- Current challenge-engine implementation spec: `Plan/challenge-engine-implementation-spec.md`
 - Existing prose rollout handoff: `Documentation/v14_prose_architecture_handoff.md`
 - Current reasoning-flow reference: `Documentation/deduction_cot_architecture.md`
 - `Documentation/gravity_character_card_template.md` now includes optional prewrite prompts plus a holistic card/scenario/lorebook split. Keep the card focused on dramatic behavior, the scenario focused on current relationship and structural tension, and the lorebook focused on reference/canon overflow rather than turning the card into a wiki page.

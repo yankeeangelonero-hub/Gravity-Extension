@@ -122,6 +122,83 @@ const MODE_LOREBOOK_KEYS = Object.freeze({
     proseAdvance: 'gravity_prose_advance',
 });
 
+function getCollectionForEntityType(state, entityType) {
+    if (!state || !entityType) return null;
+    const map = {
+        char: state.characters,
+        constraint: state.constraints,
+        collision: state.collisions,
+        combat: state.combats,
+        chapter: state.chapters,
+        faction: state.factions,
+        world: state.world,
+        pc: state.pc,
+        divination: state.divination,
+    };
+    return map[entityType] || null;
+}
+
+function valuesEquivalent(a, b) {
+    if (a === b) return true;
+    try {
+        return JSON.stringify(a) === JSON.stringify(b);
+    } catch {
+        return false;
+    }
+}
+
+function rewriteDuplicateActiveChallengeCreate(transactions, state) {
+    const runtime = getChallengeRuntime();
+    if (!runtime?.entity_type || !runtime?.entity_id || !Array.isArray(transactions) || transactions.length === 0) {
+        return { transactions, rewrittenCount: 0 };
+    }
+
+    const collection = getCollectionForEntityType(state, runtime.entity_type);
+    const existing = ['world', 'pc', 'divination'].includes(runtime.entity_type)
+        ? collection
+        : collection?.[runtime.entity_id];
+    if (!existing) return { transactions, rewrittenCount: 0 };
+
+    let rewrittenCount = 0;
+    const rewritten = [];
+
+    for (const tx of transactions) {
+        if (tx?.op !== 'CR' || tx.e !== runtime.entity_type || tx.id !== runtime.entity_id) {
+            rewritten.push(tx);
+            continue;
+        }
+
+        rewrittenCount++;
+        const reason = tx.r
+            ? `${tx.r} | system:challenge-engine:rewrite-duplicate-create`
+            : 'system:challenge-engine:rewrite-duplicate-create';
+
+        for (const [field, value] of Object.entries(tx.d || {})) {
+            if (field === 'id' || valuesEquivalent(existing?.[field], value)) continue;
+            const stateField = getStateMachineField(tx.e, field);
+            if (stateField) {
+                rewritten.push({
+                    op: 'TR',
+                    e: tx.e,
+                    id: tx.id,
+                    d: { f: field, to: value },
+                    r: reason,
+                });
+            } else {
+                rewritten.push({
+                    op: 'S',
+                    e: tx.e,
+                    id: tx.id,
+                    d: { f: field, v: value },
+                    r: reason,
+                });
+            }
+        }
+    }
+
+    return { transactions: rewritten, rewrittenCount };
+}
+
 function uniqueStrings(values) {
     return [...new Set((values || []).filter(Boolean))];
 }
@@ -1239,6 +1316,7 @@ async function onMessageReceived(messageId) {
     }
 
     let extractedTransactions = extraction.transactions || [];
+    let duplicateChallengeCreateRewriteCount = 0;
     const extractionErrors = [...(extraction.errors || [])];
 
     if (extraction.format === 'state') {
@@ -1246,6 +1324,10 @@ async function onMessageReceived(messageId) {
         extractedTransactions = compiled.transactions;
         extractionErrors.push(...compiled.errors);
     }
+
+    const duplicateCreateRewrite = rewriteDuplicateActiveChallengeCreate(extractedTransactions, _currentState);
+    extractedTransactions = duplicateCreateRewrite.transactions;
+    duplicateChallengeCreateRewriteCount = duplicateCreateRewrite.rewrittenCount;
 
     // No transactions at all (empty block or all lines failed)
     if (extractedTransactions.length === 0 && extractionErrors.length === 0) {
@@ -1365,6 +1447,11 @@ async function onMessageReceived(messageId) {
             fix: 'Resubmit corrected line',
         })));
     }
+    if (duplicateChallengeCreateRewriteCount > 0) {
+        const runtime = getChallengeRuntime();
+        _pendingReinforcement = (_pendingReinforcement || '') +
+            `\n[CHALLENGE RUNTIME]\nThe extension already seeded ${runtime?.entity_type || 'challenge'}:${runtime?.entity_id || ''}. Do not create it again. Only set or update its fields.`;
+    }
 
     challengeCorrection = await processChallengeAssistantTurn(_currentState, committedTxns, message.mes);
     if (challengeCorrection) {
@@ -1390,6 +1477,7 @@ async function onUserMessage(messageId) {
     if ((challengeLocked || challengePrefix) && !/^ooc:/i.test(rawText)) {
         const challengeResult = await handleChallengeActionSelection(rawText, _currentState, drawDivination);
         if (challengeResult.handled) {
+            _currentState = computeCurrentState();
             _pendingDeductionType = challengeResult.deductionType || getActiveChallengeDeductionType() || 'combat';
             _pendingReinforcement = null;
             injectPrompt('advance');
@@ -1559,6 +1647,7 @@ function handleAdvanceButton() {
 async function handleCombatButton() {
     if (!isChallengeSessionLocked()) {
         await startChallengeRuntime('combat', drawDivination());
+        _currentState = computeCurrentState();
         _pendingDeductionType = 'combat';
         injectPrompt('advance');
         updatePanel(_currentState, _turnCounter);

@@ -746,6 +746,28 @@ This is explicitly not part of the first implementation.
 
 ## Implementation Handoff — Phases 1+2
 
+### Addendum — 2026-04-03 later follow-up
+
+The implementation status below is now partly stale.
+
+Current live status:
+- stable option ids are implemented in the engine, with stored option ids plus
+  `option_table_version`
+- setup is now split into `setup_opening` and `setup_buffered`
+- `scene_draw_active` now stays true through setup and expires when setup exits
+  successfully into live exchange play
+- duplicate `create` operations against the already-seeded active challenge
+  entity are rewritten into updates before commit
+- custom threshold mode now works through `gravity_challenge_settings.<kind>`
+
+Practical implication:
+- Phase 2 should now be treated as complete for the combat profile
+- the old "5 of 7 items completed" note below remains useful as historical
+  rollout context, but it no longer describes the live codebase exactly
+
+Use the rest of this section as implementation history, not as the current
+completion ledger.
+
 Completed: `3d7db38` on `codex-v13-state-delta` (2026-04-03)
 
 ### What was built

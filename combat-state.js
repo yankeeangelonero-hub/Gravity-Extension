@@ -59,7 +59,7 @@ function categoryFromStep(step) {
 
 function buildDcTableLegacy(settings) {
     const mode = settings?.mode || combatProfile?.defaultMode || 'Cinematic';
-    return buildDcTable(mode, combatProfile);
+    return buildDcTable(mode, combatProfile, settings?.custom_dcs);
 }
 
 function getCombatSettings() {

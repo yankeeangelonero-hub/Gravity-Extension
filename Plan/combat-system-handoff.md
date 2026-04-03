@@ -11,10 +11,13 @@ This handoff predates the repository's power-doctrine refactor. The overall comb
 - `power` is dynamic. `power_base` is the healthy earned rating. Severe impairment can lower `power`; lasting growth or decline can change `power_base`.
 - `OOC: power review pc|char:id|all` is the supported re-judgment path when the story earns a power change.
 - The full combat runtime is now live in `combat-state.js`, with a dedicated `_combat` injection slot, a first-class `combat` entity type, cleanup grace behavior, and synced panel difficulty controls.
+- Combat now runs through the generic challenge engine. `combat-state.js` is a compatibility facade over `challenge-state.js`, and the live prompt contract uses `CHALLENGE_INPUT`, `CHALLENGE_MECHANICS`, and `CHALLENGE_TASK`.
 - Difficulty is now injected from the extension as live success thresholds, not left to prompt-side numeric assumptions. The prompt assets now tell the model to trust the injected category and threshold as canonical.
 - Combat setup strips the generic divination `NARRATIVE_FORCING` text. The spawn draw now highlights encounter circumstance, leverage, visibility, spacing, terrain truth, and why opening options sit at their assessed categories.
 - Resolution outcomes are now framed as `SUCCESS`, `TRANSFORM`, `CRITICAL_SUCCESS`, and `CRITICAL_TRANSFORM`.
 - Player combat input now uses a `combat:` prefix flow: the Combat button inserts `combat: `, numbered options can be chosen with `combat:2`, and declared actions use `combat: <freeform action> DC <category>`.
+- Setup is now split into `setup_opening` and `setup_buffered`, scene draws expire only after setup completes successfully, and stored options now carry ids plus `option_table_version`.
+- The extension auto-seeds the active `combat:*` container and now rewrites duplicate `create combat:<active-id>` attempts into field updates before commit so the seeded entity is not overwritten.
 
 Use [combat-power-doctrine.md](./combat-power-doctrine.md) as the field contract for the power model referenced throughout this handoff.
 

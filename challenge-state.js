@@ -141,12 +141,27 @@ function categoryFromStepForProfile(step, profile) {
 
 // ─── DC / Threshold Helpers ───────────────────────────────────────────────────
 
-function buildDcTable(mode, profile) {
+function buildDcTable(mode, profile, customDcs = null) {
     if (!profile) return {};
+    const defaultTable = profile.thresholdTables[profile.defaultMode]
+        ? clone(profile.thresholdTables[profile.defaultMode])
+        : {};
+
+    if (mode === 'Custom') {
+        const merged = { ...defaultTable };
+        for (const [rawCategory, rawValue] of Object.entries(customDcs || {})) {
+            const category = normalizeCategoryForProfile(rawCategory, profile);
+            const dc = coerceNumber(rawValue);
+            if (!category || dc == null) continue;
+            if (category === profile.autoSuccess || category === profile.autoFail) continue;
+            merged[category] = dc;
+        }
+        return merged;
+    }
+
     const table = profile.thresholdTables[mode];
     if (table) return clone(table);
-    const defaultTable = profile.thresholdTables[profile.defaultMode];
-    return defaultTable ? clone(defaultTable) : {};
+    return defaultTable;
 }
 
 function describeDcTable(table) {
@@ -222,7 +237,7 @@ async function setChallengeDifficultyMode(kind, mode) {
     const profile = getProfile(kind);
     if (!profile) return;
     const known = Object.keys(profile.thresholdTables);
-    const validMode = known.includes(mode) ? mode : profile.defaultMode;
+    const validMode = (known.includes(mode) || mode === 'Custom') ? mode : profile.defaultMode;
     const settings = getChallengeSettings(kind);
     settings.mode = validMode;
     await setChallengeSettings(kind, settings);
@@ -243,6 +258,12 @@ function normalizeRuntime(runtime) {
     if (typeof normalized.locked !== 'boolean') {
         normalized.locked = normalized.phase !== 'cleanup_grace';
     }
+    if (normalized.phase === 'setup') {
+        normalized.phase = normalized.pending_action?.setup_buffered ? 'setup_buffered' : 'setup_opening';
+    }
+    if (normalized.phase === 'setup_opening' && normalized.pending_action?.setup_buffered) {
+        normalized.phase = 'setup_buffered';
+    }
     // Ensure canonical field names
     if (!normalized.entity_type && normalized.kind) {
         const profile = getProfile(normalized.kind);
@@ -252,8 +273,11 @@ function normalizeRuntime(runtime) {
         normalized.entity_id = normalized.combat_id;
     }
     if (normalized.scene_draw_active === undefined) {
-        normalized.scene_draw_active = normalized.phase === 'setup';
+        normalized.scene_draw_active = normalized.phase === 'setup_opening' || normalized.phase === 'setup_buffered';
     }
+    normalized.option_table_version = Number.isFinite(Number(normalized.option_table_version))
+        ? Number(normalized.option_table_version)
+        : 0;
     return normalized;
 }
 
@@ -363,7 +387,7 @@ async function startChallengeRuntime(kind, sceneDraw) {
 
     const entityId = makeEntityId(profile);
     const settings = getChallengeSettings(kind);
-    const mode = settings.mode && profile.thresholdTables[settings.mode]
+    const mode = (settings.mode === 'Custom' || profile.thresholdTables[settings.mode])
         ? settings.mode
         : profile.defaultMode;
 
@@ -375,12 +399,13 @@ async function startChallengeRuntime(kind, sceneDraw) {
         kind,
         entity_type: profile.entityType,
         entity_id: entityId,
-        phase: 'setup',
+        phase: 'setup_opening',
         exchange: 1,
         scene_draw: clone(sceneDraw),
         scene_draw_active: true,
         difficulty_mode: mode,
         options: [],
+        option_table_version: 0,
         pending_action: null,
         pending_roll: null,
         last_resolution: null,
@@ -406,15 +431,28 @@ function getChallengeCommandBody(rawText, profile) {
 function parseChallengeOptionValue(value, label, profile) {
     const text = decodeHtmlEntities(value);
     const escaped = profile.optionPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const match = text.match(new RegExp(`^\\*?${escaped}:\\s*option\\s*\\|\\s*(\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
-    if (!match) return null;
-    const category = normalizeCategoryForProfile(match[2], profile);
+    const withId = text.match(new RegExp(`^\\*?${escaped}:\\s*option\\s*\\|\\s*([^|]+)\\|\\s*(\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
+    if (withId) {
+        const category = normalizeCategoryForProfile(withId[3], profile);
+        if (!category) return null;
+        return {
+            id: normalizeText(withId[1]),
+            index: Number(withId[2]),
+            category,
+            intent: normalizeText(withId[4]),
+            label: normalizeText(decodeHtmlEntities(label)) || normalizeText(withId[4]),
+        };
+    }
+    const legacy = text.match(new RegExp(`^\\*?${escaped}:\\s*option\\s*\\|\\s*(\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
+    if (!legacy) return null;
+    const category = normalizeCategoryForProfile(legacy[2], profile);
     if (!category) return null;
     return {
-        index: Number(match[1]),
+        id: null,
+        index: Number(legacy[1]),
         category,
-        intent: normalizeText(match[3]),
-        label: normalizeText(decodeHtmlEntities(label)) || normalizeText(match[3]),
+        intent: normalizeText(legacy[3]),
+        label: normalizeText(decodeHtmlEntities(label)) || normalizeText(legacy[3]),
     };
 }
 
@@ -468,6 +506,20 @@ function parseChallengeOptionsFromMessage(text, profile) {
         if (parsed) options.push(parsed);
     }
     return options.sort((a, b) => a.index - b.index);
+}
+
+function storeParsedOptions(runtime, options) {
+    if (!options?.length) return clone(runtime);
+    const nextVersion = (Number(runtime?.option_table_version) || 0) + 1;
+    return {
+        ...clone(runtime),
+        option_table_version: nextVersion,
+        options: options.map(option => ({
+            ...option,
+            id: option.id || `opt-e${runtime?.exchange || 1}-v${nextVersion}-${option.index}`,
+            table_version: nextVersion,
+        })),
+    };
 }
 
 // ─── Roll Math ────────────────────────────────────────────────────────────────
@@ -531,6 +583,11 @@ function getOptionByIndex(runtime, index) {
     return (runtime.options || []).find(option => option.index === index) || null;
 }
 
+function getOptionById(runtime, id) {
+    if (!id) return null;
+    return (runtime.options || []).find(option => option.id === id) || null;
+}
+
 function buildOptionAction(option, baselineCategory, profile, options = {}) {
     const baselineStep = categoryStepForProfile(baselineCategory, profile);
     const chosenStep = categoryStepForProfile(option.category, profile);
@@ -579,6 +636,7 @@ function buildInputRecord(rawText, profile, overrides = {}) {
         raw_message: normalizeText(decodeHtmlEntities(rawText)),
         explicit_prefix: new RegExp(`^\\*?${profile.inputPrefix}:`, 'i').test(String(rawText || '')),
         parsed_source: 'UNKNOWN',
+        option_id: null,
         option_index: null,
         option_label: '',
         intent: '',
@@ -599,6 +657,7 @@ function buildChallengeInputBlock(runtime, profile) {
     lines.push(`RAW_MESSAGE: ${mechanicsValue(input?.raw_message)}`);
     lines.push(`EXPLICIT_PREFIX: ${boolText(!!input?.explicit_prefix)}`);
     lines.push(`PARSED_SOURCE: ${mechanicsValue(input?.parsed_source)}`);
+    lines.push(`OPTION_ID: ${mechanicsValue(input?.option_id)}`);
     lines.push(`OPTION_INDEX: ${mechanicsValue(input?.option_index)}`);
     lines.push(`OPTION_LABEL: ${mechanicsValue(input?.option_label)}`);
     lines.push(`INTENT: ${mechanicsValue(input?.intent)}`);
@@ -626,7 +685,7 @@ function buildChallengeMechanicsBlock(runtime, profile, settings, dcTable, basel
     lines.push(`SCENE_DRAW_ACTIVE: ${boolText(!!runtime?.scene_draw_active)}`);
     lines.push(`SCENE_DRAW: ${summarizeDrawForMechanics(runtime?.scene_draw)}`);
     lines.push(`ACTION_SOURCE: ${mechanicsValue(action?.source ? String(action.source).toUpperCase() : null)}`);
-    lines.push(`ACTION_STATE: ${action ? (action.assessment_only ? 'ASSESSMENT_ONLY' : (action.setup_buffered ? 'BUFFERED' : 'DECLARED')) : 'NONE'}`);
+    lines.push(`ACTION_STATE: ${action ? (action.assessment_only ? 'ASSESSMENT_ONLY' : ((runtime?.phase === 'setup_buffered' || action.setup_buffered) ? 'BUFFERED' : 'DECLARED')) : 'NONE'}`);
     lines.push(`ACTION_INTENT: ${mechanicsValue(action?.intent)}`);
     lines.push(`DECLARED_CATEGORY: ${mechanicsValue(action?.declared_category)}`);
     lines.push(`BASELINE_CATEGORY: ${mechanicsValue(action?.baseline_category || baseline?.category)}`);
@@ -649,7 +708,11 @@ function buildChallengeMechanicsBlock(runtime, profile, settings, dcTable, basel
         lines.push('SUCCESS_DECIDED_BY_EXTENSION: false');
     }
 
-    lines.push(`NEXT_OPTIONS_REQUIRED: ${runtime?.phase === 'awaiting_choice' || runtime?.phase === 'awaiting_resolution' || (runtime?.phase === 'setup' && !!action) ? 'true' : 'false'}`);
+    const needsOptions = runtime?.phase === 'awaiting_choice'
+        || runtime?.phase === 'awaiting_resolution'
+        || runtime?.phase === 'setup_opening'
+        || runtime?.phase === 'setup_buffered';
+    lines.push(`NEXT_OPTIONS_REQUIRED: ${needsOptions ? 'true' : 'false'}`);
     lines.push('[/CHALLENGE_MECHANICS]');
     return lines.join('\n');
 }
@@ -657,17 +720,19 @@ function buildChallengeMechanicsBlock(runtime, profile, settings, dcTable, basel
 function buildChallengeTaskBlock(runtime, profile, entity) {
     const action = runtime?.pending_action || null;
     const roll = runtime?.pending_roll || null;
-    const setupBuffered = runtime?.phase === 'setup' && !!action?.setup_buffered;
+    const setupOpening = runtime?.phase === 'setup_opening';
+    const setupBuffered = runtime?.phase === 'setup_buffered' || (runtime?.phase === 'setup' && !!action?.setup_buffered);
     const needsAssessment = !!action?.assessment_only;
     const mustResolveBuffered = setupBuffered && !needsAssessment;
     const mustResolveExchange = runtime?.phase === 'awaiting_resolution' || mustResolveBuffered;
-    const mustOutputOptions = runtime?.phase === 'setup'
+    const mustOutputOptions = setupOpening
+        || setupBuffered
         || (runtime?.phase === 'awaiting_choice' && (needsAssessment || !(runtime?.options || []).length))
         || runtime?.phase === 'awaiting_resolution';
     const optionRange = profile?.optionCount || [3, 4];
 
     let turnObjective = 'NONE';
-    if (runtime?.phase === 'setup') {
+    if (setupOpening || setupBuffered) {
         turnObjective = setupBuffered
             ? (needsAssessment ? 'SETUP_AND_ASSESS' : 'SETUP_AND_RESOLVE_BUFFERED_ACTION')
             : 'SETUP_OPENING';
@@ -687,8 +752,8 @@ function buildChallengeTaskBlock(runtime, profile, entity) {
     lines.push(`INPUT_MODE: ${runtime?.locked ? 'LOCKED_CHALLENGE' : 'PREFIX_ONLY'}`);
     lines.push(`PLAYER_MESSAGE_IS_CHALLENGE_INPUT: ${boolText(!!runtime?.locked || action?.source === 'custom' || action?.source === 'option')}`);
     lines.push(`MUST_CREATE_ENTITY: false`);
-    lines.push(`MUST_FILL_ENTITY_FIELDS: ${boolText(runtime?.phase === 'setup')}`);
-    lines.push(`MUST_ESTABLISH_OPENING: ${boolText(runtime?.phase === 'setup')}`);
+    lines.push(`MUST_FILL_ENTITY_FIELDS: ${boolText(setupOpening || setupBuffered)}`);
+    lines.push(`MUST_ESTABLISH_OPENING: ${boolText(setupOpening || setupBuffered)}`);
     lines.push(`MUST_ASSESS_ACTION_TO_OPTIONS: ${boolText(needsAssessment)}`);
     lines.push(`MUST_NOT_RESOLVE_EXCHANGE: ${boolText(needsAssessment || runtime?.phase === 'awaiting_choice')}`);
     lines.push(`MUST_RESOLVE_BUFFERED_ACTION: ${boolText(mustResolveBuffered)}`);
@@ -760,7 +825,7 @@ function buildChallengePrompt(state) {
     const entity = getChallengeEntity(state, runtime) || getActiveChallengeEntity(state, runtime.entity_type);
     const settings = getChallengeSettings(runtime.kind);
     const mode = runtime.difficulty_mode || settings.mode || profile.defaultMode;
-    const dcTable = buildDcTable(mode, profile);
+    const dcTable = buildDcTable(mode, profile, settings.custom_dcs);
     const baseline = profile.getBaseline(state, entity);
 
     const lines = [];
@@ -813,14 +878,15 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
     }
 
     const baseline = profile.getBaseline(state, getChallengeEntity(state, runtime));
-    const dcTable = buildDcTable(runtime.difficulty_mode || profile.defaultMode, profile);
+    const settings = getChallengeSettings(profile.kind);
+    const dcTable = buildDcTable(runtime.difficulty_mode || settings.mode || profile.defaultMode, profile, settings.custom_dcs);
     const next = clone(runtime);
     const optionText = parseChallengeOptionValue(rawText, '', profile);
     const optionIndex = optionText?.index ?? parseChallengeIndexText(rawText, profile) ?? parseOptionIndexText(rawText) ?? parseBareIndexText(rawText);
     const explicitCustom = parseChallengeCustomText(rawText, profile);
 
     // ─── Setup phase ──────────────────────────────────────────────────
-    if (next.phase === 'setup') {
+    if (next.phase === 'setup_opening' || next.phase === 'setup_buffered') {
         if (commandBody === '') {
             next.last_input = buildInputRecord(rawText, profile, {
                 parsed_source: 'ENTER_CHALLENGE',
@@ -830,10 +896,22 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
         }
 
         if (optionText || optionIndex != null) {
-            const option = optionText || getOptionByIndex(next, optionIndex);
-            if (!option) return { handled: false };
+            const option = optionText || getOptionById(next, optionText?.id) || getOptionByIndex(next, optionIndex);
+            if (!option) {
+                next.last_input = buildInputRecord(rawText, profile, {
+                    parsed_source: 'UNRESOLVED_OPTION_SELECTION',
+                    option_id: optionText?.id || null,
+                    option_index: optionText?.index ?? optionIndex ?? null,
+                    option_label: optionText?.label || '',
+                    intent: optionText?.intent || '',
+                    declared_category: optionText?.category || null,
+                });
+                await setChallengeRuntime(next);
+                return { handled: false, deductionType: profile.deductionType };
+            }
             next.last_input = buildInputRecord(rawText, profile, {
                 parsed_source: 'OPTION_SELECTION',
+                option_id: option.id || optionText?.id || null,
                 option_index: option.index,
                 option_label: option.label || option.intent || '',
                 intent: option.intent || '',
@@ -841,6 +919,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
             });
             const action = buildOptionAction(option, null, profile, { skipClamp: true });
             next.pending_action = { ...action, setup_buffered: true, baseline_category: null };
+            next.phase = 'setup_buffered';
             if (profile.usesD20) {
                 next.pending_roll = {
                     ...buildRollPayload(action.effective_category, dcTable, drawFn, profile),
@@ -860,6 +939,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
             });
             const action = buildCustomAction(explicitCustom.intent, explicitCustom.category, null, profile, { skipChallenge: true });
             next.pending_action = { ...action, setup_buffered: true, baseline_category: null };
+            next.phase = 'setup_buffered';
             if (profile.usesD20) {
                 next.pending_roll = {
                     ...buildRollPayload(action.effective_category, dcTable, drawFn, profile),
@@ -893,13 +973,14 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
             setup_buffered: true,
         };
         next.pending_roll = null;
+        next.phase = 'setup_buffered';
         await setChallengeRuntime(next);
         return { handled: true, inject: true, deductionType: profile.deductionType };
     }
 
     // ─── Awaiting reassessment ────────────────────────────────────────
     if (next.phase === 'awaiting_reassessment') {
-        const reassessed = explicitCustom || optionText || (optionIndex != null ? getOptionByIndex(next, optionIndex) : null);
+        const reassessed = explicitCustom || optionText || (optionText?.id ? getOptionById(next, optionText.id) : null) || (optionIndex != null ? getOptionByIndex(next, optionIndex) : null);
         if (!reassessed) {
             next.last_input = buildInputRecord(rawText, profile, {
                 parsed_source: 'REASSESSMENT_PENDING',
@@ -917,6 +998,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
             })
             : buildInputRecord(rawText, profile, {
                 parsed_source: 'OPTION_REASSESSMENT',
+                option_id: reassessed.id || null,
                 option_index: reassessed.index,
                 option_label: reassessed.label || reassessed.intent || '',
                 intent: reassessed.intent || '',
@@ -969,11 +1051,23 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
     }
 
     if (optionIndex != null) {
-        const option = optionText || getOptionByIndex(next, optionIndex);
-        if (!option) return { handled: false };
+        const option = optionText || getOptionById(next, optionText?.id) || getOptionByIndex(next, optionIndex);
+        if (!option) {
+            next.last_input = buildInputRecord(rawText, profile, {
+                parsed_source: 'UNRESOLVED_OPTION_SELECTION',
+                option_id: optionText?.id || null,
+                option_index: optionText?.index ?? optionIndex ?? null,
+                option_label: optionText?.label || '',
+                intent: optionText?.intent || '',
+                declared_category: optionText?.category || null,
+            });
+            await setChallengeRuntime(next);
+            return { handled: false, deductionType: profile.deductionType };
+        }
 
         next.last_input = buildInputRecord(rawText, profile, {
             parsed_source: 'OPTION_SELECTION',
+            option_id: option.id || optionText?.id || null,
             option_index: option.index,
             option_label: option.label || option.intent || '',
             intent: option.intent || '',
@@ -1101,11 +1195,12 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
     }
 
     // ─── Setup phase ──────────────────────────────────────────────────
-    if (runtime.phase === 'setup') {
+    const isSetupPhase = runtime.phase === 'setup_opening' || runtime.phase === 'setup_buffered' || runtime.phase === 'setup';
+    if (isSetupPhase) {
         if (!entity) {
             // Preserve any options the model output this turn before correcting
             if (options.length) {
-                runtime.options = options;
+                runtime = storeParsedOptions(runtime, options);
             }
             runtime.correction_attempts = (runtime.correction_attempts || 0) + 1;
             if (runtime.correction_attempts >= 3) {
@@ -1127,12 +1222,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             );
         }
 
-        // Expire scene draw after setup completes
-        if (runtime.scene_draw_active) {
-            runtime.scene_draw_active = false;
-        }
-
-        if (runtime.pending_action?.setup_buffered && runtime.pending_roll) {
+        if ((runtime.phase === 'setup_buffered' || runtime.pending_action?.setup_buffered) && runtime.pending_roll) {
             if (profile.usesD20 && !runtime.pending_roll.skip && !recordedLastDraw && !resolved) {
                 return challengeCorrection('The buffered setup action had a fixed rolled result, but this turn did not consume it. Resolve that stored action now, use the injected threshold/d20/draw, record divination.last_draw, then offer next options if the challenge continues.', profile);
             }
@@ -1163,11 +1253,13 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
 
             next.phase = 'awaiting_choice';
             next.exchange = Math.max((runtime.exchange || 1) + 1, coerceNumber(entity?.exchange) ?? 0);
-            next.options = options;
+            next.scene_draw_active = false;
+            next.option_table_version = runtime.option_table_version || 0;
+            next.options = runtime.options || [];
             next.pending_action = null;
             next.pending_roll = null;
             next.correction_attempts = 0;
-            await setChallengeRuntime(next);
+            await setChallengeRuntime(storeParsedOptions(next, options));
 
             if (!options.length) {
                 return challengeCorrection(`The buffered setup action resolved, but no next options were presented. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
@@ -1175,68 +1267,75 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             return null;
         }
 
-        if (runtime.pending_action?.setup_buffered && !runtime.pending_roll) {
+        if ((runtime.phase === 'setup_buffered' || runtime.pending_action?.setup_buffered) && !runtime.pending_roll) {
             // Assessment-only buffered action (no roll for non-d20 profiles or freeform)
-            const next = {
+            if (!options.length) {
+                await setChallengeRuntime(runtime);
+                return challengeCorrection(`Setup completed, but the buffered uncategorized action was not turned into options. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
+            }
+            let next = {
                 ...runtime,
-                options: options.length ? options : runtime.options || [],
                 pending_action: null,
                 pending_roll: null,
                 phase: 'awaiting_choice',
+                scene_draw_active: false,
                 correction_attempts: 0,
             };
+            next = storeParsedOptions(next, options);
             await setChallengeRuntime(next);
-            if (!options.length) {
-                return challengeCorrection(`Setup completed, but the buffered uncategorized action was not turned into options. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
-            }
             return null;
         }
 
         if (runtime.pending_action?.assessment_only) {
-            const next = {
+            if (!options.length) {
+                await setChallengeRuntime(runtime);
+                return challengeCorrection(`Setup completed, but the buffered uncategorized action was not turned into options. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
+            }
+            let next = {
                 ...runtime,
-                options: options.length ? options : runtime.options || [],
                 pending_action: null,
                 pending_roll: null,
                 phase: 'awaiting_choice',
+                scene_draw_active: false,
                 correction_attempts: 0,
             };
+            next = storeParsedOptions(next, options);
             await setChallengeRuntime(next);
-            if (!options.length) {
-                return challengeCorrection(`Setup completed, but the buffered uncategorized action was not turned into options. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
-            }
             return null;
         }
 
-        const next = {
+        if (!options.length) {
+            await setChallengeRuntime(runtime);
+            return challengeCorrection(`Challenge is active but no options were presented. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
+        }
+
+        let next = {
             ...runtime,
-            options,
             pending_action: null,
             pending_roll: null,
             phase: 'awaiting_choice',
+            scene_draw_active: false,
             correction_attempts: 0,
         };
+        next = storeParsedOptions(next, options);
         await setChallengeRuntime(next);
-
-        if (!options.length) {
-            return challengeCorrection(`Challenge is active but no options were presented. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
-        }
         return null;
     }
 
     // ─── Awaiting choice with assessment ──────────────────────────────
     if (runtime.phase === 'awaiting_choice' && runtime.pending_action?.assessment_only) {
-        const next = {
+        if (!options.length) {
+            await setChallengeRuntime(runtime);
+            return challengeCorrection(`Challenge is active but the uncategorized action was not assessed into options. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
+        }
+        let next = {
             ...runtime,
-            options: options.length ? options : runtime.options || [],
             pending_action: null,
             pending_roll: null,
             correction_attempts: 0,
         };
+        next = storeParsedOptions(next, options);
         await setChallengeRuntime(next);
-        if (!options.length) {
-            return challengeCorrection(`Challenge is active but the uncategorized action was not assessed into options. Output ${optionRange[0]}-${optionRange[1]} clickable options using the exact HTML format.`, profile);
-        }
         return null;
     }
 
@@ -1246,7 +1345,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             return challengeCorrection(`Challenge is active but no ${runtime.entity_type} entity exists. The extension auto-seeded it — check if it was destroyed.`, profile);
         }
         if (options.length) {
-            await setChallengeRuntime({ ...runtime, options, correction_attempts: 0 });
+            await setChallengeRuntime(storeParsedOptions({ ...runtime, correction_attempts: 0 }, options));
         }
         return null;
     }
