@@ -83,6 +83,32 @@ function normalizeCharacterKnowledgeAsymmetry(state) {
         if (char.knowledge_asymmetry === undefined || char.knowledge_asymmetry === null) {
             char.knowledge_asymmetry = '';
         }
+        if (char.last_seen_at === undefined || char.last_seen_at === null) {
+            char.last_seen_at = '';
+        }
+    }
+}
+
+function normalizeFactionIntel(state) {
+    for (const faction of Object.values(state.factions || {})) {
+        if (faction.comms_latency === undefined || faction.comms_latency === null) {
+            faction.comms_latency = '';
+        }
+        if (faction.last_verified_at === undefined || faction.last_verified_at === null) {
+            faction.last_verified_at = '';
+        }
+        if (faction.intel_posture === undefined || faction.intel_posture === null) {
+            faction.intel_posture = '';
+        }
+        if (faction.blindspots === undefined || faction.blindspots === null) {
+            faction.blindspots = '';
+        }
+        if (!faction.intel_on || typeof faction.intel_on !== 'object' || Array.isArray(faction.intel_on)) {
+            faction.intel_on = {};
+        }
+        if (!faction.false_beliefs || typeof faction.false_beliefs !== 'object' || Array.isArray(faction.false_beliefs)) {
+            faction.false_beliefs = {};
+        }
     }
 }
 
@@ -338,6 +364,7 @@ function computeState(snapshot, transactions) {
     }
 
     normalizeCharacterKnowledgeAsymmetry(state);
+    normalizeFactionIntel(state);
 
     return state;
 }

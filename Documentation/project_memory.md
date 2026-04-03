@@ -86,6 +86,17 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Character dossiers now include `knowledge_asymmetry` for KNOWN / TRACKED / PRINCIPAL characters.
   - Use it as the active knowledge firewall: what a character knows, does not know, is hiding, or is misreading right now.
   - `state-view.js` now surfaces it in the prompt-facing character registry and documents `char:id.knowledge_asymmetry` in the quick reference.
+- Lightweight information-propagation support is now in place:
+  - important characters also carry `last_seen_at`
+  - factions can carry `comms_latency`, `last_verified_at`, `intel_posture`, `blindspots`, `intel_on`, and `false_beliefs`
+  - this is intentionally a snapshot model, not a live simulation
+  - remote factions/NPCs should only learn things through plausible channels such as witness, report, sensor contact, debrief, or justified inference
+  - when a character re-enters scene after time away, refresh their `knowledge_asymmetry` from `last_seen_at`, summary residue, and current faction intel instead of globally synchronizing everyone every turn
+- The intel/provenance rule is now injected in both layers:
+  - runtime nudge in `index.js`
+  - hidden deduction CoT in `gravity_v14.json` for `regular`, `combat`, `advance`, and `intimacy`
+  - mode playbooks in `Gravity World Info.json` for `advance`, `combat`, and `intimacy`
+  - preset/state guidance now explicitly treats remote factions as delayed, partial, and sometimes wrong rather than live-omniscient
 
 ## Challenge Engine Notes
 

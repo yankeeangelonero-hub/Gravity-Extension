@@ -105,6 +105,9 @@ function formatStateView(state, mode = 'full') {
         if (char.knowledge_asymmetry !== undefined) {
             lines.push(`    Knowledge asymmetry: ${normalizeText(char.knowledge_asymmetry) || '(unset)'}`);
         }
+        if (char.last_seen_at !== undefined && char.last_seen_at !== null && normalizeText(char.last_seen_at)) {
+            lines.push(`    Last seen at: ${normalizeText(char.last_seen_at)}`);
+        }
         if (!slim && char.power_basis) lines.push(`    Power basis: ${char.power_basis}`);
         if (!slim) {
             const abilities = toList(char.abilities);
@@ -343,6 +346,22 @@ function formatStateView(state, mode = 'full') {
                     lines.push(line);
                     if (f.leverage) lines.push(`    Leverage: ${f.leverage}`);
                     if (f.vulnerability) lines.push(`    Vulnerability: ${f.vulnerability}`);
+                    if (f.comms_latency) lines.push(`    Comms latency: ${f.comms_latency}`);
+                    if (f.last_verified_at) lines.push(`    Last verified at: ${f.last_verified_at}`);
+                    if (f.intel_posture) lines.push(`    Intel posture: ${f.intel_posture}`);
+                    if (f.blindspots) lines.push(`    Blindspots: ${f.blindspots}`);
+                }
+                if (f.intel_on && typeof f.intel_on === 'object' && Object.keys(f.intel_on).length) {
+                    lines.push('    Intel on:');
+                    for (const [subject, intel] of Object.entries(f.intel_on)) {
+                        lines.push(`      ${subject}: ${intel}`);
+                    }
+                }
+                if (f.false_beliefs && typeof f.false_beliefs === 'object' && Object.keys(f.false_beliefs).length) {
+                    lines.push('    False beliefs:');
+                    for (const [subject, belief] of Object.entries(f.false_beliefs)) {
+                        lines.push(`      ${subject}: ${belief}`);
+                    }
                 }
                 if (f.relations && typeof f.relations === 'object') {
                     for (const [targetId, relation] of Object.entries(f.relations)) {
@@ -475,6 +494,9 @@ pc.location: "where the PC is now"
 pc.condition: "physical and emotional state"
 char:elena.condition: "steady, watchful"
 char:elena.knowledge_asymmetry: "Knows the PC is armed, does not know who sent them, is hiding that she already warned the owner"
+char:elena.last_seen_at: "[Day 2 - 19:10]"
+faction:zaft.intel_on.archangel: "Believes the ship escaped damaged; does not know who the Strike pilot is"
+faction:zaft.false_beliefs.strike-pilot: "Assumes the pilot identity is still unconfirmed"
 collision:trust-vs-duty.distance: 4
 constraint:c1.integrity: STRESSED
 char:elena.reads.pc: "Cautious ally"
@@ -500,7 +522,14 @@ COMMON PATHS:
   char:id.condition
   char:id.doing
   char:id.knowledge_asymmetry
+  char:id.last_seen_at
   char:id.reads.pc
+  faction:id.comms_latency
+  faction:id.last_verified_at
+  faction:id.intel_posture
+  faction:id.blindspots
+  faction:id.intel_on.subject
+  faction:id.false_beliefs.subject
   collision:id.name
   collision:id.forces
   collision:id.details
@@ -546,7 +575,10 @@ If a turn gets structurally complicated, switch to a full ---LEDGER--- block ins
 DISCIPLINE:
   Only write what changed materially.
   Keep doing as "action | Cost: what this neglects or risks".
-  Keep knowledge_asymmetry current on KNOWN/TRACKED/PRINCIPAL characters: what they know, what they do not know, what they are hiding, or what they are misreading right now.
+  Keep knowledge_asymmetry current on KNOWN/TRACKED/PRINCIPAL characters when they are active or scene-relevant: what they know, what they do not know, what they are hiding, or what they are misreading right now.
+  Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
+  Use faction intel fields for remote awareness: comms_latency, last_verified_at, intel_posture, blindspots, intel_on, and false_beliefs.
+  No provenance, no knowledge: distant factions and characters do not know live scene truth unless it plausibly reached them.
   Every live collision needs a story capsule: what is converging, who or what is caught in it, what it costs, and the forced choice looming.
   When a collision presses into the scene, update collision:id.last_manifestation with the concrete current expression.
   Pressure points are seeds, not history. If a seam fired, resolved, or became a collision, REMOVE it.
@@ -724,10 +756,16 @@ FACTIONS — create and manage factions with political simulation
   > CREATE faction:shinra name="Shinra Corp" objective="Control the reactors" resources="Military" stance_toward_pc="Hostile" power="stable" momentum="Expanding into Sector 7" leverage="Military force" vulnerability="Public opinion" -- Full political profile
   > SET faction:shinra field=power value="declining" -- Lost reactor control
   > MAP_SET faction:shinra field=relations key=avalanche value="Hostile — active operations against" -- Inter-faction relation
+  > SET faction:zaft field=comms_latency value="Ship-to-ship near-real-time; long-range relay delayed by jamming" -- Intel travel speed
+  > SET faction:zaft field=last_verified_at value="[Day 4 — 09:20]" -- Last trustworthy refresh
+  > MAP_SET faction:zaft field=intel_on key=archangel value="Believes the ship escaped damaged; pilot identity still uncertain" -- Current intel snapshot
+  > MAP_SET faction:zaft field=false_beliefs key=strike-pilot value="Assumes the pilot is still unknown" -- Important wrong belief
 
   Faction fields: name, objective, resources, stance_toward_pc, power (rising/stable/declining/collapsed),
   momentum (current action), last_move (last visible action), leverage, vulnerability,
-  relations (map: faction_id → stance string). Optional: doctrine, leadership, territory, alliances.
+  relations (map: faction_id → stance string). Optional: doctrine, leadership, territory, alliances,
+  comms_latency, last_verified_at, intel_posture, blindspots, intel_on (map: subject → belief snapshot),
+  false_beliefs (map: subject → important wrong assumption).
   Pressure points generated from faction conflicts are collision fuel — during advance turns,
   they compress existing collision distances or spawn new collisions.
   A pressure point should stay SHORT: a seam, signal, or pending break.

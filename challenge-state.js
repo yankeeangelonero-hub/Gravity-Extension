@@ -420,7 +420,7 @@ function buildChallengeMechanicsBlock(runtime, profile, settings, dcTable, basel
     lines.push(`SCENE_DRAW_ACTIVE: ${boolText(!!runtime?.scene_draw_active)}`);
     lines.push(`SCENE_DRAW: ${summarizeDrawForMechanics(runtime?.scene_draw)}`);
     lines.push(`ACTION_SOURCE: ${mechanicsValue(action?.source ? String(action.source).toUpperCase() : null)}`);
-    lines.push(`ACTION_STATE: ${action ? (action.assessment_only ? 'ASSESSMENT_ONLY' : ((runtime?.phase === 'setup_buffered' || action.setup_buffered) ? 'BUFFERED' : 'DECLARED')) : 'NONE'}`);
+    lines.push(`ACTION_STATE: ${action ? (action.assessment_only ? 'ASSESSMENT_ONLY' : (runtime?.phase === 'setup_buffered' ? 'BUFFERED' : 'DECLARED')) : 'NONE'}`);
     lines.push(`ACTION_INTENT: ${mechanicsValue(action?.intent)}`);
     lines.push(`DECLARED_CATEGORY: ${mechanicsValue(action?.declared_category)}`);
     lines.push(`BASELINE_CATEGORY: ${mechanicsValue(action?.baseline_category || baseline?.category)}`);
@@ -455,7 +455,7 @@ function buildChallengeTaskBlock(runtime, profile, entity) {
     const action = runtime?.pending_action || null;
     const roll = runtime?.pending_roll || null;
     const setupOpening = runtime?.phase === 'setup_opening';
-    const setupBuffered = runtime?.phase === 'setup_buffered' || (runtime?.phase === 'setup' && !!action?.setup_buffered);
+    const setupBuffered = runtime?.phase === 'setup_buffered';
     const needsAssessment = !!action?.assessment_only;
     const mustResolveBuffered = setupBuffered && !needsAssessment;
     const mustResolveExchange = runtime?.phase === 'awaiting_resolution' || mustResolveBuffered;
@@ -958,7 +958,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
     }
 
     // ─── Setup phase ──────────────────────────────────────────────────
-    const isSetupPhase = runtime.phase === 'setup_opening' || runtime.phase === 'setup_buffered' || runtime.phase === 'setup';
+    const isSetupPhase = runtime.phase === 'setup_opening' || runtime.phase === 'setup_buffered';
     if (isSetupPhase) {
         if (!entity) {
             // Preserve any options the model output this turn before correcting
@@ -978,14 +978,14 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             }
             await setChallengeRuntime(runtime);
             return challengeCorrection(
-                runtime.pending_action?.setup_buffered
+                runtime.phase === 'setup_buffered'
                     ? `Setup is incomplete and a player action is waiting. The extension auto-seeded ${runtime.entity_type}:${runtime.entity_id}. Fill its fields now, then resolve the buffered action.`
                     : `The extension auto-seeded ${runtime.entity_type}:${runtime.entity_id}. Fill its fields now before continuing.`,
                 profile,
             );
         }
 
-        if ((runtime.phase === 'setup_buffered' || runtime.pending_action?.setup_buffered) && runtime.pending_roll) {
+        if (runtime.phase === 'setup_buffered' && runtime.pending_roll) {
             if (profile.usesD20 && !runtime.pending_roll.skip && !recordedLastDraw && !resolved) {
                 return challengeCorrection('The buffered setup action had a fixed rolled result, but this turn did not consume it. Resolve that stored action now, use the injected threshold/d20/draw, record divination.last_draw, then offer next options if the challenge continues.', profile);
             }
@@ -1022,7 +1022,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             return null;
         }
 
-        if ((runtime.phase === 'setup_buffered' || runtime.pending_action?.setup_buffered) && !runtime.pending_roll) {
+        if (runtime.phase === 'setup_buffered' && !runtime.pending_roll) {
             // Assessment-only buffered action (no roll for non-d20 profiles or freeform)
             if (!options.length) {
                 await setChallengeRuntime(runtime);

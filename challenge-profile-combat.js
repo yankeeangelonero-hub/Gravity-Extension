@@ -345,7 +345,7 @@ const combatProfile = Object.freeze({
             case 'setup_buffered':
                 lines.push('');
                 lines.push('PHASE INSTRUCTION: SETUP');
-                if (runtime.phase === 'setup_buffered' || runtime.pending_action?.setup_buffered) {
+                if (runtime.phase === 'setup_buffered') {
                     lines.push('Setup is incomplete, but the player already committed to an action while setup had not advanced.');
                     lines.push(`combat:${runtime.entity_id} already exists. Do not create it again.`);
                     lines.push(`Fill combat:${runtime.entity_id} fields: participants, hostiles, primary_enemy, terrain, situation, threat, and exchange.`);

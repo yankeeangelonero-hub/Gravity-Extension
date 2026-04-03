@@ -1300,7 +1300,9 @@ After the thinking pass closes, visible output is:
 - Structural turns or explicit cleanup/setup instructions: ---LEDGER--- (full command block, no line limit)${_uncappedTurn ? ' (UNCAPPED - full cleanup allowed)' : ''}
 
 Update current_scene, location, and condition when they materially change or the scene would be hard to reconstruct without them.
-Knowledge firewall: characters only act on what their reads, noticed details, and knowledge_asymmetry make plausible. Hidden facts stay hidden until learned, revealed, or inferred honestly.
+Knowledge firewall: characters only act on what their reads, noticed_details, knowledge_asymmetry, faction intel, and plausible information channels make possible. Hidden facts stay hidden until learned, revealed, reported, sensed, or inferred honestly.
+Remote factions are not live-omniscient. Use faction comms_latency, last_verified_at, intel_posture, blindspots, intel_on, and false_beliefs to decide what they know right now.
+When a character re-enters after time away, use last_seen_at plus summary residue and faction intel to refresh what they plausibly learned, missed, guessed, or got wrong while absent.
 CLEANUP (REMOVE/DESTROY): max 3 per regular turn. Save bulk for eval or chapter close.
 
 You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memory.]`;
