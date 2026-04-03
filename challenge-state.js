@@ -456,7 +456,7 @@ function parseChallengeOptionValue(value, label, profile) {
     };
 }
 
-function parseChallengeCustomText(rawText, profile) {
+function parseChallengeCustomText(rawText, profile, options = {}) {
     const text = decodeHtmlEntities(rawText);
     const escaped = profile.inputPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const legacy = text.match(new RegExp(`^\\*?${escaped}:\\s*custom\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
@@ -466,10 +466,12 @@ function parseChallengeCustomText(rawText, profile) {
         return { category, intent: normalizeText(legacy[2]) };
     }
 
-    const body = getChallengeCommandBody(rawText, profile);
+    const body = getChallengeCommandBody(rawText, profile)
+        ?? (options.allowBare ? normalizeText(rawText) : null);
     if (body == null || !body) return null;
     const match = body.match(/^(.+?)\s+dc(?:\s*[:=-])?\s+(.+?)$/i)
         || body.match(/^(.+?)\s*\|\s*(.+?)$/i)
+        || body.match(/^(.+?)\s*,\s*(.+?)$/i)
         || body.match(/^(.+?)\s+\((.+?)\)\s*$/i);
     if (!match) return null;
     const category = normalizeCategoryForProfile(match[2], profile);
@@ -883,7 +885,9 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
     const next = clone(runtime);
     const optionText = parseChallengeOptionValue(rawText, '', profile);
     const optionIndex = optionText?.index ?? parseChallengeIndexText(rawText, profile) ?? parseOptionIndexText(rawText) ?? parseBareIndexText(rawText);
-    const explicitCustom = parseChallengeCustomText(rawText, profile);
+    const explicitCustom = parseChallengeCustomText(rawText, profile, {
+        allowBare: !!runtime?.locked,
+    });
 
     // ─── Setup phase ──────────────────────────────────────────────────
     if (next.phase === 'setup_opening' || next.phase === 'setup_buffered') {
