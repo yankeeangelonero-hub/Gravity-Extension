@@ -517,6 +517,60 @@ If no live collision currently carries the world's pressure, at least one surviv
     return { warnings, prompt };
 }
 
+/**
+ * Pressure ignition engine — selects a pressure point to ignite as a flash collision.
+ *
+ * Selection logic (from v15 spec F2.2):
+ *   stale  (18+ tx): MANDATORY flash at dist 0
+ *   aging  (8-17 tx): RECOMMENDED flash at dist 0-1 if score > 0
+ *   fresh  (<8 tx):  OPTIONAL — only if score >= 3
+ *
+ * Returns null if no pressure point qualifies this turn.
+ *
+ * @param {Object} state - Current computed state
+ * @param {Object} draw - Current divination draw (from drawDivination())
+ * @returns {{ point: string, dist: number, mandate: 'mandatory'|'recommended'|'optional', score: number } | null}
+ */
+function buildFlashIgnition(state, draw) {
+    const pressurePoints = getPressurePoints(state);
+    if (pressurePoints.length === 0) return null;
+
+    // Annotate each point with age and score
+    const annotated = pressurePoints.map(point => {
+        const ageTx = getPressurePointAgeTx(state, point);
+        const ageClass = classifyPressurePointAge(ageTx);
+        const score = scorePressurePointAgainstDraw(point, draw);
+        return { point, ageTx, ageClass, score };
+    });
+
+    // Sort: stale first, then by score descending within each age class
+    annotated.sort((a, b) => {
+        const ageOrder = { stale: 0, aging: 1, fresh: 2, unknown: 3 };
+        const aOrder = ageOrder[a.ageClass] ?? 3;
+        const bOrder = ageOrder[b.ageClass] ?? 3;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return b.score - a.score;
+    });
+
+    for (const item of annotated) {
+        if (item.ageClass === 'stale') {
+            // Mandatory flash — this seam has waited too long
+            return { point: item.point, dist: 0, mandate: 'mandatory', score: item.score };
+        }
+        if (item.ageClass === 'aging' && item.score > 0) {
+            // Recommended flash — aging seam resonates with the draw
+            const dist = item.score >= 2 ? 0 : 1;
+            return { point: item.point, dist, mandate: 'recommended', score: item.score };
+        }
+        if (item.ageClass === 'fresh' && item.score >= 3) {
+            // Optional flash — fresh but strongly resonates with draw themes
+            return { point: item.point, dist: 2, mandate: 'optional', score: item.score };
+        }
+    }
+
+    return null;
+}
+
 function pickAdvanceFocus() {
     const totalWeight = ADVANCE_FOCUS_TABLE.reduce((sum, f) => sum + f.weight, 0);
     let roll = Math.random() * totalWeight;
