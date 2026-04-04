@@ -1813,10 +1813,108 @@ async function handleSetupButton() {
     injectPrompt('integration');
     insertChatMessage('OOC: Begin game setup.');
 }
+/**
+ * Build the structured beat sequence for an advance turn.
+ *
+ * Beat structure (F1.1):
+ *   Beat 1 — PLAYER RESOLUTION (mandatory): acknowledge pc.doing + time + result
+ *   Beats 2-N — WORLD MOVEMENT: arrived collisions, flash ignitions, general focus
+ *   Final beat — RETURN HOOK (mandatory): consequence arrives at player
+ *
+ * @param {Object} state - Current computed state
+ * @param {Object} draw - Primary divination draw
+ * @param {Array<{id: string, col: Object}>} ripeCollisions - Collisions at dist 0, not yet in resolution tracker
+ * @param {Array<{id: string, col: Object}>} inProgressCollisions - RESOLVING or already-tracked at dist 0
+ * @param {{ point: string, dist: number, mandate: string, score: number } | null} ignition - Flash ignition result
+ * @returns {string} The instruction block for the advance injection
+ */
+function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ignition) {
+    const pcName = state?.pc?.name || '{{user}}';
+    const doing = state?.pc?.doing || 'what they were doing';
+    const lines = [];
+
+    // ── Beat 1: PLAYER RESOLUTION (mandatory) ─────────────────────────────────
+    lines.push(`BEAT 1 — PLAYER: ${pcName} continues (${doing}). Time passes.`);
+    lines.push(`  Write: acknowledge what the PC actually accomplished or failed to accomplish. Concrete result, 80-150w. The camera stays on the PC first.`);
+    lines.push('');
+
+    // ── Beats 2-N: WORLD MOVEMENT ─────────────────────────────────────────────
+    let beatNum = 2;
+
+    // Arrived collisions take priority in world movement beats
+    if (ripeCollisions.length > 0) {
+        const colBlocks = ripeCollisions.map(a => {
+            const details = buildCollisionStoryCapsule(a.id, a.col);
+            return `    COLLISION: "${a.col.name || a.id}" [dist:0]\n${details.split('\n').map(l => '    ' + l).join('\n')}`;
+        }).join('\n');
+        lines.push(`BEAT ${beatNum} — COLLISION ARRIVES:`);
+        lines.push(colBlocks);
+        lines.push(`  MOVE each arrived collision to RESOLVING. SET each collision's last_manifestation to the concrete intrusion.`);
+        lines.push('');
+        beatNum++;
+    }
+
+    // In-progress collisions push toward resolution
+    if (inProgressCollisions.length > 0) {
+        const colBlocks = inProgressCollisions.map(a => {
+            const details = buildCollisionStoryCapsule(a.id, a.col);
+            return `    "${a.col.name || a.id}" [${a.col.status}]\n${details.split('\n').map(l => '    ' + l).join('\n')}`;
+        }).join('\n');
+        lines.push(`BEAT ${beatNum} — COLLISION PUSHES:`);
+        lines.push(colBlocks);
+        lines.push(`  Keep it moving. Either resolve this turn or force a sharper crisis. SET last_manifestation to the new concrete expression.`);
+        lines.push('');
+        beatNum++;
+    }
+
+    // Flash ignition — a pressure point fires as a new collision
+    if (ignition) {
+        const mandateLabel = ignition.mandate === 'mandatory'
+            ? 'MANDATORY — this seam has been live too long, it fires now'
+            : ignition.mandate === 'recommended'
+                ? `RECOMMENDED — draw resonates with this seam (score ${ignition.score})`
+                : `OPTIONAL — fresh seam, strongly resonant with draw (score ${ignition.score})`;
+        lines.push(`BEAT ${beatNum} — FLASH IGNITION (${mandateLabel}):`);
+        lines.push(`  Seam: "${ignition.point}"`);
+        lines.push(`  This pressure point graduates into a flash collision now.`);
+        lines.push(`  Flash collisions start ACTIVE (not SEEDED). Starting distance: ${ignition.dist}.`);
+        lines.push(`  CREATE collision:<id> name="<name>" tier=flash status=ACTIVE distance=${ignition.dist} forces="<poles>" details="<capsule>" cost="<cost>" target_constraint=<id-or-none>`);
+        lines.push(`  REMOVE the pressure point from world.pressure_points this same turn.`);
+        lines.push('');
+        beatNum++;
+    }
+
+    // If no collisions and no ignition, use a general focus beat
+    if (ripeCollisions.length === 0 && inProgressCollisions.length === 0 && !ignition) {
+        const focus = pickAdvanceFocus();
+        const FOCUS_PROMPTS = {
+            scene: `  FOCUS: THE SCENE — something local moves. An NPC acts, the environment shifts, someone arrives or leaves, a noticed detail fires.`,
+            world: `  FOCUS: THE WORLD — cut away from ${pcName}. A faction or macro move plays out. Its consequences will land later.`,
+            offscreen: `  FOCUS: OFF-SCREEN CHARACTER — a tracked character pursues their own want. Show the beat, update what it changes.`,
+            new_threat: `  FOCUS: SOMETHING NEW — introduce a fresh complication or revelation that belongs to the current story logic.`,
+            collision: `  FOCUS: PRESSURE TIGHTENS — pick the collision that creates the most honest pressure and show why it compressed. If no existing collision can carry the beat, escalate the hottest pressure point into a new collision and REMOVE the pressure point.`,
+        };
+        lines.push(`BEAT ${beatNum} — WORLD MOVE:`);
+        lines.push(FOCUS_PROMPTS[focus.key] || FOCUS_PROMPTS.scene);
+        lines.push('');
+        beatNum++;
+    }
+
+    // ── Final Beat: RETURN HOOK (mandatory) ───────────────────────────────────
+    lines.push(`BEAT ${beatNum} — RETURN (mandatory): The world's move lands on ${pcName}.`);
+    lines.push(`  Write: the consequence of beats 2-${beatNum - 1} arrives at the PC. End on a new situation — something they must respond to. The camera returns. 80-150w.`);
+    lines.push('');
+
+    // ── Draw instruction ───────────────────────────────────────────────────────
+    lines.push(formatDrawInstruction(draw, 'The draw colors how the world moves — its character and method, not the outcome.'));
+    lines.push('');
+    lines.push(`Record divination.last_draw, then write beats in order and end with a compact STATE block.`);
+
+    return lines.join('\n');
+}
+
 function handleAdvanceButton() {
     _pendingDeductionType = 'advance';
-    const pcName = _currentState?.pc?.name || '{{user}}';
-    const doing = _currentState?.pc?.doing || 'what they were doing';
 
     const ripeCollisions = [];
     const inProgressCollisions = [];
@@ -1843,57 +1941,14 @@ function handleAdvanceButton() {
     }
 
     const draw = drawDivination();
+    const ignition = buildFlashIgnition(_currentState, draw);
+    const beatBlock = buildAdvanceBeats(_currentState, draw, ripeCollisions, inProgressCollisions, ignition);
+
     const markers = [MODE_LOREBOOK_KEYS.advanceCore, MODE_LOREBOOK_KEYS.advanceOptional, MODE_LOREBOOK_KEYS.proseAdvance];
-
-    if (ripeCollisions.length === 1) {
-        const a = ripeCollisions[0];
-        const colDetails = buildCollisionStoryCapsule(a.id, a.col);
-        _pendingOOCInjection = buildModeInjection(
-            'GRAVITY ADVANCE',
-            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISION:\n${`COLLISION: "${a.col.name || a.id}"\n${colDetails}`}\n\nThis is the world's move. Force the issue into the player's immediate reality now. Write the arrival, not the final resolution. MOVE the collision to RESOLVING, SET collision:${a.id}.last_manifestation to the concrete arrival, record divination.last_draw, then write prose and end with a compact STATE block.`,
-            markers,
-        );
-    } else if (ripeCollisions.length > 1) {
-        const collisionBlocks = ripeCollisions.map(a => {
-            const colDetails = buildCollisionStoryCapsule(a.id, a.col);
-            return `COLLISION: "${a.col.name || a.id}"\n${colDetails}`;
-        }).join('\n\n');
-        const convergenceDraw = drawDivination();
-        const arrivalNames = ripeCollisions.map(a => `"${a.col.name || a.id}"`).join(' and ');
-        _pendingOOCInjection = buildModeInjection(
-            'GRAVITY ADVANCE',
-            `${pcName} yields the turn. The world moves.\n\n${formatDrawInstruction(draw, 'The draw colors the circumstance, not the outcome.')}\n\nARRIVED COLLISIONS:\n${collisionBlocks}\n\nCONVERGENCE — ${arrivalNames} arrive on the same turn.\n${convergenceDraw.label}: ${convergenceDraw.reading}${convergenceDraw.html ? `\nRender this HTML card reveal:\n${convergenceDraw.html}` : ''}\n\nDeclare the relationship before writing the scene:\n• PARALLEL — distinct arrivals; one foregrounds first, others active in same beat\n• CASCADE — one triggers or delivers the other; name which drives which\n• COMPOSITE — one converged event; parents close as MERGED; CREATE a composite successor collision\n\nIf a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.\n\nMOVE each arrived collision to RESOLVING. SET each collision's last_manifestation to the concrete way it entered the converged scene. Record divination.last_draw, then write prose and end with a compact STATE block.`,
-            markers,
-        );
-    } else if (inProgressCollisions.length > 0) {
-        const collisionBlocks = inProgressCollisions.map(a => {
-            const colDetails = buildCollisionStoryCapsule(a.id, a.col);
-            return `"${a.col.name || a.id}" [${a.col.status}] - ${colDetails}`;
-        }).join('\n');
-
-        _pendingOOCInjection = buildModeInjection(
-            'GRAVITY ADVANCE',
-            `${pcName} yields the turn while a collision is already in motion.\n\n${formatDrawInstruction(draw, 'The draw colors what happens next, not the outcome.')}\n\nIN-PROGRESS COLLISION:\n${collisionBlocks}\n\nKeep pushing the confrontation. It cannot stall. Either resolve it this turn or force it into a sharper crisis. For each collision that stays live, SET that collision's last_manifestation to the new concrete manifestation. If it resolves, MOVE it to RESOLVED with outcome_type and aftermath. Record divination.last_draw, then write prose and end with a compact STATE block.`,
-            markers,
-        );
-    } else {
-        const focus = pickAdvanceFocus();
-        const ADVANCE_PROMPTS = {
-            scene: 'FOCUS: THE SCENE\nMove something local: an NPC acts, the environment shifts, someone arrives or leaves, or a noticed detail fires.',
-            world: `FOCUS: THE WORLD\nCut away from ${pcName}. Show a faction or macro move whose consequences will matter later.`,
-            offscreen: 'FOCUS: OFF-SCREEN CHARACTER\nA tracked character pursues their own want. Show the beat and update what it changes.',
-            new_threat: 'FOCUS: SOMETHING NEW\nIntroduce a fresh threat, complication, or revelation that belongs to the current story logic.',
-            collision: `FOCUS: PRESSURE TIGHTENS\nPick the collision that creates the most honest pressure right now and show why it compressed. If no existing collision can honestly carry the beat, escalate the hottest pressure point into a new collision and REMOVE the pressure point it came from.`,
-        };
-
-        _pendingOOCInjection = buildModeInjection(
-            'GRAVITY ADVANCE',
-            `${pcName} maintains vector (continues ${doing}). The PC does not take a new action this turn.\n\n${formatDrawInstruction(draw, 'The draw colors the world\'s move - it does not prescribe it.')}\n\n${ADVANCE_PROMPTS[focus.key]}\n\nRecord divination.last_draw, then write prose and end with a compact STATE block.`,
-            markers,
-        );
-    }
+    _pendingOOCInjection = buildModeInjection('GRAVITY ADVANCE', beatBlock, markers);
 
     injectPrompt('advance');
+    const pcName = _currentState?.pc?.name || '{{user}}';
     insertChatMessage(`*${pcName} continues what they were doing.*`);
 }
 
