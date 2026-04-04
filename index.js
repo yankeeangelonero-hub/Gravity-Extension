@@ -547,6 +547,70 @@ The hexagram carries rhythm. Stillness slows the beat. Movement compresses — t
 
 const ARCANA_ROMAN = ['0', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX', 'XXI'];
 
+// ─── Divination Theme Table (for pressure ignition scoring) ──────────────────
+// Each entry maps an Arcana card to themes. Used to score pressure points
+// against the current draw — higher score = better ignition candidate.
+const DIVINATION_THEME_TABLE = [
+    // 0  The Fool
+    ['beginning', 'unknown', 'risk', 'leap', 'accident', 'naive'],
+    // 1  The Magician
+    ['skill', 'opportunity', 'resources', 'manipulation', 'capability', 'plan'],
+    // 2  The High Priestess
+    ['secret', 'hidden', 'knowledge', 'intuition', 'mystery', 'silence'],
+    // 3  The Empress
+    ['protection', 'abundance', 'ally', 'shelter', 'comfort', 'care'],
+    // 4  The Emperor
+    ['authority', 'control', 'hierarchy', 'order', 'power', 'institution'],
+    // 5  The Hierophant
+    ['tradition', 'rule', 'belief', 'obligation', 'loyalty', 'duty'],
+    // 6  The Lovers
+    ['choice', 'relationship', 'bond', 'desire', 'tension', 'connection'],
+    // 7  The Chariot
+    ['will', 'conflict', 'victory', 'struggle', 'drive', 'force'],
+    // 8  Strength
+    ['patience', 'restraint', 'quiet', 'endurance', 'suppression', 'calm'],
+    // 9  The Hermit
+    ['isolation', 'truth', 'solitude', 'search', 'distance', 'alone'],
+    // 10 Wheel of Fortune
+    ['fate', 'change', 'chance', 'reversal', 'timing', 'luck'],
+    // 11 Justice
+    ['consequence', 'balance', 'debt', 'fair', 'exact', 'truth'],
+    // 12 The Hanged Man
+    ['sacrifice', 'wait', 'suspend', 'perspective', 'cost', 'pause'],
+    // 13 Death
+    ['end', 'transform', 'loss', 'change', 'death', 'transition'],
+    // 14 Temperance
+    ['balance', 'compromise', 'blend', 'patience', 'synthesis', 'middle'],
+    // 15 The Devil
+    ['trap', 'obsession', 'chain', 'comfort', 'addiction', 'bind'],
+    // 16 The Tower
+    ['collapse', 'revelation', 'shock', 'violence', 'destruction', 'upheaval'],
+    // 17 The Star
+    ['hope', 'recover', 'trust', 'guide', 'calm', 'future'],
+    // 18 The Moon
+    ['fear', 'illusion', 'deception', 'hidden', 'instinct', 'shadow'],
+    // 19 The Sun
+    ['success', 'clarity', 'win', 'joy', 'visible', 'open'],
+    // 20 Judgement
+    ['reckoning', 'past', 'account', 'call', 'answer', 'wake'],
+    // 21 The World
+    ['complete', 'cycle', 'closure', 'whole', 'end', 'arrival'],
+];
+
+/**
+ * Score a pressure point string against a divination draw.
+ * Returns 0-6: number of theme keywords that appear in the pressure point text.
+ * @param {string} point - The pressure point text
+ * @param {{ index: number }} draw - The divination draw (must have .index for arcana)
+ * @returns {number}
+ */
+function scorePressurePointAgainstDraw(point, draw) {
+    if (!draw || draw.index == null || !DIVINATION_THEME_TABLE[draw.index]) return 0;
+    const themes = DIVINATION_THEME_TABLE[draw.index];
+    const normalized = (point || '').toLowerCase();
+    return themes.filter(theme => normalized.includes(theme)).length;
+}
+
 /**
  * Get the active divination system. Checks chatMetadata first, then ledger state.
  */
@@ -678,6 +742,7 @@ function buildArcanaDraw(num, source = 'extension', sourceText = '') {
         system: 'arcana',
         label: 'THE ARCANA DREW',
         num,
+        index: num,
         reading: `${prefix}#${num} â€” ${ARCANA_TABLE[num]}\nUSE THIS EXACT CARD. Do not override or pick a different one.\n${getNarrativeForcingText(source)}`,
         html: `<div style="background:linear-gradient(180deg,#0a0a1a 0%,#1a0a2e 100%);border:1px solid #d4af37;border-radius:8px;padding:20px;margin:16px auto;max-width:280px;text-align:center;box-shadow:0 0 15px rgba(212,175,55,0.2);"><div style="color:#d4af37;font-size:0.75em;letter-spacing:3px;text-transform:uppercase;">The Arcana</div><div style="color:#f0e6d3;font-size:1.8em;margin:12px 0 4px 0;font-weight:bold;">${cardName}</div><div style="color:#d4af37;font-size:0.9em;font-style:italic;">${ARCANA_ROMAN[num]}</div><div style="width:40px;height:1px;background:#d4af37;margin:12px auto;"></div><div style="color:#a89070;font-size:0.85em;line-height:1.4;">${cardMeaning}</div></div>`,
     };
@@ -733,6 +798,7 @@ function drawDivination() {
         system: 'arcana',
         label: 'THE ARCANA DREW',
         num,
+        index: num,
         reading: `#${num} — ${ARCANA_TABLE[num]}\nUSE THIS EXACT CARD. Do not override or pick a different one.\n${NARRATIVE_FORCING}`,
         html: `<div style="background:linear-gradient(180deg,#0a0a1a 0%,#1a0a2e 100%);border:1px solid #d4af37;border-radius:8px;padding:20px;margin:16px auto;max-width:280px;text-align:center;box-shadow:0 0 15px rgba(212,175,55,0.2);"><div style="color:#d4af37;font-size:0.75em;letter-spacing:3px;text-transform:uppercase;">The Arcana</div><div style="color:#f0e6d3;font-size:1.8em;margin:12px 0 4px 0;font-weight:bold;">${cardName}</div><div style="color:#d4af37;font-size:0.9em;font-style:italic;">${ARCANA_ROMAN[num]}</div><div style="width:40px;height:1px;background:#d4af37;margin:12px auto;"></div><div style="color:#a89070;font-size:0.85em;line-height:1.4;">${cardMeaning}</div></div>`,
     };
