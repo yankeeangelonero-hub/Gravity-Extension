@@ -1949,7 +1949,8 @@ function handleAdvanceButton() {
 
     injectPrompt('advance');
     const pcName = _currentState?.pc?.name || '{{user}}';
-    insertChatMessage(`*${pcName} continues what they were doing.*`);
+    const doing = _currentState?.pc?.doing || 'what they were doing';
+    insertChatMessage(`*${pcName} continues — ${doing}.*`);
 }
 
 async function handleCombatButton() {
