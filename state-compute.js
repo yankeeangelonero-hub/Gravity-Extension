@@ -216,6 +216,10 @@ function applyTransaction(state, tx) {
                     data.status = 'RESOLVED';
                     if (!data.outcome_type) data.outcome_type = 'CRASHED';
                 }
+                // Default tier to 'arc' for backward compatibility
+                if (tx.e === 'collision' && !data.tier) {
+                    data.tier = 'arc';
+                }
                 state[collection][tx.id] = data;
             }
             break;

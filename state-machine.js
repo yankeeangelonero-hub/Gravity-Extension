@@ -37,7 +37,13 @@ const CONSTRAINT_TRANSITIONS = {
 };
 
 // ─── Collision Lifecycle ───────────────────────────────────────────────────────
-// SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED/CRASHED
+// Tier determines starting distance and tick rate:
+//   flash  — starts ACTIVE (dist 0-2), skips SEEDED/SIMMERING, resolves in 1-3 turns
+//   arc    — standard lifecycle SEEDED→SIMMERING→ACTIVE→RESOLVING→RESOLVED (dist 4-6)
+//   saga   — chapter-spanning (dist 8-10), ticks every 2-3 advances, resists resolution
+//
+// Flash lifecycle: ACTIVE → RESOLVING → RESOLVED (no SEEDED or SIMMERING)
+// Arc/Saga lifecycle: SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED/CRASHED
 
 const COLLISION_STATES = ['SEEDED', 'SIMMERING', 'ACTIVE', 'RESOLVING', 'RESOLVED', 'CRASHED'];
 

@@ -155,7 +155,8 @@ function formatStateView(state, mode = 'full') {
         lines.push('');
         lines.push('Collisions:');
         for (const col of allCollisions) {
-            let colLine = `  ${col.name || col.id} [${col.status}] dist:${col.distance || '?'}`;
+            const tierLabel = col.tier && col.tier !== 'arc' ? ` (${col.tier})` : '';
+            let colLine = `  ${col.name || col.id} [${col.status}]${tierLabel} dist:${col.distance || '?'}`;
             colLine += ` → id: ${col.id}`;
             lines.push(colLine);
             if (slim) {
