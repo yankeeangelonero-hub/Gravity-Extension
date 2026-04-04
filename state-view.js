@@ -298,7 +298,8 @@ function formatStateView(state, mode = 'full') {
             lines.push('');
             lines.push('COLLISIONS');
             for (const col of liveCollisions) {
-                lines.push(`  ⊕ ${col.name || col.id} [${col.status}] dist:${col.distance || '?'} → id: ${col.id}`);
+                const tierLabel = col.tier && col.tier !== 'arc' ? ` (${col.tier})` : '';
+                lines.push(`  ⊕ ${col.name || col.id} [${col.status}]${tierLabel} dist:${col.distance || '?'} → id: ${col.id}`);
                 const narrativeLines = getCollisionNarrativeLines(col);
                 for (const narrativeLine of narrativeLines) {
                     lines.push(`    ${narrativeLine}`);
