@@ -607,8 +607,7 @@ const DIVINATION_THEME_TABLE = [
 function scorePressurePointAgainstDraw(point, draw) {
     if (!draw || draw.index == null || !DIVINATION_THEME_TABLE[draw.index]) return 0;
     const themes = DIVINATION_THEME_TABLE[draw.index];
-    const normalized = (point || '').toLowerCase();
-    return themes.filter(theme => normalized.includes(theme)).length;
+    return themes.filter(theme => new RegExp(`\\b${theme}\\b`, 'i').test(point || '')).length;
 }
 
 /**
