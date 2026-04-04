@@ -631,6 +631,37 @@ function renderPCDossier(state) {
         }
     }
 
+    // PC Constraints
+    const pcNameLower = (pc.name || '').toLowerCase();
+    const pcConstraints = Object.values(state.constraints).filter(c =>
+        c.owner_id === 'pc' ||
+        (pcNameLower && (c.owner_id || '').toLowerCase() === pcNameLower)
+    );
+    const pcSorted = [...pcConstraints].sort((a, b) => (Number(a.shedding_order) || 99) - (Number(b.shedding_order) || 99));
+    if (pcSorted.length > 1) {
+        const order = pcSorted.map(c => esc(c.name || c.id)).join(' first → ') + ' last';
+        parts.push(`<div class="gl-d-row gl-shedding-order"><b>Shedding Order:</b> ${order}</div>`);
+    }
+    for (const c of pcSorted) {
+        const history = getFieldHistory(state, 'constraint', c.id, 'integrity');
+        const integrityDesc = c.integrity === 'STABLE' ? 'holding' : c.integrity === 'STRESSED' ? 'destabilized' : c.integrity === 'CRITICAL' ? 'approaching breach' : c.integrity === 'BREACHED' ? 'breached' : '';
+        parts.push(`<div class="gl-constraint-card">`);
+        parts.push(`<div class="gl-constraint-title"><b>${esc(c.name)}</b> ${badge(c.integrity)}${integrityDesc ? ` <span class="gl-integrity-desc">— ${esc(integrityDesc)}</span>` : ''}</div>`);
+        if (c.profile) {
+            parts.push(`<div class="gl-d-detail">${esc(c.profile)}</div>`);
+        } else {
+            if (c.prevents) parts.push(`<div class="gl-d-detail"><b>Prevents:</b> ${esc(c.prevents)}</div>`);
+            if (c.threshold) parts.push(`<div class="gl-d-detail"><b>Threshold:</b> ${esc(c.threshold)}</div>`);
+            if (c.replacement) parts.push(`<div class="gl-d-detail"><b>Replacement (if breached):</b> ${esc(c.replacement)}${c.replacement_type ? ` <i>(${esc(c.replacement_type)})</i>` : ''}</div>`);
+            if (c.current_pressure) parts.push(`<div class="gl-d-pressure"><b>Current pressure:</b> ${esc(c.current_pressure)}</div>`);
+        }
+        if (history.length > 0) {
+            parts.push(`<div class="gl-history-toggle">Integrity history (${history.length})</div>`);
+            parts.push(`<div class="gl-history-list" style="display:none">${history.map(historyLine).join('<br>')}</div>`);
+        }
+        parts.push(`</div>`);
+    }
+
     // Demonstrated traits — detailed narrative entries
     const traits = toArr(pc.demonstrated_traits);
     if (traits.length) {
@@ -716,8 +747,12 @@ function renderCharDossier(char, state) {
         parts.push(`<div class="gl-d-row"><b>Wounds:</b> ${Object.entries(charWounds).map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(', ')}</div>`);
     }
 
-    // Shedding order
-    const constraints = Object.values(state.constraints).filter(c => c.owner_id === char.id);
+    // Shedding order — match by id or name to handle LLM owner_id variations
+    const charNameLower = (char.name || '').toLowerCase();
+    const constraints = Object.values(state.constraints).filter(c =>
+        c.owner_id === char.id ||
+        (charNameLower && (c.owner_id || '').toLowerCase() === charNameLower)
+    );
     const sorted = [...constraints].sort((a, b) => (Number(a.shedding_order) || 99) - (Number(b.shedding_order) || 99));
     if (sorted.length > 1) {
         const order = sorted.map(c => esc(c.name || c.id)).join(' first → ') + ' last';
