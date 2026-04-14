@@ -1828,7 +1828,7 @@ async function handleSetupButton() {
  * @param {{ point: string, dist: number, mandate: string, score: number } | null} ignition - Flash ignition result
  * @returns {string} The instruction block for the advance injection
  */
-function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ignition) {
+function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ignition, compressed = []) {
     const pcName = state?.pc?.name || '{{user}}';
     const doing = state?.pc?.doing || 'what they were doing';
     const lines = [];
@@ -1837,6 +1837,16 @@ function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ig
     lines.push(`BEAT 1 — PLAYER: ${pcName} continues (${doing}). Time passes.`);
     lines.push(`  Write: acknowledge what the PC actually accomplished or failed to accomplish. Concrete result, 80-150w. The camera stays on the PC first.`);
     lines.push('');
+
+    // ── Mechanical compression notice ─────────────────────────────────────────
+    if (compressed.length > 0) {
+        lines.push(`[ENGINE — DISTANCE COMPRESSED THIS TURN]`);
+        for (const c of compressed) {
+            lines.push(`  "${c.name}" distance: ${c.oldDist} → ${c.newDist}`);
+        }
+        lines.push(`  These distances were already decreased by the engine. Do NOT decrease them again in your ledger output this turn.`);
+        lines.push('');
+    }
 
     // ── Beats 2-N: WORLD MOVEMENT ─────────────────────────────────────────────
     let beatNum = 2;
@@ -1913,8 +1923,29 @@ function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ig
     return lines.join('\n');
 }
 
-function handleAdvanceButton() {
+async function handleAdvanceButton() {
     _pendingDeductionType = 'advance';
+
+    // ── Engine-side distance compression ─────────────────────────────────────
+    // Decrease distance by 1 for all SIMMERING/ACTIVE collisions with distance > 0.
+    // This guarantees collisions advance even if the LLM forgets to decrease.
+    const compressed = [];
+    if (_currentState) {
+        const txns = [];
+        for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+            const dist = parseFloat(col.distance);
+            const status = (col.status || '').trim().toUpperCase();
+            if ((status === 'SIMMERING' || status === 'ACTIVE') && !isNaN(dist) && dist > 0) {
+                const newDist = dist - 1;
+                txns.push({ op: 'S', e: 'collision', id, d: { f: 'distance', v: newDist }, r: 'system:advance:distance-compress' });
+                compressed.push({ id, name: col.name || id, oldDist: dist, newDist });
+            }
+        }
+        if (txns.length > 0) {
+            await append(txns);
+            _currentState = computeCurrentState();
+        }
+    }
 
     const ripeCollisions = [];
     const inProgressCollisions = [];
@@ -1942,7 +1973,7 @@ function handleAdvanceButton() {
 
     const draw = drawDivination();
     const ignition = buildFlashIgnition(_currentState, draw);
-    const beatBlock = buildAdvanceBeats(_currentState, draw, ripeCollisions, inProgressCollisions, ignition);
+    const beatBlock = buildAdvanceBeats(_currentState, draw, ripeCollisions, inProgressCollisions, ignition, compressed);
 
     const markers = [MODE_LOREBOOK_KEYS.advanceCore, MODE_LOREBOOK_KEYS.advanceOptional, MODE_LOREBOOK_KEYS.proseAdvance];
     _pendingOOCInjection = buildModeInjection('GRAVITY ADVANCE', beatBlock, markers);
