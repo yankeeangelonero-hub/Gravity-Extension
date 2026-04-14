@@ -1944,6 +1944,7 @@ async function handleAdvanceButton() {
         if (txns.length > 0) {
             await append(txns);
             _currentState = computeCurrentState();
+            updatePanel(_currentState, _turnCounter);
         }
     }
 

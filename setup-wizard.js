@@ -170,27 +170,22 @@ function buildSetupPrompt(answers) {
 ${filled.length ? 'PLAYER PROVIDED:\n' + filled.map(f => `  ${f}`).join('\n') : ''}
 ${blank.length ? '\nAUTO-FILL (derive from character card, scenario, and genre):\n' + blank.map(b => `  - ${b}`).join('\n') : ''}
 
+IMPORTANT: The PC (player character) is {{user}}, derived from the user's persona. The PRINCIPAL is {{char}}, the character card NPC. These are DIFFERENT characters — never merge them.
+
 EMIT ALL OF THE FOLLOWING in one ---LEDGER--- block:
 
-1. WORLD SETUP:
-${answers.power_scale ? '> MAP_SET world field=constants key=power_scale value="[power ladder summary]" -- What each combat rating means in this story\n' : ''}${answers.power_ceiling ? '> MAP_SET world field=constants key=power_ceiling value=[highest_rating] -- Highest credible direct-combat level in this setting\n' : ''}${answers.power_notes ? '> MAP_SET world field=constants key=power_notes value="[caveats about range, magic, armor, or combat realism]" -- World combat caveats\n' : ''}> SET world field=world_state value="[macro reality]" -- World state
+1. PC (the player — {{user}}, from the persona):
+> SET pc field=name value="{{user}}"
+> SET pc field=doing value="[what {{user}} is doing at scene start]"
+> APPEND pc field=demonstrated_traits value="[trait from persona description]"
+{{personaDescription}}
+${answers.pc_power_base ? `> SET pc field=power_base value=${answers.pc_power_base} -- Normal earned combat level when healthy\n> SET pc field=power value=${answers.pc_power_base} -- Current effective combat level starts at base unless setup establishes impairment or a boost` : ''}${answers.pc_power_basis ? '\n> SET pc field=power_basis value="[why the PC deserves this rating]" -- Narrative justification for the rating' : ''}${answers.pc_abilities ? '\n> APPEND pc field=abilities value="[combat-relevant ability, training, gear edge, or limitation]" -- Repeat 2-4 times as needed' : ''}
+Read the persona description above. Extract demonstrated_traits (2-4 APPEND lines) from what it says about {{user}}.
 
-2. FACTIONS (at least 2 with opposing objectives):
-> CREATE faction:name name="[Name]" objective="[goal]" resources="[resources]" stance_toward_pc="[stance]" power="[rising/stable/declining]" momentum="[current action]" leverage="[power source]" vulnerability="[weakness]"
-> MAP_SET faction:name field=relations key=[other-faction-id] value="[stance]"
-
-3. CHAPTER:
-> CREATE chapter:ch1-slug number=1 title="[focus]" status=OPEN arc="[central question]" central_tension="[forced choice]"
-
-4. COLLISIONS (at least 1 active or simmering; each must be a compact narrative thread, not just a label):
-> CREATE collision:slug name="[name]" forces="force1,force2" status=SIMMERING distance=8 details="[what is converging, who is caught in it, how it is already surfacing, what forced choice is looming]" cost="[what engagement, delay, or failure costs]" target_constraint="[constraint-id if this is pressing a tracked defense]"
-
-5. PRESSURE POINTS (2-3 seams where the world is about to break; short seeds, not full collisions):
-> APPEND world field=pressure_points value="[seam that could later tighten into a collision]"
-
-6. PRINCIPAL CHARACTER (from scenario/character card):
-> CREATE char:name name="[Full Name]" tier=PRINCIPAL want="[core want from card/scenario]" doing="[action]" cost="[risk]"
+2. PRINCIPAL CHARACTER ({{char}} — the character card NPC, NOT the PC):
+> CREATE char:name name="[Full Name from character card]" tier=PRINCIPAL want="[core want from card/scenario]" doing="[action]" cost="[risk]"
 > SET char:name field=intimacy_stance value="[initial stance]"
+> SET char:name field=knowledge_asymmetry value="[what they know that the PC doesn't; what the PC knows that they don't; what they are hiding or misreading]"
 If this character is combat-capable or likely to become a direct physical threat, also assign:
 > SET char:name field=power_base value=[earned_rating]
 > SET char:name field=power value=[current_effective_rating]
@@ -201,13 +196,25 @@ Build 3-4 constraints:
 > CREATE constraint:c2-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=displacement shedding_order=2
 > CREATE constraint:c3-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=depth_shift shedding_order=3
 
-7. PC:
-> SET pc field=name value="{{user}}"
-> APPEND pc field=demonstrated_traits value="[from persona card]"
-${answers.pc_power_base ? `> SET pc field=power_base value=${answers.pc_power_base} -- Normal earned combat level when healthy\n> SET pc field=power value=${answers.pc_power_base} -- Current effective combat level starts at base unless setup establishes impairment or a boost` : ''}${answers.pc_power_basis ? '\n> SET pc field=power_basis value="[why the PC deserves this rating]" -- Narrative justification for the rating' : ''}${answers.pc_abilities ? '\n> APPEND pc field=abilities value="[combat-relevant ability, training, gear edge, or limitation]" -- Repeat 2-4 times as needed' : ''}
+3. WORLD SETUP:
+${answers.power_scale ? '> MAP_SET world field=constants key=power_scale value="[power ladder summary]" -- What each combat rating means in this story\n' : ''}${answers.power_ceiling ? '> MAP_SET world field=constants key=power_ceiling value=[highest_rating] -- Highest credible direct-combat level in this setting\n' : ''}${answers.power_notes ? '> MAP_SET world field=constants key=power_notes value="[caveats about range, magic, armor, or combat realism]" -- World combat caveats\n' : ''}> SET world field=world_state value="[macro reality]" -- World state
+
+4. FACTIONS (at least 2 with opposing objectives):
+> CREATE faction:name name="[Name]" objective="[goal]" resources="[resources]" stance_toward_pc="[stance]" power="[rising/stable/declining]" momentum="[current action]" leverage="[power source]" vulnerability="[weakness]"
+> MAP_SET faction:name field=relations key=[other-faction-id] value="[stance]"
+
+5. CHAPTER:
+> CREATE chapter:ch1-slug number=1 title="[focus]" status=OPEN arc="[central question]" central_tension="[forced choice]"
+
+6. COLLISIONS (at least 1 active or simmering; each must be a compact narrative thread, not just a label):
+> CREATE collision:slug name="[name]" forces="force1,force2" status=SIMMERING distance=8 details="[what is converging, who is caught in it, how it is already surfacing, what forced choice is looming]" cost="[what engagement, delay, or failure costs]" target_constraint="[constraint-id if this is pressing a tracked defense]"
+
+7. PRESSURE POINTS (2-3 seams where the world is about to break; short seeds, not full collisions):
+> APPEND world field=pressure_points value="[seam that could later tighten into a collision]"
 
 8. Any scenario NPCs as KNOWN:
 > CREATE char:npc-slug name="[NPC Name]" tier=KNOWN
+> SET char:npc-slug field=knowledge_asymmetry value="[what they know vs. what the PC knows — even a brief note]"
 If any recurring or important NPC is combat-capable, assign:
 > SET char:npc-slug field=power_base value=[earned_rating]
 > SET char:npc-slug field=power value=[current_effective_rating]
