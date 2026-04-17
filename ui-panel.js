@@ -727,7 +727,6 @@ function renderCharDossier(char, state) {
     if (char.condition) parts.push(`<div class="gl-d-row"><b>Condition:</b> ${esc(char.condition)}</div>`);
     if (char.want) parts.push(`<div class="gl-d-row"><b>WANT:</b> ${esc(char.want)}</div>`);
     // doing now includes cost (merged field)
-    if (char.doing) parts.push(`<div class="gl-d-row"><b>DOING:</b> ${esc(char.doing)}${char.cost && !char.doing.includes('Cost:') ? ` | <b>Cost:</b> ${esc(char.cost)}` : ''}</div>`);
     if (char.knowledge_asymmetry) parts.push(`<div class="gl-d-row"><b>Knowledge:</b> ${esc(char.knowledge_asymmetry)}</div>`);
     // Stance toward PC: prefer reads[pc], fall back to stance_toward_pc (legacy)
     const stanceTowardPc = (char.reads?.pc) || char.stance_toward_pc;

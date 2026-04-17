@@ -123,7 +123,6 @@ function formatStateView(state, mode = 'full') {
         if (isKnown) continue;
 
         // TRACKED+ fields: doing, knowledge_asymmetry, last_seen_at
-        if (char.doing) lines.push(`    Doing: ${char.doing}`);
         if (char.knowledge_asymmetry !== undefined) {
             lines.push(`    Knowledge asymmetry: ${normalizeText(char.knowledge_asymmetry) || '(unset)'}`);
         }
@@ -257,7 +256,6 @@ function formatStateView(state, mode = 'full') {
         if (state.pc.current_scene) {
             lines.push(`    SCENE: ${state.pc.current_scene}`);
         }
-        if (state.pc.doing) lines.push(`    Doing: ${state.pc.doing}`);
         // Combat-relevant PC fields — only in combat/full
         if (showPower) {
             if (state.pc.equipment) lines.push(`    Equipment: ${state.pc.equipment}`);
@@ -554,7 +552,6 @@ COMMON PATHS:
   pc.equipment
   char:id.location
   char:id.condition
-  char:id.doing
   char:id.knowledge_asymmetry
   char:id.last_seen_at
   char:id.reads.pc
@@ -673,7 +670,6 @@ MOVE — state machine transition (no skipping levels)
   > MOVE chapter:ch1 field=status OPEN->CLOSING -- Chapter target reached
 
 SET — overwrite a field
-  > SET char:tifa field=doing value="Investigating the reactor" -- New action
   > SET collision:trust-vs-duty field=distance value=6 -- Closer after confrontation
   > SET world field=world_state value="Martial law declared" -- Major world change
   > SET combat:alley-fight field=exchange value=2 -- New exchange begins

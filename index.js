@@ -914,21 +914,6 @@ function getStateViewMode(isRegular, isAdvance, isIntegration, challengeRuntimeA
     return 'lite';
 }
 
-/**
- * Find the char entity whose name matches pc.name and return its doing.
- * Falls back when pc.doing is never explicitly SET by the LLM.
- */
-function getMatchingCharDoing(state) {
-    if (!state?.pc?.name) return null;
-    const pcName = state.pc.name.toLowerCase();
-    for (const char of Object.values(state.characters || {})) {
-        if ((char.name || '').toLowerCase() === pcName && char.doing) {
-            return char.doing;
-        }
-    }
-    return null;
-}
-
 // ─── Visible Ledger ────────────────────────────────────────────────────────────
 
 function escapeHtml(str) {
@@ -1239,7 +1224,7 @@ function injectPrompt(mode) {
                 const lastTx = charTxns.length > 0 ? charTxns[charTxns.length - 1].tx : 0;
                 const gap = totalTx - lastTx;
                 if (gap >= DORMANT_THRESHOLD) {
-                    dormant.push(`${char.name || id} [${char.tier}] — WANT: ${char.want || '?'}, DOING: ${char.doing || '?'} — last activity ${gap} transactions ago`);
+                    dormant.push(`${char.name || id} [${char.tier}] — WANT: ${char.want || '?'} — last activity ${gap} transactions ago`);
                 }
             }
             if (dormant.length > 0) {
@@ -1900,7 +1885,7 @@ async function handleSetupButton() {
  * Build the structured beat sequence for an advance turn.
  *
  * Beat structure (F1.1):
- *   Beat 1 — PLAYER RESOLUTION (mandatory): acknowledge pc.doing + time + result
+ *   Beat 1 — PLAYER RESOLUTION (mandatory): acknowledge player action + time + result
  *   Beats 2-N — WORLD MOVEMENT: arrived collisions, flash ignitions, general focus
  *   Final beat — RETURN HOOK (mandatory): consequence arrives at player
  *
@@ -1913,11 +1898,10 @@ async function handleSetupButton() {
  */
 function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ignition, compressed = []) {
     const pcName = state?.pc?.name || '{{user}}';
-    const doing = state?.pc?.doing || getMatchingCharDoing(state) || 'what they were doing';
     const lines = [];
 
     // ── Beat 1: PLAYER RESOLUTION (mandatory) ─────────────────────────────────
-    lines.push(`BEAT 1 — PLAYER: ${pcName} continues (${doing}). Time passes.`);
+    lines.push(`BEAT 1 — PLAYER: ${pcName} continues. Time passes.`);
     lines.push(`  Write: acknowledge what the PC actually accomplished or failed to accomplish. Concrete result, 80-150w. The camera stays on the PC first.`);
     lines.push('');
 
@@ -2082,8 +2066,7 @@ async function handleAdvanceButton() {
 
     injectPrompt('advance');
     const pcName = _currentState?.pc?.name || '{{user}}';
-    const doing = _currentState?.pc?.doing || getMatchingCharDoing(_currentState) || 'what they were doing';
-    insertChatMessage(`*${pcName} continues — ${doing}.*`);
+    insertChatMessage(`*${pcName} continues.*`);
 }
 
 async function handleCombatButton() {
