@@ -726,7 +726,27 @@ function renderCharDossier(char, state) {
     if (char.condition) parts.push(`<div class="gl-d-row"><b>Condition:</b> ${esc(char.condition)}</div>`);
     if (char.want) parts.push(`<div class="gl-d-row"><b>WANT:</b> ${esc(char.want)}</div>`);
     // doing now includes cost (merged field)
-    if (char.knowledge_asymmetry) parts.push(`<div class="gl-d-row"><b>Knowledge:</b> ${esc(char.knowledge_asymmetry)}</div>`);
+    if (char.knowledge_asymmetry) {
+        const ka = char.knowledge_asymmetry;
+        if (typeof ka === 'object' && !Array.isArray(ka)) {
+            const kaItems = [];
+            for (const bucket of ['knows', 'unknown', 'hiding', 'misreading']) {
+                const map = ka[bucket];
+                if (map && typeof map === 'object') {
+                    for (const [k, v] of Object.entries(map)) {
+                        const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
+                        kaItems.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(k)}:</b> ${esc(String(v))}</li>`);
+                    }
+                }
+            }
+            if (ka.legacy) kaItems.push(`<li><span class="gl-ka-bucket">Legacy</span> ${esc(ka.legacy)}</li>`);
+            if (kaItems.length) {
+                parts.push(`<div class="gl-d-row"><b>Knowledge:</b><ul class="gl-d-kalist">${kaItems.join('')}</ul></div>`);
+            }
+        } else if (typeof ka === 'string' && ka) {
+            parts.push(`<div class="gl-d-row"><b>Knowledge:</b> ${esc(ka)}</div>`);
+        }
+    }
     // Stance toward PC: prefer reads[pc], fall back to stance_toward_pc (legacy)
     const stanceTowardPc = (char.reads?.pc) || char.stance_toward_pc;
     if (stanceTowardPc) parts.push(`<div class="gl-d-row"><b>Reads PC as:</b> ${esc(stanceTowardPc)}</div>`);

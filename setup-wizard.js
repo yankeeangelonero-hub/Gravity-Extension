@@ -185,7 +185,10 @@ Read the persona description above. Extract demonstrated_traits (2-4 APPEND line
 2. PRINCIPAL CHARACTER ({{char}} — the character card NPC, NOT the PC):
 > CREATE char:name name="[Full Name from character card]" tier=PRINCIPAL want="[core want from card/scenario]" doing="[action]"
 > SET char:name field=intimacy_stance value="[initial stance]"
-> SET char:name field=knowledge_asymmetry value="[what they know that the PC doesn't; what the PC knows that they don't; what they are hiding or misreading]"
+> MAP_SET char:name field=knowledge_asymmetry key=knows.[topic] value="[fact they hold]"
+> MAP_SET char:name field=knowledge_asymmetry key=unknown.[topic] value="[gap they have]"
+> MAP_SET char:name field=knowledge_asymmetry key=hiding.[topic] value="[what they conceal]"
+> MAP_SET char:name field=knowledge_asymmetry key=misreading.[topic] value="[false belief they hold]"
 If this character is combat-capable or likely to become a direct physical threat, also assign:
 > SET char:name field=power_base value=[earned_rating]
 > SET char:name field=power value=[current_effective_rating]

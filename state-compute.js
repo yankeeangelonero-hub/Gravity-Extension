@@ -78,8 +78,16 @@ function normalizeCharacterKnowledgeAsymmetry(state) {
     for (const char of Object.values(state.characters || {})) {
         const tier = String(char?.tier || '').toUpperCase();
         if (!['KNOWN', 'TRACKED', 'PRINCIPAL'].includes(tier)) continue;
-        if (char.knowledge_asymmetry === undefined || char.knowledge_asymmetry === null) {
-            char.knowledge_asymmetry = '';
+        const ka = char.knowledge_asymmetry;
+        if (ka === undefined || ka === null || ka === '') {
+            char.knowledge_asymmetry = { knows: {}, unknown: {}, hiding: {}, misreading: {} };
+        } else if (typeof ka === 'string') {
+            char.knowledge_asymmetry = { knows: {}, unknown: {}, hiding: {}, misreading: {}, legacy: ka };
+        } else if (typeof ka === 'object' && !Array.isArray(ka)) {
+            if (!ka.knows || typeof ka.knows !== 'object') ka.knows = {};
+            if (!ka.unknown || typeof ka.unknown !== 'object') ka.unknown = {};
+            if (!ka.hiding || typeof ka.hiding !== 'object') ka.hiding = {};
+            if (!ka.misreading || typeof ka.misreading !== 'object') ka.misreading = {};
         }
         if (char.last_seen_at === undefined || char.last_seen_at === null) {
             char.last_seen_at = '';
@@ -286,13 +294,31 @@ function applyTransaction(state, tx) {
         case 'MS': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
-                if (typeof target[tx.d.f] !== 'object' || Array.isArray(target[tx.d.f])) {
-                    target[tx.d.f] = {};
-                }
-                const oldVal = target[tx.d.f][tx.d.k];
-                target[tx.d.f][tx.d.k] = tx.d.v;
-                if (oldVal !== tx.d.v) {
-                    recordHistory(state, tx.e, tx.id, `${tx.d.f}.${tx.d.k}`, oldVal, tx.d.v, tx);
+                const dotIdx = tx.d.k ? tx.d.k.indexOf('.') : -1;
+                if (dotIdx !== -1) {
+                    // Dotted key: f=knowledge_asymmetry k=knows.apostle -> target[f][knows][apostle]
+                    const subKey = tx.d.k.slice(0, dotIdx);
+                    const leafKey = tx.d.k.slice(dotIdx + 1);
+                    if (typeof target[tx.d.f] !== 'object' || Array.isArray(target[tx.d.f])) {
+                        target[tx.d.f] = {};
+                    }
+                    if (typeof target[tx.d.f][subKey] !== 'object' || Array.isArray(target[tx.d.f][subKey])) {
+                        target[tx.d.f][subKey] = {};
+                    }
+                    const oldVal = target[tx.d.f][subKey][leafKey];
+                    target[tx.d.f][subKey][leafKey] = tx.d.v;
+                    if (oldVal !== tx.d.v) {
+                        recordHistory(state, tx.e, tx.id, `${tx.d.f}.${tx.d.k}`, oldVal, tx.d.v, tx);
+                    }
+                } else {
+                    if (typeof target[tx.d.f] !== 'object' || Array.isArray(target[tx.d.f])) {
+                        target[tx.d.f] = {};
+                    }
+                    const oldVal = target[tx.d.f][tx.d.k];
+                    target[tx.d.f][tx.d.k] = tx.d.v;
+                    if (oldVal !== tx.d.v) {
+                        recordHistory(state, tx.e, tx.id, `${tx.d.f}.${tx.d.k}`, oldVal, tx.d.v, tx);
+                    }
                 }
             }
             break;
@@ -300,10 +326,22 @@ function applyTransaction(state, tx) {
 
         case 'MR': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
-            if (target && tx.d.f && typeof target[tx.d.f] === 'object') {
-                const oldVal = target[tx.d.f][tx.d.k];
-                delete target[tx.d.f][tx.d.k];
-                recordHistory(state, tx.e, tx.id, `${tx.d.f}.${tx.d.k}`, oldVal, undefined, tx);
+            if (target && tx.d.f) {
+                const dotIdx = tx.d.k ? tx.d.k.indexOf('.') : -1;
+                if (dotIdx !== -1) {
+                    const subKey = tx.d.k.slice(0, dotIdx);
+                    const leafKey = tx.d.k.slice(dotIdx + 1);
+                    if (target[tx.d.f] && typeof target[tx.d.f] === 'object' &&
+                        target[tx.d.f][subKey] && typeof target[tx.d.f][subKey] === 'object') {
+                        const oldVal = target[tx.d.f][subKey][leafKey];
+                        delete target[tx.d.f][subKey][leafKey];
+                        recordHistory(state, tx.e, tx.id, `${tx.d.f}.${tx.d.k}`, oldVal, undefined, tx);
+                    }
+                } else if (typeof target[tx.d.f] === 'object') {
+                    const oldVal = target[tx.d.f][tx.d.k];
+                    delete target[tx.d.f][tx.d.k];
+                    recordHistory(state, tx.e, tx.id, `${tx.d.f}.${tx.d.k}`, oldVal, undefined, tx);
+                }
             }
             break;
         }

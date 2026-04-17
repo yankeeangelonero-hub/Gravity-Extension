@@ -329,12 +329,13 @@ function parseStateLine(line, lineNum) {
     const entityType = entityMatch[1].toLowerCase();
     const entityId = entityMatch[2] || '';
     const field = parts[1] || '';
-    const key = parts[2] || '';
+    // Depth-4 paths (e.g. char:elena.knowledge_asymmetry.knows.apostle) produce a dotted key
+    const key = parts.length >= 4 ? `${parts[2]}.${parts[3]}` : (parts[2] || '');
 
     if (!field) {
         return { entry: null, error: `Line ${lineNum}: STATE path "${path}" is missing a field`, raw };
     }
-    if (parts.length > 3) {
+    if (parts.length > 4) {
         return { entry: null, error: `Line ${lineNum}: STATE path "${path}" is too deep`, raw };
     }
 

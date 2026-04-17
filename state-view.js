@@ -119,9 +119,28 @@ function formatStateView(state, mode = 'full') {
         // KNOWN tier: name + location only (knowledge proxied by faction intel)
         if (isKnown) continue;
 
-        // TRACKED+ fields: doing, knowledge_asymmetry, last_seen_at
-        if (char.knowledge_asymmetry !== undefined) {
-            lines.push(`    Knowledge asymmetry: ${normalizeText(char.knowledge_asymmetry) || '(unset)'}`);
+        // TRACKED+ fields: knowledge_asymmetry, last_seen_at
+        const ka = char.knowledge_asymmetry;
+        if (ka !== undefined && ka !== null) {
+            if (typeof ka === 'object' && !Array.isArray(ka)) {
+                const kaLines = [];
+                for (const bucket of ['knows', 'unknown', 'hiding', 'misreading']) {
+                    const map = ka[bucket];
+                    if (map && typeof map === 'object' && Object.keys(map).length) {
+                        const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
+                        for (const [k, v] of Object.entries(map)) {
+                            kaLines.push(`      [${label}] ${k}: ${v}`);
+                        }
+                    }
+                }
+                if (ka.legacy) kaLines.push(`      [legacy] ${ka.legacy}`);
+                if (kaLines.length) {
+                    lines.push('    Knowledge asymmetry:');
+                    lines.push(...kaLines);
+                }
+            } else if (typeof ka === 'string' && ka) {
+                lines.push(`    Knowledge asymmetry: ${normalizeText(ka)}`);
+            }
         }
         if (char.last_seen_at !== undefined && char.last_seen_at !== null && normalizeText(char.last_seen_at)) {
             lines.push(`    Last seen at: ${normalizeText(char.last_seen_at)}`);
@@ -516,7 +535,9 @@ at: [Day N - HH:MM]
 scene: "Where. Who's present. What's happening. Emotional atmosphere."
 pc.location: "where the PC is now"
 char:elena.condition: "steady, watchful"
-char:elena.knowledge_asymmetry: "Knows the PC is armed, does not know who sent them, is hiding that she already warned the owner"
+char:elena.knowledge_asymmetry.knows.weapon: "PC is armed"
+char:elena.knowledge_asymmetry.unknown.sender: "does not know who sent them"
+char:elena.knowledge_asymmetry.hiding.owner-warn: "already warned the owner"
 char:elena.last_seen_at: "[Day 2 - 19:10]"
 faction:zaft.intel_on.archangel: "Believes the ship escaped damaged; does not know who the Strike pilot is"
 faction:zaft.false_beliefs.strike-pilot: "Assumes the pilot identity is still unconfirmed"
@@ -541,7 +562,10 @@ COMMON PATHS:
   pc.equipment
   char:id.location
   char:id.condition
-  char:id.knowledge_asymmetry
+  char:id.knowledge_asymmetry.knows.<key>
+  char:id.knowledge_asymmetry.unknown.<key>
+  char:id.knowledge_asymmetry.hiding.<key>
+  char:id.knowledge_asymmetry.misreading.<key>
   char:id.last_seen_at
   char:id.reads.pc
   faction:id.comms_latency
@@ -593,8 +617,8 @@ If a turn gets structurally complicated, switch to a full ---LEDGER--- block ins
 DISCIPLINE:
   Only write what changed materially.
   Keep char:id.condition terse — 10-15 words describing body/mind state. Scene prose carries longer description.
-  Keep knowledge_asymmetry current on TRACKED/PRINCIPAL characters when they are active or scene-relevant: what they know, what they do not know, what they are hiding, or what they are misreading right now.
-  KNOWN characters inherit knowledge from their faction's intel_on and false_beliefs maps. Only set individual knowledge_asymmetry on a KNOWN character when they learn something their faction does not know yet.
+  Keep knowledge_asymmetry current on TRACKED/PRINCIPAL characters when they are active or scene-relevant. Use the four buckets: knows (facts they hold), unknown (gaps you want to track), hiding (facts they are actively concealing), misreading (false beliefs they hold). Add or remove individual keys; never overwrite the whole field.
+  KNOWN characters inherit knowledge from their faction's intel_on map. Only set individual knowledge_asymmetry keys on a KNOWN character when they learn something their faction does not know yet.
   If the protagonist also exists as char:<pc-id>, treat pc and char:<pc-id> as separate surfaces: pc carries immediate scene/body state, while char:<pc-id> carries the social/knowledge dossier. Updating pc.* does not update the mirrored char dossier.
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
   Use faction intel fields for remote awareness: comms_latency, last_verified_at, intel_posture, blindspots, intel_on, and false_beliefs.
