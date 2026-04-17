@@ -897,6 +897,122 @@ function clearMatchedCorrections(committedTxns) {
     });
 }
 
+// ─── State View Mode ──────────────────────────────────────────────────────────
+
+/**
+ * Determine which state view mode to use based on turn context.
+ *   lite     — regular turns without combat/intimacy
+ *   combat   — combat challenge active or combat deduction
+ *   intimacy — intimacy deduction active
+ *   full     — advance, integration, setup, chapter close
+ */
+function getStateViewMode(isRegular, isAdvance, isIntegration, challengeRuntimeActive, reasonMode) {
+    if (isIntegration) return 'full';
+    if (isAdvance) return 'full';
+    if (challengeRuntimeActive) return 'combat';
+    if (reasonMode === 'intimacy') return 'intimacy';
+    if (reasonMode === 'combat') return 'combat';
+    return 'lite';
+}
+
+/**
+ * Find the char entity whose name matches pc.name and return its doing.
+ * Falls back when pc.doing is never explicitly SET by the LLM.
+ */
+function getMatchingCharDoing(state) {
+    if (!state?.pc?.name) return null;
+    const pcName = state.pc.name.toLowerCase();
+    for (const char of Object.values(state.characters || {})) {
+        if ((char.name || '').toLowerCase() === pcName && char.doing) {
+            return char.doing;
+        }
+    }
+    return null;
+}
+
+// ─── Auto-Summary & Visible Ledger ────────────────────────────────────────────
+
+function escapeHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Build a compact mechanical delta string from committed transactions.
+ * ~20-40 tokens vs 80-130 words of LLM-generated summary.
+ */
+function buildAutoSummary(committedTxns) {
+    if (!committedTxns?.length) return null;
+    const timestamp = committedTxns[0]?.t || '';
+    const parts = [];
+    for (const tx of committedTxns) {
+        const entityRef = tx.id ? `${tx.e}:${tx.id}` : tx.e;
+        const field = tx.d?.f || '';
+        const value = tx.d?.v ?? tx.d?.to ?? '';
+        // Skip summary transactions and system transactions
+        if (tx.e === 'summary') continue;
+        if (tx.r?.startsWith('system:')) continue;
+
+        if (tx.op === 'TR') {
+            parts.push(`${entityRef}.${field} ${tx.d.from}→${tx.d.to}`);
+        } else if (tx.op === 'S') {
+            const sv = String(value).length > 50 ? String(value).slice(0, 50) + '…' : value;
+            parts.push(`${entityRef}.${field}→"${sv}"`);
+        } else if (tx.op === 'CR') {
+            parts.push(`+${entityRef} (${tx.d?.tier || tx.d?.status || 'new'})`);
+        } else if (tx.op === 'D') {
+            parts.push(`-${entityRef}`);
+        } else if (tx.op === 'A' && field) {
+            const sv = String(value).length > 40 ? String(value).slice(0, 40) + '…' : value;
+            parts.push(`${entityRef}.${field}+="${sv}"`);
+        } else if (tx.op === 'MS') {
+            const key = tx.d?.k || '';
+            const sv = String(value).length > 40 ? String(value).slice(0, 40) + '…' : value;
+            parts.push(`${entityRef}.${field}.${key}→"${sv}"`);
+        }
+    }
+    if (parts.length === 0) return null;
+    return `${timestamp ? timestamp + ' ' : ''}${parts.join('; ')}`;
+}
+
+/**
+ * Format committed transactions as visible HTML for the chat message.
+ */
+function formatCommittedTxnsHtml(committedTxns) {
+    if (!committedTxns?.length) return '';
+    const lines = [];
+    for (const tx of committedTxns) {
+        const entityRef = tx.id ? `${tx.e}:${tx.id}` : tx.e;
+        const field = tx.d?.f || '';
+        const value = tx.d?.v ?? tx.d?.to ?? '';
+        if (tx.op === 'TR') {
+            lines.push(`${entityRef}.${field} ${tx.d.from} → ${tx.d.to}`);
+        } else if (tx.op === 'S') {
+            lines.push(`${entityRef}.${field} → "${value}"`);
+        } else if (tx.op === 'CR') {
+            lines.push(`+ ${entityRef} (${tx.d?.name || tx.d?.tier || 'created'})`);
+        } else if (tx.op === 'D') {
+            lines.push(`- ${entityRef} (destroyed)`);
+        } else if (tx.op === 'A') {
+            if (tx.e === 'summary') {
+                lines.push(`summary+ "${String(value).length > 80 ? String(value).slice(0, 80) + '…' : value}"`);
+            } else if (field) {
+                lines.push(`${entityRef}.${field}+ "${value}"`);
+            }
+        } else if (tx.op === 'R') {
+            lines.push(`${entityRef}.${field}- "${value}"`);
+        } else if (tx.op === 'MS') {
+            const key = tx.d?.k || '';
+            lines.push(`${entityRef}.${field}.${key} → "${value}"`);
+        } else if (tx.op === 'MR') {
+            const key = tx.d?.k || '';
+            lines.push(`${entityRef}.${field}.${key} (removed)`);
+        }
+    }
+    if (lines.length === 0) return '';
+    const lineHtml = lines.map(l => `<div class="gl-ledger-line">${escapeHtml(l)}</div>`).join('\n');
+    return `\n<div class="gl-ledger-display"><div class="gl-ledger-header">STATE</div>\n${lineHtml}\n</div>`;
+}
+
 // ─── Prompt Injection ──────────────────────────────────────────────────────────
 
 function getStateTarget(state, entityType, entityId) {
@@ -964,10 +1080,19 @@ function compileStateEntries(stateEntries, currentState) {
                     tx = { op: 'R', e: entry.entityType, id: entry.entityId, d: { f: entry.field, v: entry.value } };
                 }
             } else if (entry.kind === 'set') {
+                // No-op prevention: skip if value unchanged (E)
+                if (entry.key == null && currentValue != null && String(currentValue) === String(entry.value)) {
+                    continue; // silently drop — value already matches
+                }
                 if (entry.key != null) {
                     if (entry.value === null) {
                         tx = { op: 'MR', e: entry.entityType, id: entry.entityId, d: { f: entry.field, k: entry.key } };
                     } else {
+                        // No-op prevention for map_set
+                        const mapCurrent = target?.[entry.field]?.[entry.key];
+                        if (mapCurrent != null && String(mapCurrent) === String(entry.value)) {
+                            continue; // silently drop — map value already matches
+                        }
                         tx = { op: 'MS', e: entry.entityType, id: entry.entityId, d: { f: entry.field, k: entry.key, v: entry.value } };
                     }
                 } else if (machineField === entry.field && target && currentValue != null && String(currentValue) !== String(entry.value) && entry.value !== '') {
@@ -1044,9 +1169,10 @@ function injectPrompt(mode) {
         }
         _currentReasonMode = nextReasonMode;
 
-        // State view — slim on regular turns, full on advance/integration or active challenge
+        // State view — four modes: lite, combat, intimacy, full
         if (_currentState) {
-            const stateView = formatStateView(_currentState, isRegular && !challengeRuntimeActive ? 'slim' : 'full');
+            const stateViewMode = getStateViewMode(isRegular, isAdvance, isIntegration, challengeRuntimeActive, nextReasonMode);
+            const stateView = formatStateView(_currentState, stateViewMode);
             setExtensionPrompt(`${MODULE_NAME}_state`, stateView, PROMPT_IN_CHAT, 0);
         }
 
@@ -1412,7 +1538,7 @@ GRAVITY_REASON_MODE: ${reasonMode}
 These flags are for hidden reasoning only. Never echo or paraphrase them in visible output.
 
 After the thinking pass closes, visible output is:
-1. Optional divination card HTML when another injection requests it
+1. Divination card HTML ONLY when another injection explicitly requests a draw this turn. ${reasonMode === 'regular' ? 'DIVINATION: none this turn. Do not render a card or reference any prior draw.' : ''}
 2. Prose
 3. UPDATE block:
 - Normal turns: ---STATE--- (compact delta, only material changes)
@@ -1666,6 +1792,36 @@ async function onMessageReceived(messageId) {
         }
     }
 
+    // ── Visible ledger HTML — append to message so player sees state changes ──
+    if (committedTxns.length > 0) {
+        const ledgerHtml = formatCommittedTxnsHtml(committedTxns);
+        if (ledgerHtml && message) {
+            message.mes += ledgerHtml;
+            // Persist the modified message
+            try {
+                const ctx = SillyTavern.getContext();
+                ctx.saveChatDebounced?.();
+            } catch (_) { /* non-critical */ }
+        }
+    }
+
+    // ── Auto-summary — mechanical delta replaces LLM-generated summary+ ──────
+    if (committedTxns.length > 0) {
+        // Only auto-generate if the LLM didn't already write a summary this turn
+        const llmWroteSummary = committedTxns.some(tx => tx.e === 'summary' && tx.op === 'A');
+        if (!llmWroteSummary) {
+            const autoSummary = buildAutoSummary(committedTxns);
+            if (autoSummary) {
+                try {
+                    await append([{ op: 'A', e: 'summary', id: '', d: { f: '', v: autoSummary }, r: 'system:auto-summary' }]);
+                    _currentState = computeCurrentState();
+                } catch (err) {
+                    console.warn(`${LOG_PREFIX} Auto-summary commit failed:`, err);
+                }
+            }
+        }
+    }
+
     // Build reinforcement FIRST — then append tiering/size warnings on top
     _pendingReinforcement = getReinforcement(extraction, _turnCounter);
 
@@ -1830,7 +1986,7 @@ async function handleSetupButton() {
  */
 function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ignition, compressed = []) {
     const pcName = state?.pc?.name || '{{user}}';
-    const doing = state?.pc?.doing || 'what they were doing';
+    const doing = state?.pc?.doing || getMatchingCharDoing(state) || 'what they were doing';
     const lines = [];
 
     // ── Beat 1: PLAYER RESOLUTION (mandatory) ─────────────────────────────────
@@ -1944,8 +2100,26 @@ async function handleAdvanceButton() {
         if (txns.length > 0) {
             await append(txns);
             _currentState = computeCurrentState();
-            updatePanel(_currentState, _turnCounter);
         }
+
+        // ── Collision auto-transition on distance 0 (C) ─────────────────────
+        // After compression: SIMMERING at dist 0 → ACTIVE
+        const transitionTxns = [];
+        for (const c of compressed) {
+            if (c.newDist <= 0) {
+                const col = _currentState?.collisions?.[c.id];
+                const colStatus = (col?.status || '').trim().toUpperCase();
+                if (colStatus === 'SIMMERING') {
+                    transitionTxns.push({ op: 'TR', e: 'collision', id: c.id, d: { f: 'status', from: 'SIMMERING', to: 'ACTIVE' }, r: 'system:advance:arrival-transition' });
+                }
+            }
+        }
+        if (transitionTxns.length > 0) {
+            await append(transitionTxns);
+            _currentState = computeCurrentState();
+        }
+
+        updatePanel(_currentState, _turnCounter);
     }
 
     const ripeCollisions = [];
@@ -1981,7 +2155,7 @@ async function handleAdvanceButton() {
 
     injectPrompt('advance');
     const pcName = _currentState?.pc?.name || '{{user}}';
-    const doing = _currentState?.pc?.doing || 'what they were doing';
+    const doing = _currentState?.pc?.doing || getMatchingCharDoing(_currentState) || 'what they were doing';
     insertChatMessage(`*${pcName} continues — ${doing}.*`);
 }
 

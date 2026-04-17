@@ -8,7 +8,7 @@
  * No lorebook interaction — all injection handled by index.js via setExtensionPrompt.
  */
 
-import { getPhonebook, getArrayItemHistory } from './state-compute.js';
+import { getArrayItemHistory } from './state-compute.js';
 import { getHotView } from './memory-tier.js';
 
 function normalizeText(value) {
@@ -83,53 +83,94 @@ function formatPowerTag(entity) {
  */
 function formatStateView(state, mode = 'full') {
     const lines = [];
-    const slim = (mode === 'slim');
+    // ── Mode flags ────────────────────────────────────────────────────────
+    const isLite = (mode === 'lite');
+    const isCombat = (mode === 'combat');
+    const isIntimacy = (mode === 'intimacy');
+    const isFull = (mode === 'full');
+    // Derived feature flags
+    const showPower = isCombat || isFull;          // power tags, abilities, wounds
+    const showIntimacy = isIntimacy || isFull;      // intimacy_stance, reads, traits
+    const showConstraintDetail = isIntimacy || isFull; // full constraint profile
+    const showConstants = isCombat || isFull;       // power scale/ceiling/notes
+    const showFullDetail = isFull;                  // faction detail, full PC dossier
+
     lines.push('═══ GRAVITY STATE VIEW ═══');
     lines.push('');
 
-    // ── Entity Registry (what to write to) ─────────────────────────────
+    // ── Entity Registry ──────────────────────────────────────────────────
     lines.push('ENTITY REGISTRY — use these IDs in ledger transactions');
 
-    // Characters
-    const phonebook = getPhonebook(state);
+    // Characters — tier-aware rendering
     lines.push('');
     lines.push('Characters:');
     for (const char of Object.values(state.characters)) {
         if (char.tier === 'UNKNOWN') continue;
-        let charLine = `  ${char.tier} "${char.name || char.id}"`;
-        charLine += formatPowerTag(char);
+        const tier = char.tier || 'KNOWN';
+        const isPrincipal = tier === 'PRINCIPAL';
+        const isTracked = tier === 'TRACKED';
+        const isKnown = tier === 'KNOWN';
+
+        // Header line — power tag only in combat/full
+        let charLine = `  ${tier} "${char.name || char.id}"`;
+        if (showPower) charLine += formatPowerTag(char);
         charLine += ` → id: ${char.id}`;
         lines.push(charLine);
+
+        // Location — all tiers
         if (char.location) lines.push(`    Location: ${char.location}`);
-        if (!slim && char.condition) lines.push(`    Condition: ${char.condition}`);
+
+        // KNOWN tier: name + location only (knowledge proxied by faction intel)
+        if (isKnown) continue;
+
+        // TRACKED+ fields: doing, knowledge_asymmetry, last_seen_at
+        if (char.doing) lines.push(`    Doing: ${char.doing}`);
         if (char.knowledge_asymmetry !== undefined) {
             lines.push(`    Knowledge asymmetry: ${normalizeText(char.knowledge_asymmetry) || '(unset)'}`);
         }
         if (char.last_seen_at !== undefined && char.last_seen_at !== null && normalizeText(char.last_seen_at)) {
             lines.push(`    Last seen at: ${normalizeText(char.last_seen_at)}`);
         }
-        if (!slim && char.power_basis) lines.push(`    Power basis: ${char.power_basis}`);
-        if (!slim) {
+
+        // Condition — PRINCIPAL always, TRACKED only in combat/full
+        if (isPrincipal && char.condition) {
+            lines.push(`    Condition: ${char.condition}`);
+        } else if (isTracked && showPower && char.condition) {
+            lines.push(`    Condition: ${char.condition}`);
+        }
+
+        // Combat fields — only in combat/full
+        if (showPower) {
+            if (char.power_basis) lines.push(`    Power basis: ${char.power_basis}`);
             const abilities = toList(char.abilities);
             if (abilities.length) lines.push(`    Abilities: ${abilities.join(' | ')}`);
+            if (char.wounds && typeof char.wounds === 'object' && Object.keys(char.wounds).length) {
+                const woundList = Object.entries(char.wounds).map(([k, v]) => `${k}: ${v}`).join(', ');
+                lines.push(`    Wounds: ${woundList}`);
+            }
         }
-        if (!slim && char.intimacy_stance) {
+
+        // Intimacy fields — only in intimacy/full
+        if (showIntimacy && char.intimacy_stance) {
             lines.push(`    Intimacy stance: ${char.intimacy_stance}`);
         }
-        if (!slim && char.wounds && typeof char.wounds === 'object' && Object.keys(char.wounds).length) {
-            const woundList = Object.entries(char.wounds).map(([k, v]) => `${k}: ${v}`).join(', ');
-            lines.push(`    Wounds: ${woundList}`);
-        }
-        // Key moments — ALWAYS shown, ALL entries (permanent character history)
+
+        // Key moments — tier-aware capping
         const moments = Array.isArray(char.key_moments) ? char.key_moments : [];
-        if (moments.length) {
-            lines.push(`    Key moments (${moments.length}):`);
-            for (const m of moments) lines.push(`      - ${m}`);
+        let momentCap;
+        if (isFull) momentCap = Infinity;
+        else if (isCombat || isIntimacy) momentCap = isPrincipal ? 5 : 3;
+        else momentCap = isPrincipal ? 3 : 1; // lite
+        const displayMoments = momentCap === Infinity ? moments : moments.slice(-momentCap);
+        if (displayMoments.length) {
+            const capNote = moments.length > displayMoments.length ? `, showing last ${displayMoments.length}` : '';
+            lines.push(`    Key moments (${moments.length}${capNote}):`);
+            for (const m of displayMoments) lines.push(`      - ${m}`);
         }
     }
     if (Object.keys(state.characters).length === 0) lines.push('  (none)');
 
-    // Constraints
+    // Constraints — mode-aware detail level
     const constraints = Object.values(state.constraints);
     if (constraints.length) {
         lines.push('');
@@ -141,15 +182,26 @@ function formatStateView(state, mode = 'full') {
             if (c.shedding_order) cLine += ` shed:${c.shedding_order}`;
             cLine += ` → id: ${c.id}`;
             lines.push(cLine);
-            if (!slim && c.profile) {
-                lines.push(`    ${c.profile}`);
-            } else if (!slim && c.current_pressure) {
+            // Lite: name [INTEGRITY] only (already in header line)
+            // Combat: + current_pressure
+            if (isCombat && !showConstraintDetail && c.current_pressure) {
                 lines.push(`    Pressure: ${c.current_pressure}`);
+            }
+            // Intimacy/Full: full constraint profile
+            if (showConstraintDetail) {
+                if (c.profile) {
+                    lines.push(`    ${c.profile}`);
+                } else {
+                    if (c.prevents) lines.push(`    Prevents: ${c.prevents}`);
+                    if (c.threshold) lines.push(`    Threshold: ${c.threshold}`);
+                    if (c.replacement) lines.push(`    Replacement: ${c.replacement}${c.replacement_type ? ` (${c.replacement_type})` : ''}`);
+                }
+                if (c.current_pressure) lines.push(`    Pressure: ${c.current_pressure}`);
             }
         }
     }
 
-    // Collisions — slim: just IDs, full: adds detail section below
+    // Collisions — registry listing
     const allCollisions = Object.values(state.collisions).filter(c => c.status !== 'RESOLVED');
     if (allCollisions.length) {
         lines.push('');
@@ -159,15 +211,15 @@ function formatStateView(state, mode = 'full') {
             let colLine = `  ${col.name || col.id} [${col.status}]${tierLabel} dist:${col.distance || '?'}`;
             colLine += ` → id: ${col.id}`;
             lines.push(colLine);
-            if (slim) {
-                const threadLines = getCollisionNarrativeLines(col, { includeForces: false });
-                for (const threadLine of threadLines) {
-                    lines.push(`    ${threadLine}`);
-                }
+            // Lite: just last_manifestation (collision detail section is skipped)
+            if (isLite) {
+                const manifestation = normalizeText(col?.last_manifestation);
+                if (manifestation) lines.push(`    Now: ${manifestation}`);
             }
         }
     }
 
+    // Combats — always show registry if active
     const activeCombats = Object.values(state.combats || {}).filter(combat => String(combat.status || '').toUpperCase() !== 'RESOLVED');
     if (activeCombats.length) {
         lines.push('');
@@ -193,48 +245,57 @@ function formatStateView(state, mode = 'full') {
         }
     }
 
-    // Singletons
+    // Singletons — PC fields are mode-aware
     lines.push('');
     lines.push('Singletons (no id needed):');
     lines.push('  world — constants, pressure_points, world_state');
     if (state.pc.name) {
         let pcSingleton = `  pc — "${state.pc.name}"`;
-        if (state.pc.location) pcSingleton += ` @ ${state.pc.location}`;
+        // Only show location when current_scene is not set (scene subsumes location)
+        if (state.pc.location && !state.pc.current_scene) pcSingleton += ` @ ${state.pc.location}`;
         if (state.pc.condition) pcSingleton += ` [${state.pc.condition}]`;
         lines.push(pcSingleton);
         if (state.pc.current_scene) {
             lines.push(`    SCENE: ${state.pc.current_scene}`);
         }
-        if (state.pc.equipment) lines.push(`    Equipment: ${state.pc.equipment}`);
-        if (state.pc.power_basis) lines.push(`    Power basis: ${state.pc.power_basis}`);
-        const slimAbilities = toList(state.pc.abilities);
-        if (slimAbilities.length) lines.push(`    Abilities: ${slimAbilities.join(' | ')}`);
-        const slimWounds = (state.pc.wounds && typeof state.pc.wounds === 'object') ? state.pc.wounds : {};
-        if (Object.keys(slimWounds).length) {
-            lines.push(`    Wounds: ${Object.entries(slimWounds).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
+        if (state.pc.doing) lines.push(`    Doing: ${state.pc.doing}`);
+        // Combat-relevant PC fields — only in combat/full
+        if (showPower) {
+            if (state.pc.equipment) lines.push(`    Equipment: ${state.pc.equipment}`);
+            if (state.pc.power_basis) lines.push(`    Power basis: ${state.pc.power_basis}`);
+            const pcAbilities = toList(state.pc.abilities);
+            if (pcAbilities.length) lines.push(`    Abilities: ${pcAbilities.join(' | ')}`);
+            const pcWounds = (state.pc.wounds && typeof state.pc.wounds === 'object') ? state.pc.wounds : {};
+            if (Object.keys(pcWounds).length) {
+                lines.push(`    Wounds: ${Object.entries(pcWounds).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
+            }
         }
     } else {
         lines.push('  pc — (not initialized)');
     }
+
+    // Divination — hide last_draw in lite to prevent bleed
     const divSys = state.divination?.active_system;
     if (divSys) {
-        lines.push(`  divination — system: ${divSys}${state.divination?.last_draw ? `, last draw: ${state.divination.last_draw}` : ''}`);
+        if (isLite) {
+            lines.push(`  divination — system: ${divSys}`);
+        } else {
+            lines.push(`  divination — system: ${divSys}${state.divination?.last_draw ? `, last draw: ${state.divination.last_draw}` : ''}`);
+        }
     }
 
-    // Factions — slim: name + stance only, full: all political fields
+    // Factions — lite/combat/intimacy: name + stance + power; full: detail section below
     const factionEntities = Object.values(state.factions || {});
     const legacyFactions = Array.isArray(state.world.factions) ? state.world.factions : [];
     if (factionEntities.length || legacyFactions.length) {
         lines.push('');
         lines.push('Factions:');
         for (const f of factionEntities) {
-            if (slim) {
-                // Slim: just name + power + stance
-                const slimStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
-                const slimPower = f.power ? ` [${f.power}]` : '';
-                lines.push(`  ${f.name || f.id}${slimPower} | Stance: ${slimStance} → id: ${f.id}`);
+            if (!showFullDetail) {
+                const fStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
+                const fPower = f.power ? ` [${f.power}]` : '';
+                lines.push(`  ${f.name || f.id}${fPower} | Stance: ${fStance} → id: ${f.id}`);
             } else {
-                // shown in detail section below
                 lines.push(`  ${f.name || f.id} → id: ${f.id}`);
             }
         }
@@ -248,7 +309,7 @@ function formatStateView(state, mode = 'full') {
         }
     }
 
-    // ── Current State Detail ───────────────────────────────────────────
+    // ── Current State Detail ──────────────────────────────────────────────
     lines.push('');
     lines.push('─── CURRENT STATE ───');
 
@@ -257,27 +318,27 @@ function formatStateView(state, mode = 'full') {
     if (openChapter) {
         lines.push('');
         if (openChapter.profile) {
-            // New: single profile paragraph
             lines.push(`CHAPTER [${openChapter.status}] → id: ${openChapter.id}`);
             lines.push(`  ${openChapter.profile}`);
         } else {
-            // Legacy: separate fields
             lines.push(`CHAPTER ${openChapter.number || '?'}: "${openChapter.title || openChapter.focus || '?'}" [${openChapter.status}]`);
             if (openChapter.arc) lines.push(`  Arc: ${openChapter.arc}`);
             if (openChapter.central_tension) lines.push(`  Tension: ${openChapter.central_tension}`);
         }
     }
 
-    // Constants — always shown (story framing lives here; prose rules live in the preset)
-    const c = state.world.constants || {};
-    const constantLines = [];
-    if (c.power_scale) constantLines.push(`  Power Scale: ${normalizeText(c.power_scale)}`);
-    if (c.power_ceiling != null) constantLines.push(`  Power Ceiling: ${c.power_ceiling}`);
-    if (c.power_notes) constantLines.push(`  Power Notes: ${normalizeText(c.power_notes)}`);
-    if (constantLines.length) {
-        lines.push('');
-        lines.push('CONSTANTS');
-        lines.push(...constantLines);
+    // Constants — combat and full only (internalized after setup, not needed on regular turns)
+    if (showConstants) {
+        const cn = state.world.constants || {};
+        const constantLines = [];
+        if (cn.power_scale) constantLines.push(`  Power Scale: ${normalizeText(cn.power_scale)}`);
+        if (cn.power_ceiling != null) constantLines.push(`  Power Ceiling: ${cn.power_ceiling}`);
+        if (cn.power_notes) constantLines.push(`  Power Notes: ${normalizeText(cn.power_notes)}`);
+        if (constantLines.length) {
+            lines.push('');
+            lines.push('CONSTANTS');
+            lines.push(...constantLines);
+        }
     }
 
     // World state — always shown
@@ -287,12 +348,12 @@ function formatStateView(state, mode = 'full') {
         lines.push(`  ${state.world.world_state}`);
     }
 
-    // ── Below here: full mode only ───────────────────────────────────────
+    // ── Mode-aware detail sections ────────────────────────────────────────
 
-    if (!slim) {
-        // Collisions detail
+    // Collisions detail — all modes except lite (lite shows last_manifestation in registry)
+    if (!isLite) {
         const liveCollisions = Object.values(state.collisions).filter(
-            c => c.status !== 'RESOLVED' && c.status !== 'SEEDED'
+            cl => cl.status !== 'RESOLVED' && cl.status !== 'SEEDED'
         );
         if (liveCollisions.length) {
             lines.push('');
@@ -306,138 +367,132 @@ function formatStateView(state, mode = 'full') {
                 }
             }
         }
+    }
 
-        if (activeCombats.length) {
-            lines.push('');
-            lines.push('COMBATS');
-            for (const combat of activeCombats) {
-                lines.push(`  ⚔ ${combat.name || combat.id} [${combat.status || 'ACTIVE'}] exch:${combat.exchange || '?'} → id: ${combat.id}`);
-                if (combat.participants) {
-                    lines.push(`    Participants: ${Array.isArray(combat.participants) ? combat.participants.join(', ') : combat.participants}`);
-                }
-                if (combat.hostiles) {
-                    lines.push(`    Hostiles: ${Array.isArray(combat.hostiles) ? combat.hostiles.join(', ') : combat.hostiles}`);
-                }
-                if (combat.primary_enemy) {
-                    lines.push(`    Primary enemy: ${typeof combat.primary_enemy === 'object' ? combat.primary_enemy.name || combat.primary_enemy.id || '?' : combat.primary_enemy}`);
-                }
-                if (combat.situation) lines.push(`    Situation: ${combat.situation}`);
-                if (combat.terrain) lines.push(`    Terrain: ${combat.terrain}`);
-                if (combat.threat) lines.push(`    Threat: ${combat.threat}`);
+    // Combats detail — combat and full modes
+    if (showPower && activeCombats.length) {
+        lines.push('');
+        lines.push('COMBATS');
+        for (const combat of activeCombats) {
+            lines.push(`  ⚔ ${combat.name || combat.id} [${combat.status || 'ACTIVE'}] exch:${combat.exchange || '?'} → id: ${combat.id}`);
+            if (combat.participants) {
+                lines.push(`    Participants: ${Array.isArray(combat.participants) ? combat.participants.join(', ') : combat.participants}`);
             }
+            if (combat.hostiles) {
+                lines.push(`    Hostiles: ${Array.isArray(combat.hostiles) ? combat.hostiles.join(', ') : combat.hostiles}`);
+            }
+            if (combat.primary_enemy) {
+                lines.push(`    Primary enemy: ${typeof combat.primary_enemy === 'object' ? combat.primary_enemy.name || combat.primary_enemy.id || '?' : combat.primary_enemy}`);
+            }
+            if (combat.situation) lines.push(`    Situation: ${combat.situation}`);
+            if (combat.terrain) lines.push(`    Terrain: ${combat.terrain}`);
+            if (combat.threat) lines.push(`    Threat: ${combat.threat}`);
         }
+    }
 
-        // Factions detail
-        if (factionEntities.length) {
-            lines.push('');
-            lines.push('FACTIONS');
-            for (const f of factionEntities) {
-                if (f.profile) {
-                    // New: single profile paragraph
-                    lines.push(`  ${f.name || f.id}: ${f.profile}`);
-                } else {
-                    // Legacy: separate fields
-                    let line = `  ${f.name || f.id}: ${f.objective || ''}`;
-                    line += ` | Resources: ${f.resources || '?'}`;
-                    const factionStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
-                    line += ` | Stance: ${factionStance}`;
-                    if (f.power) line += ` | Power: ${f.power}`;
-                    const momentum = f.last_move && f.momentum && !f.momentum.includes(f.last_move)
-                        ? `${f.momentum}; last: ${f.last_move}` : (f.momentum || f.last_move || '');
-                    if (momentum) line += ` | Momentum: ${momentum}`;
-                    lines.push(line);
-                    if (f.leverage) lines.push(`    Leverage: ${f.leverage}`);
-                    if (f.vulnerability) lines.push(`    Vulnerability: ${f.vulnerability}`);
-                    if (f.comms_latency) lines.push(`    Comms latency: ${f.comms_latency}`);
-                    if (f.last_verified_at) lines.push(`    Last verified at: ${f.last_verified_at}`);
-                    if (f.intel_posture) lines.push(`    Intel posture: ${f.intel_posture}`);
-                    if (f.blindspots) lines.push(`    Blindspots: ${f.blindspots}`);
-                }
-                if (f.intel_on && typeof f.intel_on === 'object' && Object.keys(f.intel_on).length) {
-                    lines.push('    Intel on:');
-                    for (const [subject, intel] of Object.entries(f.intel_on)) {
-                        lines.push(`      ${subject}: ${intel}`);
-                    }
-                }
-                if (f.false_beliefs && typeof f.false_beliefs === 'object' && Object.keys(f.false_beliefs).length) {
-                    lines.push('    False beliefs:');
-                    for (const [subject, belief] of Object.entries(f.false_beliefs)) {
-                        lines.push(`      ${subject}: ${belief}`);
-                    }
-                }
-                if (f.relations && typeof f.relations === 'object') {
-                    for (const [targetId, relation] of Object.entries(f.relations)) {
-                        lines.push(`    ↔ ${targetId}: ${relation}`);
-                    }
+    // Factions detail — full mode only
+    if (showFullDetail && factionEntities.length) {
+        lines.push('');
+        lines.push('FACTIONS');
+        for (const f of factionEntities) {
+            if (f.profile) {
+                lines.push(`  ${f.name || f.id}: ${f.profile}`);
+            } else {
+                let line = `  ${f.name || f.id}: ${f.objective || ''}`;
+                line += ` | Resources: ${f.resources || '?'}`;
+                const factionStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
+                line += ` | Stance: ${factionStance}`;
+                if (f.power) line += ` | Power: ${f.power}`;
+                const momentum = f.last_move && f.momentum && !f.momentum.includes(f.last_move)
+                    ? `${f.momentum}; last: ${f.last_move}` : (f.momentum || f.last_move || '');
+                if (momentum) line += ` | Momentum: ${momentum}`;
+                lines.push(line);
+                if (f.leverage) lines.push(`    Leverage: ${f.leverage}`);
+                if (f.vulnerability) lines.push(`    Vulnerability: ${f.vulnerability}`);
+                if (f.comms_latency) lines.push(`    Comms latency: ${f.comms_latency}`);
+                if (f.last_verified_at) lines.push(`    Last verified at: ${f.last_verified_at}`);
+                if (f.intel_posture) lines.push(`    Intel posture: ${f.intel_posture}`);
+                if (f.blindspots) lines.push(`    Blindspots: ${f.blindspots}`);
+            }
+            if (f.intel_on && typeof f.intel_on === 'object' && Object.keys(f.intel_on).length) {
+                lines.push('    Intel on:');
+                for (const [subject, intel] of Object.entries(f.intel_on)) {
+                    lines.push(`      ${subject}: ${intel}`);
                 }
             }
-        }
-
-        // Pressure points
-        const pressurePoints = Array.isArray(state.world.pressure_points) ? state.world.pressure_points : (state.world.pressure_points ? [String(state.world.pressure_points)] : []);
-        if (pressurePoints.length) {
-            lines.push('');
-            lines.push('PRESSURE POINTS');
-            for (const pp of pressurePoints) {
-                const meta = getPressurePointMeta(state, pp);
-                lines.push(`  - ${pp}${meta ? ` [${meta}]` : ''}`);
-            }
-        }
-
-        // PC — full
-        if (state.pc.name) {
-            lines.push('');
-            let pcLine = `PC: ${state.pc.name}`;
-            pcLine += formatPowerTag(state.pc);
-            lines.push(pcLine);
-            if (state.pc.location) lines.push(`  Location: ${state.pc.location}`);
-            if (state.pc.condition) lines.push(`  Condition: ${state.pc.condition}`);
-            if (state.pc.equipment) lines.push(`  Equipment: ${state.pc.equipment}`);
-            if (state.pc.power_basis) lines.push(`  Power basis: ${state.pc.power_basis}`);
-            const pcAbilities = toList(state.pc.abilities);
-            if (pcAbilities.length) lines.push(`  Abilities: ${pcAbilities.join(' | ')}`);
-            // Traits — show last 10 in full mode (older are in cold storage)
-            const allTraits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
-            const traits = allTraits.slice(-10);
-            if (traits.length) {
-                const traitPrefix = allTraits.length > 10 ? `  Traits (${allTraits.length} total, showing last 10): ` : '  Traits: ';
-                lines.push(`${traitPrefix}${traits.join(', ')}`);
-            }
-            // Reputation: show pc.reputation (legacy) merged with character reads[pc]
-            // Collect all reads OF the PC from tracked characters
-            const pcReputation = [];
-            for (const char of Object.values(state.characters)) {
-                if (char.tier === 'UNKNOWN') continue;
-                const readOfPc = char.reads?.pc || char.reads?.[state.pc.name] || char.stance_toward_pc;
-                if (readOfPc) pcReputation.push({ who: char.name || char.id, read: readOfPc });
-            }
-            // Also include legacy pc.reputation entries not covered by character reads
-            const legacyRep = (state.pc.reputation && typeof state.pc.reputation === 'object' && !Array.isArray(state.pc.reputation)) ? state.pc.reputation : {};
-            for (const [who, r] of Object.entries(legacyRep)) {
-                if (!pcReputation.some(p => p.who.toLowerCase().includes(who.toLowerCase()))) {
-                    pcReputation.push({ who, read: r });
+            if (f.false_beliefs && typeof f.false_beliefs === 'object' && Object.keys(f.false_beliefs).length) {
+                lines.push('    False beliefs:');
+                for (const [subject, belief] of Object.entries(f.false_beliefs)) {
+                    lines.push(`      ${subject}: ${belief}`);
                 }
             }
-            if (pcReputation.length) {
-                lines.push(`  How others see PC:`);
-                for (const { who, read } of pcReputation) {
-                    lines.push(`    ${who}: ${read}`);
+            if (f.relations && typeof f.relations === 'object') {
+                for (const [targetId, relation] of Object.entries(f.relations)) {
+                    lines.push(`    ↔ ${targetId}: ${relation}`);
                 }
-            }
-            const pcWounds = (state.pc.wounds && typeof state.pc.wounds === 'object') ? state.pc.wounds : {};
-            if (Object.keys(pcWounds).length) {
-                const woundList = Object.entries(pcWounds).map(([k, v]) => `${k}: ${v}`).join(', ');
-                lines.push(`  Wounds: ${woundList}`);
             }
         }
     }
 
-    // Timeline — single chronological record, strict temporal order
-    // Uses hot view (watermark-based) so archived entries are excluded
+    // Pressure points — lite: only fresh (< 8 tx age); others: all
+    const pressurePoints = Array.isArray(state.world.pressure_points) ? state.world.pressure_points : (state.world.pressure_points ? [String(state.world.pressure_points)] : []);
+    if (pressurePoints.length) {
+        const displayPoints = isLite
+            ? pressurePoints.filter(pp => {
+                const meta = getPressurePointMeta(state, pp);
+                return !meta.startsWith('stale');
+            })
+            : pressurePoints;
+        if (displayPoints.length) {
+            lines.push('');
+            lines.push('PRESSURE POINTS');
+            for (const pp of displayPoints) {
+                const meta = getPressurePointMeta(state, pp);
+                lines.push(`  - ${pp}${meta ? ` [${meta}]` : ''}`);
+            }
+        }
+    }
+
+    // PC dossier — traits & reads (intimacy and full modes)
+    if (showIntimacy && state.pc.name) {
+        lines.push('');
+        lines.push(`PC DOSSIER: ${state.pc.name}`);
+        // Traits — intimacy: last 5, full: last 10
+        const allTraits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
+        const traitCap = isFull ? 10 : 5;
+        const traits = allTraits.slice(-traitCap);
+        if (traits.length) {
+            const traitPrefix = allTraits.length > traitCap ? `  Traits (${allTraits.length} total, showing last ${traitCap}): ` : '  Traits: ';
+            lines.push(`${traitPrefix}${traits.join(', ')}`);
+        }
+        // Reads/reputation — how others see the PC
+        const pcReputation = [];
+        for (const char of Object.values(state.characters)) {
+            if (char.tier === 'UNKNOWN') continue;
+            // In intimacy mode, skip KNOWN (their reads are low-fidelity)
+            if (isIntimacy && !isFull && char.tier === 'KNOWN') continue;
+            const readOfPc = char.reads?.pc || char.reads?.[state.pc.name] || char.stance_toward_pc;
+            if (readOfPc) pcReputation.push({ who: char.name || char.id, read: readOfPc });
+        }
+        // Legacy pc.reputation entries not covered by character reads
+        const legacyRep = (state.pc.reputation && typeof state.pc.reputation === 'object' && !Array.isArray(state.pc.reputation)) ? state.pc.reputation : {};
+        for (const [who, r] of Object.entries(legacyRep)) {
+            if (!pcReputation.some(p => p.who.toLowerCase().includes(who.toLowerCase()))) {
+                pcReputation.push({ who, read: r });
+            }
+        }
+        if (pcReputation.length) {
+            lines.push(`  How others see PC:`);
+            for (const { who, read } of pcReputation) {
+                lines.push(`    ${who}: ${read}`);
+            }
+        }
+    }
+
+    // Timeline — mode-aware entry count
     const fullTimeline = Array.isArray(state.story_summary) ? state.story_summary : [];
     const { hot: hotTimeline, arcs } = getHotView('story_summary', state);
     if (hotTimeline.length) {
-        // Separate consolidated entries from regular in hot view
         const consolidated = [];
         const regular = [];
         for (const s of hotTimeline) {
@@ -449,19 +504,31 @@ function formatStateView(state, mode = 'full') {
             }
         }
 
-        const displayEntries = slim
-            ? [...consolidated, ...regular.slice(-10)]
-            : [...consolidated, ...regular];
+        // Lite: arcs + last 5 regular. Combat/intimacy: arcs + last 10. Full: all.
+        let displayEntries;
+        if (isLite) displayEntries = [...consolidated, ...regular.slice(-5)];
+        else if (isCombat || isIntimacy) displayEntries = [...consolidated, ...regular.slice(-10)];
+        else displayEntries = [...consolidated, ...regular];
 
         const archivedCount = fullTimeline.length - hotTimeline.length;
         const archiveNote = archivedCount > 0 ? `, ${archivedCount} archived` : '';
+        const showingNote = displayEntries.length < hotTimeline.length ? `, showing ${displayEntries.length}` : '';
         lines.push('');
-        lines.push(slim ? `TIMELINE (${hotTimeline.length} hot${archiveNote}, showing ${displayEntries.length})` : `TIMELINE (${hotTimeline.length} hot${archiveNote})`);
+        lines.push(`TIMELINE (${hotTimeline.length} hot${archiveNote}${showingNote})`);
         for (const s of displayEntries) {
             const text = typeof s === 'object' ? s.text : s;
             const time = typeof s === 'object' ? (s.t || '') : '';
             lines.push(`  ${time ? time + ' ' : ''}${text}`);
         }
+    }
+
+    // ── Token budget warning ──────────────────────────────────────────────
+    const stateText = lines.join('\n');
+    const approxTokens = Math.ceil(stateText.length / 4);
+    if (approxTokens > 8000) {
+        console.warn(`[GravityLedger:StateView] State view ~${approxTokens} tokens — over 8k budget. Consider consolidation.`);
+    } else if (approxTokens > 6000) {
+        console.warn(`[GravityLedger:StateView] State view ~${approxTokens} tokens — approaching 6k budget.`);
     }
 
     lines.push('');
@@ -577,7 +644,8 @@ If a turn gets structurally complicated, switch to a full ---LEDGER--- block ins
 DISCIPLINE:
   Only write what changed materially.
   Keep doing as "action | Cost: what this neglects or risks".
-  Keep knowledge_asymmetry current on KNOWN/TRACKED/PRINCIPAL characters when they are active or scene-relevant: what they know, what they do not know, what they are hiding, or what they are misreading right now.
+  Keep knowledge_asymmetry current on TRACKED/PRINCIPAL characters when they are active or scene-relevant: what they know, what they do not know, what they are hiding, or what they are misreading right now.
+  KNOWN characters inherit knowledge from their faction's intel_on and false_beliefs maps. Only set individual knowledge_asymmetry on a KNOWN character when they learn something their faction does not know yet.
   If the protagonist also exists as char:<pc-id>, treat pc and char:<pc-id> as separate surfaces: pc carries immediate scene/body state, while char:<pc-id> carries the social/knowledge dossier. Updating pc.* does not update the mirrored char dossier.
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
   Use faction intel fields for remote awareness: comms_latency, last_verified_at, intel_posture, blindspots, intel_on, and false_beliefs.
@@ -587,7 +655,8 @@ DISCIPLINE:
   Pressure points are seeds, not history. If a seam fired, resolved, or became a collision, REMOVE it.
   If a pressure point gains actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point the same turn.
   key_moments are permanent; do not remove them.
-  summary+ should capture what happened and what changed. If at: is set, do not repeat the timestamp inside the text unless it matters stylistically.
+  summary+ is auto-generated by the extension on regular turns. Do not write summary+ yourself on regular turns.
+  On structural turns (chapter close, timeskip, consolidation): write a narrative arc summary via summary+ that synthesizes meaning, not just facts.
   Cleanup is still capped on normal turns; save bulk pruning for eval or chapter close.
 
 === END QUICK REFERENCE ===`;

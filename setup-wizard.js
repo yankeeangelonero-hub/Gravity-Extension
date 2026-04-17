@@ -183,7 +183,7 @@ ${answers.pc_power_base ? `> SET pc field=power_base value=${answers.pc_power_ba
 Read the persona description above. Extract demonstrated_traits (2-4 APPEND lines) from what it says about {{user}}.
 
 2. PRINCIPAL CHARACTER ({{char}} — the character card NPC, NOT the PC):
-> CREATE char:name name="[Full Name from character card]" tier=PRINCIPAL want="[core want from card/scenario]" doing="[action]" cost="[risk]"
+> CREATE char:name name="[Full Name from character card]" tier=PRINCIPAL want="[core want from card/scenario]" doing="[action]"
 > SET char:name field=intimacy_stance value="[initial stance]"
 > SET char:name field=knowledge_asymmetry value="[what they know that the PC doesn't; what the PC knows that they don't; what they are hiding or misreading]"
 If this character is combat-capable or likely to become a direct physical threat, also assign:
@@ -214,7 +214,7 @@ ${answers.power_scale ? '> MAP_SET world field=constants key=power_scale value="
 
 8. Any scenario NPCs as KNOWN:
 > CREATE char:npc-slug name="[NPC Name]" tier=KNOWN
-> SET char:npc-slug field=knowledge_asymmetry value="[what they know vs. what the PC knows — even a brief note]"
+KNOWN characters inherit knowledge from their faction's intel_on and false_beliefs maps. Do NOT set individual knowledge_asymmetry — only TRACKED/PRINCIPAL characters get it.
 If any recurring or important NPC is combat-capable, assign:
 > SET char:npc-slug field=power_base value=[earned_rating]
 > SET char:npc-slug field=power value=[current_effective_rating]
