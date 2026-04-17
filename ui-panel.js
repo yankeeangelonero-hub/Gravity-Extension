@@ -618,7 +618,6 @@ function renderPCDossier(state) {
     }
     if (pc.current_scene) parts.push(`<div class="gl-d-row"><b>Scene:</b> ${esc(pc.current_scene)}</div>`);
     if (pc.location) parts.push(`<div class="gl-d-row"><b>Location:</b> ${esc(pc.location)}</div>`);
-    if (pc.condition) parts.push(`<div class="gl-d-row"><b>Condition:</b> ${esc(pc.condition)}</div>`);
     if (pc.equipment) parts.push(`<div class="gl-d-row"><b>Equipment:</b> ${esc(pc.equipment)}</div>`);
     const pcWounds = toObj(pc.wounds);
     if (Object.keys(pcWounds).length) {
@@ -924,7 +923,7 @@ function renderWorld(state) {
             const ageTx = lastAdd ? Math.max(0, (state.lastTxId || 0) - (lastAdd.tx || 0)) : null;
             const ageLabel = ageTx == null ? '' : ageTx >= 18 ? `stale (${ageTx} tx)` : ageTx >= 8 ? `aging (${ageTx} tx)` : `fresh (${ageTx} tx)`;
             const match = liveCollisions.find(col => {
-                const hay = `${col.name || ''} ${col.details || ''} ${col.forces || ''} ${col.cost || ''} ${col.last_manifestation || ''}`.toLowerCase();
+                const hay = `${col.name || ''} ${col.details || ''} ${col.forces || ''} ${col.cost || ''}`.toLowerCase();
                 const needle = String(p).toLowerCase();
                 return needle.length > 8 && hay.includes(needle);
             });
@@ -970,7 +969,6 @@ function renderCollisions(state) {
         if (distBar) parts.push(distBar);
         if (col.cost) parts.push(`<div class="gl-d-detail"><b>Cost:</b> ${esc(col.cost)}</div>`);
         if (col.target_constraint) parts.push(`<div class="gl-d-detail"><b>Target:</b> ${esc(col.target_constraint)}</div>`);
-        if (col.last_manifestation) parts.push(`<div class="gl-d-detail"><b>Now:</b> ${esc(col.last_manifestation)}</div>`);
         if (parents.length) parts.push(`<div class="gl-d-detail"><b>From:</b> ${parents.map(p => esc(p)).join(', ')}</div>`);
 
         const distHist = getFieldHistory(state, 'collision', col.id, 'distance');

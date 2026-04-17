@@ -353,15 +353,12 @@ function buildCollisionStoryCapsule(id, col) {
     const forces = getCollisionForcesText(col);
     const cost = normalizeText(col?.cost);
     const targetConstraint = normalizeText(col?.target_constraint);
-    const manifestation = normalizeText(col?.last_manifestation);
-
     if (details) lines.push(`Thread: ${details}`);
     if (forces) lines.push(`Forces: ${forces}`);
     else if (!details) lines.push(`Collision: ${col?.name || id}`);
 
     if (cost) lines.push(`Cost: ${cost}`);
     if (targetConstraint) lines.push(`Target constraint: ${targetConstraint}`);
-    if (manifestation) lines.push(`Current manifestation: ${manifestation}`);
 
     return lines.join('\n');
 }
@@ -378,7 +375,6 @@ function buildCollisionNarrativeWarnings(id, col, status) {
     const name = col?.name || id;
     const details = normalizeText(col?.details);
     const cost = normalizeText(col?.cost);
-    const manifestation = normalizeText(col?.last_manifestation);
     const forces = getCollisionForcesText(col);
 
     if (!forces) {
@@ -393,10 +389,6 @@ function buildCollisionNarrativeWarnings(id, col, status) {
 
     if ((status === 'SIMMERING' || status === 'ACTIVE' || status === 'RESOLVING') && !cost) {
         warnings.push(`"${name}" is ${status} but missing cost — SET collision:${id}.cost to what engagement, delay, or failure will cost.`);
-    }
-
-    if ((status === 'ACTIVE' || status === 'RESOLVING') && !manifestation) {
-        warnings.push(`"${name}" is ${status} but missing last_manifestation — SET collision:${id}.last_manifestation to the concrete way this pressure is entering the scene right now.`);
     }
 
     return warnings;
@@ -436,7 +428,6 @@ function buildPressurePointAudit(state) {
                 col?.details,
                 getCollisionForcesText(col),
                 col?.cost,
-                col?.last_manifestation,
             ].filter(Boolean).join(' | ')),
         }));
 
@@ -1294,7 +1285,7 @@ The collision is RESOLVING. Its presence permeates the current scene as atmosphe
 
 DO NOT let the player ignore this. The collision's weight is in the room even if its forces aren't. Subtext in dialogue. Physical tension in body language. Environmental details that mirror the approaching confrontation.
 
-Your hidden deduction must name how this collision is affecting the current scene. If the player's action doesn't engage the collision, show how the collision's pressure bleeds into whatever they're doing instead. If the collision stays live after this beat, SET collision:${id}.last_manifestation to the concrete way it pressed into the scene.`);
+Your hidden deduction must name how this collision is affecting the current scene. If the player's action doesn't engage the collision, show how the collision's pressure bleeds into whatever they're doing instead.`);
 
                     } else if (turnsSince <= RESOLUTION_INTRUSION_TURNS) {
                         // Phase 2: The Oracle Manifests — direct intrusion with fresh draw
@@ -1313,7 +1304,7 @@ This is not subtext anymore. An NPC arrives. A consequence detonates. A choice i
 
 You have FULL LICENSE: move NPCs, trigger events, create witnesses, use the environment. The draw is the shape. The collision is the force. Write the most dramatically honest intrusion this draw suggests.
 
-If the collision survives the beat, SET collision:${id}.last_manifestation to the concrete intrusion you wrote. The player has ${RESOLUTION_CRASH_TURNS - turnsSince} turns before gravity resolves this without them.`);
+The player has ${RESOLUTION_CRASH_TURNS - turnsSince} turns before gravity resolves this without them.`);
 
                     } else {
                         // Phase 3: Crash threshold — gravity resolves without player
@@ -1376,7 +1367,7 @@ You have FULL LICENSE to make this happen. Move NPCs into the scene. Spawn threa
 
 The draw shapes the CIRCUMSTANCE of how this collision arrives — not the outcome. Write the situation, not the resolution. The player must respond to it.
 
-MOVE status to RESOLVING. SET collision:${id}.last_manifestation to the concrete arrival you wrote. The resolution clock is now ticking.
+MOVE status to RESOLVING. The resolution clock is now ticking.
 
 Four outcomes are possible:
 • RESOLVED (outcome_type: DIRECT) — the player engaged and shaped the result. Clean or costly, including active retreat.
@@ -1412,7 +1403,7 @@ Do not announce this choice as visible meta text. Let the scene itself make the 
 
 If a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.
 
-MOVE each arrived collision to RESOLVING. SET each collision's last_manifestation to how it entered the converged scene. The resolution clock is now ticking for all of them.`);
+MOVE each arrived collision to RESOLVING. The resolution clock is now ticking for all of them.`);
             }
 
             // ── Closure audit — resolved collisions missing required fields ────────
@@ -1926,7 +1917,7 @@ function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ig
         }).join('\n');
         lines.push(`BEAT ${beatNum} — COLLISION ARRIVES:`);
         lines.push(colBlocks);
-        lines.push(`  MOVE each arrived collision to RESOLVING. SET each collision's last_manifestation to the concrete intrusion.`);
+        lines.push(`  MOVE each arrived collision to RESOLVING.`);
         lines.push('');
         beatNum++;
     }
@@ -1939,7 +1930,7 @@ function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ig
         }).join('\n');
         lines.push(`BEAT ${beatNum} — COLLISION PUSHES:`);
         lines.push(colBlocks);
-        lines.push(`  Keep it moving. Either resolve this turn or force a sharper crisis. SET last_manifestation to the new concrete expression.`);
+        lines.push(`  Keep it moving. Either resolve this turn or force a sharper crisis.`);
         lines.push('');
         beatNum++;
     }

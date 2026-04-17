@@ -30,9 +30,7 @@ function getCollisionNarrativeLines(col, options = {}) {
     const forces = getCollisionForcesText(col);
     const cost = normalizeText(col?.cost);
     const targetConstraint = normalizeText(col?.target_constraint);
-    const manifestation = normalizeText(col?.last_manifestation);
     const includeForces = options.includeForces !== false;
-    const includeManifestation = options.includeManifestation !== false;
 
     if (details) lines.push(`Thread: ${details}`);
     else if (forces) lines.push(`Forces: ${forces}`);
@@ -40,7 +38,6 @@ function getCollisionNarrativeLines(col, options = {}) {
     if (includeForces && details && forces) lines.push(`Forces: ${forces}`);
     if (cost) lines.push(`Cost: ${cost}`);
     if (targetConstraint) lines.push(`Target constraint: ${targetConstraint}`);
-    if (includeManifestation && manifestation) lines.push(`Now: ${manifestation}`);
 
     return lines;
 }
@@ -209,11 +206,6 @@ function formatStateView(state, mode = 'full') {
             let colLine = `  ${col.name || col.id} [${col.status}]${tierLabel} dist:${col.distance || '?'}`;
             colLine += ` → id: ${col.id}`;
             lines.push(colLine);
-            // Lite: just last_manifestation (collision detail section is skipped)
-            if (isLite) {
-                const manifestation = normalizeText(col?.last_manifestation);
-                if (manifestation) lines.push(`    Now: ${manifestation}`);
-            }
         }
     }
 
@@ -251,7 +243,6 @@ function formatStateView(state, mode = 'full') {
         let pcSingleton = `  pc — "${state.pc.name}"`;
         // Only show location when current_scene is not set (scene subsumes location)
         if (state.pc.location && !state.pc.current_scene) pcSingleton += ` @ ${state.pc.location}`;
-        if (state.pc.condition) pcSingleton += ` [${state.pc.condition}]`;
         lines.push(pcSingleton);
         if (state.pc.current_scene) {
             lines.push(`    SCENE: ${state.pc.current_scene}`);
@@ -347,7 +338,7 @@ function formatStateView(state, mode = 'full') {
 
     // ── Mode-aware detail sections ────────────────────────────────────────
 
-    // Collisions detail — all modes except lite (lite shows last_manifestation in registry)
+    // Collisions detail — all modes except lite
     if (!isLite) {
         const liveCollisions = Object.values(state.collisions).filter(
             cl => cl.status !== 'RESOLVED' && cl.status !== 'SEEDED'
@@ -524,7 +515,6 @@ STANDARD SHAPE:
 at: [Day N - HH:MM]
 scene: "Where. Who's present. What's happening. Emotional atmosphere."
 pc.location: "where the PC is now"
-pc.condition: "physical and emotional state"
 char:elena.condition: "steady, watchful"
 char:elena.knowledge_asymmetry: "Knows the PC is armed, does not know who sent them, is hiding that she already warned the owner"
 char:elena.last_seen_at: "[Day 2 - 19:10]"
@@ -547,7 +537,6 @@ PATH RULES:
 
 COMMON PATHS:
   pc.location
-  pc.condition
   pc.current_scene (or scene)
   pc.equipment
   char:id.location
@@ -568,7 +557,6 @@ COMMON PATHS:
   collision:id.target_constraint
   collision:id.distance
   collision:id.status
-  collision:id.last_manifestation
   collision:id.outcome_type
   collision:id.aftermath
   collision:id.successor_collision_ids+
@@ -604,7 +592,7 @@ If a turn gets structurally complicated, switch to a full ---LEDGER--- block ins
 
 DISCIPLINE:
   Only write what changed materially.
-  Keep doing as "action | Cost: what this neglects or risks".
+  Keep char:id.condition terse — 10-15 words describing body/mind state. Scene prose carries longer description.
   Keep knowledge_asymmetry current on TRACKED/PRINCIPAL characters when they are active or scene-relevant: what they know, what they do not know, what they are hiding, or what they are misreading right now.
   KNOWN characters inherit knowledge from their faction's intel_on and false_beliefs maps. Only set individual knowledge_asymmetry on a KNOWN character when they learn something their faction does not know yet.
   If the protagonist also exists as char:<pc-id>, treat pc and char:<pc-id> as separate surfaces: pc carries immediate scene/body state, while char:<pc-id> carries the social/knowledge dossier. Updating pc.* does not update the mirrored char dossier.
@@ -612,7 +600,6 @@ DISCIPLINE:
   Use faction intel fields for remote awareness: comms_latency, last_verified_at, intel_posture, blindspots, intel_on, and false_beliefs.
   No provenance, no knowledge: distant factions and characters do not know live scene truth unless it plausibly reached them.
   Every live collision needs a story capsule: what is converging, who or what is caught in it, what it costs, and the forced choice looming.
-  When a collision presses into the scene, update collision:id.last_manifestation with the concrete current expression.
   Pressure points are seeds, not history. If a seam fired, resolved, or became a collision, REMOVE it.
   If a pressure point gains actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point the same turn.
   key_moments are permanent; do not remove them.
@@ -823,7 +810,6 @@ COLLISIONS ARE STORY ENGINES, NOT LABELS:
   details           — the story capsule for the collision
   cost              — the price of delay, engagement, or failure
   target_constraint — which tracked defense this pressure is leaning on (if personal)
-  last_manifestation — the current concrete expression in scene reality; update it whenever the collision enters or sharpens in-scene
 
 COLLISION CLOSURE (required on every RESOLVED transition):
   Every collision that reaches RESOLVED must record three fields:
