@@ -16,7 +16,6 @@
  * @property {Object} world
  * @property {Object} pc
  * @property {Object} divination
- * @property {Array} story_summary
  * @property {number} lastTxId
  * @property {Object} _history - field change history per entity
  */
@@ -70,7 +69,6 @@ function createEmptyState() {
             last_draw: null,    // { value, reading, timestamp }
             readings: [],       // history of all draws
         },
-        story_summary: [],  // append-only: [{ text, timestamp, chapter }]
         lastTxId: -1,
         _history: {},  // { "entity:id:field": [{ from, to, t, tx }] }
     };
@@ -123,7 +121,6 @@ function getCollectionName(entityType) {
         world: 'world',
         pc: 'pc',
         divination: 'divination',
-        summary: 'story_summary',
     };
     return map[entityType] || entityType;
 }
@@ -190,16 +187,9 @@ function getEntityHistory(state, entityType, entityId) {
 function applyTransaction(state, tx) {
     const collection = getCollectionName(tx.e);
     const isSingleton = ['world', 'pc', 'divination'].includes(tx.e);
-    const isSummary = tx.e === 'summary';
 
-    // Handle summary as a special append-only entity
-    if (isSummary && tx.op === 'A') {
-        state.story_summary.push({
-            text: tx.d.v || tx.d.value || tx.d.text || '',
-            chapter: tx.d.chapter || '',
-            t: tx.t || '',
-            _ts: tx._ts || '',
-        });
+    // Silently drop legacy summary transactions on replay of old chats
+    if (tx.e === 'summary') {
         state.lastTxId = tx.tx;
         return state;
     }
@@ -346,7 +336,6 @@ function computeState(snapshot, transactions) {
     if (!state._history) state._history = {};
     if (!state.factions) state.factions = {};
     if (!state.divination) state.divination = { active_system: '', last_draw: null, readings: [] };
-    if (!state.story_summary) state.story_summary = [];
 
     // First pass: collect amendments
     const amendments = new Map();

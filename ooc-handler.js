@@ -6,7 +6,6 @@ import { createSnapshot, listSnapshots, rollback, computeCurrentState } from './
 import {
     getAllTransactions,
     getTransactionsForEntity,
-    getTransactionsInRange,
     append,
 } from './ledger-store.js';
 
@@ -22,9 +21,6 @@ const OOC_PATTERNS = [
     { pattern: /ooc:\s*rollback\b/i, handler: handleRollback },
     { pattern: /ooc:\s*eval\b/i, handler: handleEval },
     { pattern: /ooc:\s*history\s+(.+)/i, handler: handleHistory },
-    { pattern: /ooc:\s*timeline\s+(.+)\s+to\s+(.+)/i, handler: handleTimeline },
-    { pattern: /ooc:\s*archive\b/i, handler: handleConsolidate },
-    { pattern: /ooc:\s*consolidate\b/i, handler: handleConsolidate },
 ];
 
 async function processOOC(message) {
@@ -83,7 +79,6 @@ async function handleEval() {
     lines.push(`Collisions: ${Object.keys(state.collisions).length}`);
     lines.push(`Chapters: ${Object.keys(state.chapters).length}`);
     lines.push(`Factions: ${Object.keys(state.factions || {}).length}`);
-    lines.push(`Story summary entries: ${(state.story_summary || []).length}`);
     lines.push(`Divination: ${state.divination?.active_system || 'not set'}`);
     lines.push('');
     lines.push('RECENT TRANSACTIONS (last 30):');
@@ -109,9 +104,8 @@ async function handleEval() {
     lines.push('3. KNOWLEDGE GAPS: Verify pc.knowledge_gaps is accurate - add missing gaps, remove discovered ones.');
     lines.push('4. POWER: Audit power_base, power, power_basis, and abilities. Lower power only for real impairment. Raise power_base only when growth is earned.');
     lines.push('5. PRESSURE POINTS: For each pressure point, decide KEEP / REMOVE / ESCALATE. REMOVE fired or stale seams; if one now has actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point.');
-    lines.push('6. PRUNE: REMOVE stale noticed details, resolved entries, duplicate summaries.');
-    lines.push('7. CONSOLIDATE: If story_summary exceeds 30 entries, consolidate oldest batches into 3-5 sentence overviews.');
-    lines.push('8. FIX: emit AMEND for any continuity errors found.');
+    lines.push('6. PRUNE: REMOVE stale noticed details, resolved entries, duplicate fields.');
+    lines.push('7. FIX: emit AMEND for any continuity errors found.');
     lines.push('This turn is UNCAPPED - emit as many ledger lines as needed for a thorough cleanup.');
     lines.push('=== END EVALUATION ===');
     return lines.join('\n');
@@ -142,27 +136,6 @@ async function handleHistory(match) {
     }
     lines.push('=== END HISTORY ===');
     return lines.join('\n');
-}
-
-async function handleTimeline(match) {
-    const from = match[1].trim();
-    const to = match[2].trim();
-    const txns = getTransactionsInRange(from, to);
-
-    if (txns.length === 0) return `[LEDGER: No transactions between "${from}" and "${to}".]`;
-
-    const lines = [`=== TIMELINE: ${from} to ${to} (${txns.length} TX) ===`];
-    for (const tx of txns) {
-        lines.push(`  tx#${tx.tx} ${tx.t} ${tx.op} ${tx.e}:${tx.id || '-'} - ${tx.r || summarizeTxData(tx)}`);
-    }
-    lines.push('=== END TIMELINE ===');
-    return lines.join('\n');
-}
-
-async function handleConsolidate() {
-    const state = computeCurrentState();
-    const snap = await createSnapshot(state, 'Consolidation checkpoint');
-    return `[LEDGER: Consolidated. Snapshot #${snap.id} at tx ${snap.lastTxId}.]`;
 }
 
 async function handlePowerReview(match) {
@@ -385,9 +358,6 @@ function buildPowerEvidence(target, state, allTxns) {
     if (target.ref === 'pc') {
         const traits = toArray(entity.demonstrated_traits).slice(-3);
         for (const trait of traits) lines.push(`Trait: ${trait}`);
-
-        const summaries = toArray(state.story_summary).slice(-2);
-        for (const summary of summaries) lines.push(`Summary: ${typeof summary === 'object' ? summary.text || '' : summary}`);
 
         const pcTxns = allTxns
             .filter(tx => tx.e === 'pc')

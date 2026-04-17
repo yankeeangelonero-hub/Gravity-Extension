@@ -68,14 +68,16 @@ The extension injects turn-specific deduction templates via the `_nudge` slot:
 - **`advance`** - Focus, what moves, divination, collision tracking
 - **`intimacy`** - Stance, constraint, partner wants, history, divination
 
-### Memory Tiering
+### Scope
 
-`memory-tier.js` rotates hot arrays (`story_summary`, `pc.timeline`, `pc.demonstrated_traits`) to cold storage in `chatMetadata['gravity_cold']` when caps are exceeded. Consolidated batch summaries are injected alongside hot entries.
+Gravity is a **collision engine + character ledger**. It does NOT track narrative summary or story recap — those are the responsibility of a companion SillyTavern memory extension (Summarize, Vectors, or similar). Users running Gravity without a memory extension will lose narrative continuity beyond the ~3-5 messages of chat context.
+
+The ledger tracks: collisions, constraints, combats, chapters, factions, PC state, and per-character dossiers (reads, knowledge_asymmetry, key_moments, intimate_history, demonstrated_traits). It does not track: story summaries, scene-by-scene timelines, or cross-chapter narrative arcs.
 
 ## Key Conventions
 
 - **Operations**: `CR` (create), `S` (set), `TR` (transition/move), `A` (append), `R` (remove), `MS` (map_set/read), `MR` (map_del), `D` (destroy), `SNAP`, `ROLL`, `AMEND`
-- **Entity types**: `char`, `constraint`, `collision`, `chapter`, `faction`, `world`, `pc`, `divination`, `summary`
+- **Entity types**: `char`, `constraint`, `collision`, `chapter`, `faction`, `world`, `pc`, `divination`
 - **State machines** (char tiers, constraint integrity, collision status, chapter status) are documented in `state-machine.js` and the v11 preset but not enforced by code - the LLM follows and self-audits via `OOC: eval`
 - **Collision status**: `SEEDED -> SIMMERING -> ACTIVE -> RESOLVING -> RESOLVED` or `-> CRASHED` (player ignored it, gravity resolved it - worst outcome)
 - **Oracle-driven resolution**: When a collision hits distance 0, the extension starts a resolution clock with divination draws at each phase: atmosphere (turns 1-2), direct intrusion with fresh draw (turns 3-4), crash with final draw (turn 5+). Tracked via `_resolutionTracker` Map in `index.js`.

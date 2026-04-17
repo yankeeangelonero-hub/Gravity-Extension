@@ -501,9 +501,6 @@ function computeChangedKeys(prev, curr, prefix) {
             }
         }
     }
-    if (JSON.stringify(prev.story_summary) !== JSON.stringify(curr.story_summary)) {
-        _changedKeys.add('story_summary');
-    }
 }
 
 function applyChangeHighlights() {
@@ -522,7 +519,7 @@ function applyChangeHighlights() {
         if (sid === 'world') hasChanges = [..._changedKeys].some(k => k.startsWith('world.') || k.startsWith('factions.'));
         if (sid === 'collisions') hasChanges = [..._changedKeys].some(k => k.startsWith('collisions.'));
         if (sid === 'combat') hasChanges = [..._changedKeys].some(k => k.startsWith('combats.'));
-        if (sid === 'arc') hasChanges = [..._changedKeys].some(k => k.startsWith('chapters.') || k === 'story_summary');
+        if (sid === 'arc') hasChanges = [..._changedKeys].some(k => k.startsWith('chapters.'));
         if (sid === 'divination') hasChanges = [..._changedKeys].some(k => k.startsWith('divination.'));
         if (hasChanges) section.querySelector('.gl-section-header')?.classList.add('gl-changed');
     });
@@ -705,14 +702,6 @@ function renderPCDossier(state) {
         for (const [key, val] of Object.entries(intimate)) {
             parts.push(`<div class="gl-d-row"><b>${esc(key)}:</b> ${esc(val)}</div>`);
         }
-    }
-
-    // Timeline — timestamped detailed entries
-    const timeline = toArr(pc.timeline);
-    if (timeline.length) {
-        parts.push(`<div class="gl-d-section"><b>Timeline (${timeline.length}):</b></div>`);
-        const timeItems = timeline.map(t => `<div class="gl-moment">${esc(t)}</div>`);
-        parts.push(collapsibleList(timeItems, 5, 'older entries'));
     }
 
     return parts.join('');
@@ -1153,19 +1142,7 @@ function renderArc(state) {
         }
     }
 
-    // Story summary
-    const summary = toArr(state.story_summary);
-    if (summary.length) {
-        parts.push(`<div class="gl-d-section"><b>Story Summary (${summary.length}):</b></div>`);
-        const sumItems = summary.map(s => {
-            const text = typeof s === 'object' ? s.text : s;
-            const time = typeof s === 'object' ? (s.t || s.chapter || '') : '';
-            return `<div class="gl-d-row">${time ? `<span class="gl-history-time">[${esc(time)}]</span> ` : ''}${esc(text)}</div>`;
-        });
-        parts.push(collapsibleList(sumItems, 5, 'older entries'));
-    }
-
-    return parts.length ? parts.join('') : '<div class="gl-empty">No chapters or story data</div>';
+    return parts.length ? parts.join('') : '<div class="gl-empty">No chapter data</div>';
 }
 
 // ─── Tab 5: Divination ──────────────────────────────────────────────────────────

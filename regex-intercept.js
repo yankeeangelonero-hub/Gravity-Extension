@@ -525,7 +525,7 @@ function getReinforcement(result, turn) {
 
         if (score < 0.5) {
             return `[STATE/LEDGER: Update block missing. REQUIRED after every response.\n` +
-                `Normal prose turns (preferred): ---STATE---\nat: [Day N - HH:MM]\nscene: "Where. Who. Atmosphere."\npc.location: "..."\nsummary+: "What changed"\n---END STATE---\n` +
+                `Normal prose turns (preferred): ---STATE---\nat: [Day N - HH:MM]\nscene: "Where. Who. Atmosphere."\npc.location: "..."\n---END STATE---\n` +
                 `Structural turns may still use full ---LEDGER--- ... ---END LEDGER---.]`;
         }
         return `[STATE/LEDGER: Update block missing. Append ---STATE--- ... ---END STATE--- after normal turns, or ---LEDGER--- ... ---END LEDGER--- for structural turns.]`;

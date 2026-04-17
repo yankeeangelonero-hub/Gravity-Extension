@@ -16,7 +16,6 @@ import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from '
 import { processOOC } from './ooc-handler.js';
 import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
-import { checkAndRotate, buildConsolidationPrompt } from './memory-tier.js';
 import { getStateMachineField } from './state-machine.js';
 import {
     buildChallengePrompt,
@@ -930,48 +929,10 @@ function getMatchingCharDoing(state) {
     return null;
 }
 
-// ─── Auto-Summary & Visible Ledger ────────────────────────────────────────────
+// ─── Visible Ledger ────────────────────────────────────────────────────────────
 
 function escapeHtml(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-/**
- * Build a compact mechanical delta string from committed transactions.
- * ~20-40 tokens vs 80-130 words of LLM-generated summary.
- */
-function buildAutoSummary(committedTxns) {
-    if (!committedTxns?.length) return null;
-    const timestamp = committedTxns[0]?.t || '';
-    const parts = [];
-    for (const tx of committedTxns) {
-        const entityRef = tx.id ? `${tx.e}:${tx.id}` : tx.e;
-        const field = tx.d?.f || '';
-        const value = tx.d?.v ?? tx.d?.to ?? '';
-        // Skip summary transactions and system transactions
-        if (tx.e === 'summary') continue;
-        if (tx.r?.startsWith('system:')) continue;
-
-        if (tx.op === 'TR') {
-            parts.push(`${entityRef}.${field} ${tx.d.from}→${tx.d.to}`);
-        } else if (tx.op === 'S') {
-            const sv = String(value).length > 50 ? String(value).slice(0, 50) + '…' : value;
-            parts.push(`${entityRef}.${field}→"${sv}"`);
-        } else if (tx.op === 'CR') {
-            parts.push(`+${entityRef} (${tx.d?.tier || tx.d?.status || 'new'})`);
-        } else if (tx.op === 'D') {
-            parts.push(`-${entityRef}`);
-        } else if (tx.op === 'A' && field) {
-            const sv = String(value).length > 40 ? String(value).slice(0, 40) + '…' : value;
-            parts.push(`${entityRef}.${field}+="${sv}"`);
-        } else if (tx.op === 'MS') {
-            const key = tx.d?.k || '';
-            const sv = String(value).length > 40 ? String(value).slice(0, 40) + '…' : value;
-            parts.push(`${entityRef}.${field}.${key}→"${sv}"`);
-        }
-    }
-    if (parts.length === 0) return null;
-    return `${timestamp ? timestamp + ' ' : ''}${parts.join('; ')}`;
 }
 
 /**
@@ -993,9 +954,7 @@ function formatCommittedTxnsHtml(committedTxns) {
         } else if (tx.op === 'D') {
             lines.push(`- ${entityRef} (destroyed)`);
         } else if (tx.op === 'A') {
-            if (tx.e === 'summary') {
-                lines.push(`summary+ "${String(value).length > 80 ? String(value).slice(0, 80) + '…' : value}"`);
-            } else if (field) {
+            if (field) {
                 lines.push(`${entityRef}.${field}+ "${value}"`);
             }
         } else if (tx.op === 'R') {
@@ -1020,7 +979,6 @@ function getStateTarget(state, entityType, entityId) {
     if (entityType === 'world') return state.world || null;
     if (entityType === 'pc') return state.pc || null;
     if (entityType === 'divination') return state.divination || null;
-    if (entityType === 'summary') return state.story_summary || null;
 
     const collections = {
         char: state.characters,
@@ -1052,14 +1010,9 @@ function compileStateEntries(stateEntries, currentState) {
             tx = { ...entry.tx };
         } else if (entry.kind === 'scene') {
             tx = { op: 'S', e: 'pc', id: '', d: { f: 'current_scene', v: entry.value } };
-        } else if (entry.kind === 'summary') {
-            tx = { op: 'A', e: 'summary', id: '', d: { f: '', v: entry.value } };
-        } else if (entry.kind === 'removeSummary') {
-            errors.push({ lineNum: i + 1, error: 'STATE summary- is not supported. Use a full LEDGER block for destructive timeline cleanup.', raw: entry.raw || '[summary-]' });
-            continue;
         } else {
             const target = getStateTarget(workingState, entry.entityType, entry.entityId);
-            const requiresExistingTarget = !['world', 'pc', 'divination', 'summary'].includes(entry.entityType);
+            const requiresExistingTarget = !['world', 'pc', 'divination'].includes(entry.entityType);
             if (requiresExistingTarget && !target) {
                 errors.push({
                     lineNum: i + 1,
@@ -1569,7 +1522,6 @@ You have ONLY 3-5 messages of context. Gravity_State_View is your COMPLETE memor
 const ARRAY_SIZE_LIMITS = {
     pressure_points: { path: s => s.world?.pressure_points, label: 'PRESSURE_POINTS', cap: 15 },
     demonstrated_traits: { path: s => s.pc?.demonstrated_traits, label: 'PC TRAITS', cap: 20 },
-    timeline: { path: s => s.pc?.timeline, label: 'PC TIMELINE', cap: 30 },
 };
 
 function checkArraySizes(state) {
@@ -1805,33 +1757,8 @@ async function onMessageReceived(messageId) {
         }
     }
 
-    // ── Auto-summary — mechanical delta replaces LLM-generated summary+ ──────
-    if (committedTxns.length > 0) {
-        // Only auto-generate if the LLM didn't already write a summary this turn
-        const llmWroteSummary = committedTxns.some(tx => tx.e === 'summary' && tx.op === 'A');
-        if (!llmWroteSummary) {
-            const autoSummary = buildAutoSummary(committedTxns);
-            if (autoSummary) {
-                try {
-                    await append([{ op: 'A', e: 'summary', id: '', d: { f: '', v: autoSummary }, r: 'system:auto-summary' }]);
-                    _currentState = computeCurrentState();
-                } catch (err) {
-                    console.warn(`${LOG_PREFIX} Auto-summary commit failed:`, err);
-                }
-            }
-        }
-    }
-
-    // Build reinforcement FIRST — then append tiering/size warnings on top
+    // Build reinforcement FIRST — then append size warnings on top
     _pendingReinforcement = getReinforcement(extraction, _turnCounter);
-
-    // Memory tiering — check if hot arrays exceeded caps, rotate to cold
-    const rotation = checkAndRotate(_currentState);
-    if (rotation.needsConsolidation) {
-        const consolidationPrompt = buildConsolidationPrompt(rotation.pendingBatches);
-        _pendingReinforcement = (_pendingReinforcement || '') + '\n' + consolidationPrompt;
-        _uncappedTurn = true; // Allow large ledger block for consolidation
-    }
 
     // Check array sizes and warn if bloated
     const sizeWarnings = checkArraySizes(_currentState);
