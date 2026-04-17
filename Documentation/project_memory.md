@@ -1,8 +1,10 @@
 # Project Memory
 
-Updated: 2026-04-03 16:02:00 +08:00
+Updated: 2026-04-18 (schema note); last content refresh 2026-04-03 16:02:00 +08:00
 
 Durable working memory for Codex sessions in this repository. Update this file when system behavior, active design decisions, or important constraints change.
+
+> **Schema update 2026-04-17:** `char.knowledge_asymmetry` and `faction.intel_on.<subject>` are now four-map structures (`knows` / `unknown` / `hiding` / `misreading`). `faction.false_beliefs` and `faction.blindspots` are removed (migrated on replay). `char.reads.<target>` is now a capped append log (max 5). Combat entities are thinned to engine stats (`primary_enemy`, `opened_from`, `outcome`, `aftermath`). Legacy references below may be stale — see commits 997a31f / 355ea87 / c20c47b / 0928d88 and `Plan/2026-04-17-ledger-scope-reduction.md`.
 
 ## Current State
 

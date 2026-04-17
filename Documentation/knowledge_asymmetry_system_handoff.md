@@ -1,5 +1,7 @@
 # Knowledge Asymmetry System Handoff
 
+> **Schema update 2026-04-17:** `char.knowledge_asymmetry` and `faction.intel_on.<subject>` are now keyed four-map structures (`knows` / `unknown` / `hiding` / `misreading`). `faction.false_beliefs` and `faction.blindspots` have been removed; their contents migrate into the new `misreading` / `unknown` sub-maps on replay. See commit 355ea87 and `Plan/2026-04-17-ledger-scope-reduction.md` for the canonical model. Examples below predate this change.
+
 ## Purpose
 
 This document captures the shipped knowledge-asymmetry model as of April 3, 2026.

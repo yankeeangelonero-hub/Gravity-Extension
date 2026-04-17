@@ -117,13 +117,22 @@ function normalizeFactionIntel(state) {
         if (faction.intel_posture === undefined || faction.intel_posture === null) {
             faction.intel_posture = '';
         }
+        // Migrate top-level blindspots string to a display-only legacy slot, then drop.
+        if (typeof faction.blindspots === 'string') {
+            const topLegacy = faction.blindspots.trim();
+            if (topLegacy) faction.blindspots_legacy = topLegacy;
+            delete faction.blindspots;
+        }
         if (!faction.intel_on || typeof faction.intel_on !== 'object' || Array.isArray(faction.intel_on)) {
             faction.intel_on = {};
         }
         // Migrate legacy intel_on string values to .knows.legacy
         for (const [subject, val] of Object.entries(faction.intel_on)) {
             if (typeof val === 'string') {
-                faction.intel_on[subject] = { knows: { legacy: val }, unknown: {}, hiding: {}, misreading: {} };
+                const trimmed = val.trim();
+                faction.intel_on[subject] = trimmed
+                    ? { knows: { legacy: trimmed }, unknown: {}, hiding: {}, misreading: {} }
+                    : { knows: {}, unknown: {}, hiding: {}, misreading: {} };
             } else {
                 ensureIntelSubject(faction.intel_on, subject);
             }
@@ -131,13 +140,25 @@ function normalizeFactionIntel(state) {
         // Fold false_beliefs into intel_on.<subject>.misreading.legacy
         if (faction.false_beliefs && typeof faction.false_beliefs === 'object' && !Array.isArray(faction.false_beliefs)) {
             for (const [subject, belief] of Object.entries(faction.false_beliefs)) {
+                if (typeof belief !== 'string' || !belief.trim()) continue;
                 if (!faction.intel_on[subject]) ensureIntelSubject(faction.intel_on, subject);
-                if (typeof belief === 'string' && !faction.intel_on[subject].misreading.legacy) {
-                    faction.intel_on[subject].misreading.legacy = belief;
+                if (!faction.intel_on[subject].misreading.legacy) {
+                    faction.intel_on[subject].misreading.legacy = belief.trim();
                 }
             }
         }
         delete faction.false_beliefs;
+        // Fold blindspots map (per-subject prose) into intel_on.<subject>.unknown.legacy.
+        if (faction.blindspots && typeof faction.blindspots === 'object' && !Array.isArray(faction.blindspots)) {
+            for (const [subject, gap] of Object.entries(faction.blindspots)) {
+                if (typeof gap !== 'string' || !gap.trim()) continue;
+                if (!faction.intel_on[subject]) ensureIntelSubject(faction.intel_on, subject);
+                if (!faction.intel_on[subject].unknown.legacy) {
+                    faction.intel_on[subject].unknown.legacy = gap.trim();
+                }
+            }
+            delete faction.blindspots;
+        }
     }
 }
 
@@ -317,16 +338,28 @@ function applyTransaction(state, tx) {
         case 'MS': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
-                if (typeof target[tx.d.f] !== 'object' || Array.isArray(target[tx.d.f])) {
-                    target[tx.d.f] = {};
+                const dotted = tx.d.k && tx.d.k.includes('.');
+                const fieldVal = target[tx.d.f];
+                if (typeof fieldVal !== 'object' || Array.isArray(fieldVal)) {
+                    // Preserve any legacy string at the field level before coercing to a map.
+                    if (dotted && typeof fieldVal === 'string' && fieldVal.trim()) {
+                        target[tx.d.f] = { legacy: fieldVal.trim() };
+                    } else {
+                        target[tx.d.f] = {};
+                    }
                 }
-                if (tx.d.k && tx.d.k.includes('.')) {
+                if (dotted) {
                     // Dotted key: navigate into nested sub-maps (e.g. knows.apostle or archangel.knows.status)
                     const keyParts = tx.d.k.split('.');
                     let obj = target[tx.d.f];
                     for (let i = 0; i < keyParts.length - 1; i++) {
                         const k = keyParts[i];
-                        if (typeof obj[k] !== 'object' || Array.isArray(obj[k])) obj[k] = {};
+                        if (typeof obj[k] === 'string' && obj[k].trim()) {
+                            // Preserve legacy string at intermediate key as .legacy slot.
+                            obj[k] = { legacy: obj[k].trim() };
+                        } else if (typeof obj[k] !== 'object' || Array.isArray(obj[k])) {
+                            obj[k] = {};
+                        }
                         obj = obj[k];
                     }
                     const leafKey = keyParts[keyParts.length - 1];
@@ -338,14 +371,15 @@ function applyTransaction(state, tx) {
                 } else if (tx.d.f === 'reads') {
                     // Reads are an append log capped at 5 — never overwrite
                     const existing = target[tx.d.f][tx.d.k];
-                    const log = Array.isArray(existing) ? existing : (existing ? [existing] : []);
+                    const log = Array.isArray(existing) ? [...existing] : (existing ? [String(existing)] : []);
                     const entry = tx.t ? `[${tx.t}] ${tx.d.v}` : String(tx.d.v);
                     if (log[log.length - 1] !== entry) {
+                        const prev = log[log.length - 1];
                         log.push(entry);
                         if (log.length > 5) log.splice(0, log.length - 5);
+                        target[tx.d.f][tx.d.k] = log;
+                        recordHistory(state, tx.e, tx.id, `reads.${tx.d.k}`, prev, entry, tx);
                     }
-                    target[tx.d.f][tx.d.k] = log;
-                    recordHistory(state, tx.e, tx.id, `reads.${tx.d.k}`, existing, tx.d.v, tx);
                 } else {
                     const oldVal = target[tx.d.f][tx.d.k];
                     target[tx.d.f][tx.d.k] = tx.d.v;

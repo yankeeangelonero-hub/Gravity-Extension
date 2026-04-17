@@ -107,6 +107,13 @@ function toObj(v) {
     return {};
 }
 
+// Reads live as an append log (array of entries). Return the latest entry as a string,
+// falling back to string form for legacy data.
+function latestRead(v) {
+    if (Array.isArray(v)) return v.length ? String(v[v.length - 1]) : '';
+    return v ? String(v) : '';
+}
+
 function renderPowerLabel(entity) {
     const hasCurrent = entity?.power != null;
     const hasBase = entity?.power_base != null;
@@ -670,7 +677,7 @@ function renderPCDossier(state) {
     const pcReads = [];
     for (const char of Object.values(state.characters)) {
         if (char.tier === 'UNKNOWN') continue;
-        const readOfPc = char.reads?.pc || char.reads?.[pc.name] || char.stance_toward_pc;
+        const readOfPc = latestRead(char.reads?.pc) || latestRead(char.reads?.[pc.name]) || char.stance_toward_pc;
         if (readOfPc) pcReads.push({ who: char.name || char.id, read: readOfPc, id: char.id });
     }
     const legacyRep = toObj(pc.reputation);
@@ -806,10 +813,15 @@ function renderCharDossier(char, state) {
         parts.push(`<div class="gl-d-section"><b>Relationships:</b></div>`);
         for (const [target, read] of Object.entries(reads)) {
             const hist = getFieldHistory(state, 'char', char.id, `reads.${target}`);
+            const logEntries = Array.isArray(read) ? read : (read ? [String(read)] : []);
             parts.push(`<div class="gl-read-block">`);
             parts.push(`<div class="gl-read-target">READS ${esc(target.toUpperCase())} AS:</div>`);
-            parts.push(`<div class="gl-read-text">${esc(read)}</div>`);
-            if (hist.length > 1) {
+            parts.push(`<div class="gl-read-text">${esc(latestRead(read))}</div>`);
+            if (logEntries.length > 1) {
+                const older = logEntries.slice(0, -1).map(e => `<div>${esc(e)}</div>`).join('');
+                parts.push(`<div class="gl-history-toggle">Earlier reads (${logEntries.length - 1})</div>`);
+                parts.push(`<div class="gl-history-list" style="display:none">${older}</div>`);
+            } else if (hist.length > 1) {
                 parts.push(`<div class="gl-history-toggle">Read history (${hist.length})</div>`);
                 parts.push(`<div class="gl-history-list" style="display:none">${hist.map(historyLine).join('<br>')}</div>`);
             }
@@ -901,7 +913,7 @@ function renderWorld(state) {
                 // Legacy: separate fields
                 if (f.objective) parts.push(`<div class="gl-d-detail">Objective: ${esc(f.objective)}</div>`);
                 if (f.resources) parts.push(`<div class="gl-d-detail">Resources: ${esc(f.resources)}</div>`);
-                const fStance = (f.reads && f.reads.pc) || f.stance_toward_pc;
+                const fStance = latestRead(f.reads && f.reads.pc) || f.stance_toward_pc;
                 if (fStance) parts.push(`<div class="gl-d-detail">Stance toward PC: ${esc(fStance)}</div>`);
                 if (f.power) parts.push(`<div class="gl-d-detail">Power: <b>${esc(f.power)}</b></div>`);
                 const fMomentum = f.last_move && f.momentum && !f.momentum.includes(f.last_move)
