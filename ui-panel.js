@@ -747,9 +747,11 @@ function renderCharDossier(char, state) {
             parts.push(`<div class="gl-d-row"><b>Knowledge:</b> ${esc(ka)}</div>`);
         }
     }
-    // Stance toward PC: prefer reads[pc], fall back to stance_toward_pc (legacy)
-    const stanceTowardPc = (char.reads?.pc) || char.stance_toward_pc;
-    if (stanceTowardPc) parts.push(`<div class="gl-d-row"><b>Reads PC as:</b> ${esc(stanceTowardPc)}</div>`);
+    // Stance toward PC: prefer reads[pc] (may be append-log array), fall back to stance_toward_pc
+    const pcReads = char.reads?.pc;
+    const stanceTowardPc = Array.isArray(pcReads) ? (pcReads[pcReads.length - 1] || null) : (pcReads || null);
+    const stanceDisplay = stanceTowardPc || char.stance_toward_pc;
+    if (stanceDisplay) parts.push(`<div class="gl-d-row"><b>Reads PC as:</b> ${esc(stanceDisplay)}</div>`);
     const charWounds = toObj(char.wounds);
     if (Object.keys(charWounds).length) {
         parts.push(`<div class="gl-d-row"><b>Wounds:</b> ${Object.entries(charWounds).map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(', ')}</div>`);

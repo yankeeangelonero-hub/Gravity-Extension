@@ -335,6 +335,17 @@ function applyTransaction(state, tx) {
                     if (oldVal !== tx.d.v) {
                         recordHistory(state, tx.e, tx.id, `${tx.d.f}.${tx.d.k}`, oldVal, tx.d.v, tx);
                     }
+                } else if (tx.d.f === 'reads') {
+                    // Reads are an append log capped at 5 — never overwrite
+                    const existing = target[tx.d.f][tx.d.k];
+                    const log = Array.isArray(existing) ? existing : (existing ? [existing] : []);
+                    const entry = tx.t ? `[${tx.t}] ${tx.d.v}` : String(tx.d.v);
+                    if (log[log.length - 1] !== entry) {
+                        log.push(entry);
+                        if (log.length > 5) log.splice(0, log.length - 5);
+                    }
+                    target[tx.d.f][tx.d.k] = log;
+                    recordHistory(state, tx.e, tx.id, `reads.${tx.d.k}`, existing, tx.d.v, tx);
                 } else {
                     const oldVal = target[tx.d.f][tx.d.k];
                     target[tx.d.f][tx.d.k] = tx.d.v;

@@ -14,6 +14,14 @@ function normalizeText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+// reads.<target> is an append-log array capped at 5; string values are legacy
+function getLatestRead(readsObj, key) {
+    const val = readsObj?.[key];
+    if (!val) return null;
+    if (Array.isArray(val)) return val.length ? val[val.length - 1] : null;
+    return val;
+}
+
 function getCollisionForcesText(col) {
     if (Array.isArray(col?.forces)) {
         return col.forces
@@ -299,7 +307,7 @@ function formatStateView(state, mode = 'full') {
         lines.push('Factions:');
         for (const f of factionEntities) {
             if (!showFullDetail) {
-                const fStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
+                const fStance = getLatestRead(f.reads, 'pc') || f.stance_toward_pc || '?';
                 const fPower = f.power ? ` [${f.power}]` : '';
                 lines.push(`  ${f.name || f.id}${fPower} | Stance: ${fStance} → id: ${f.id}`);
             } else {
@@ -407,7 +415,7 @@ function formatStateView(state, mode = 'full') {
             } else {
                 let line = `  ${f.name || f.id}: ${f.objective || ''}`;
                 line += ` | Resources: ${f.resources || '?'}`;
-                const factionStance = (f.reads && f.reads.pc) || f.stance_toward_pc || '?';
+                const factionStance = getLatestRead(f.reads, 'pc') || f.stance_toward_pc || '?';
                 line += ` | Stance: ${factionStance}`;
                 if (f.power) line += ` | Power: ${f.power}`;
                 const momentum = f.last_move && f.momentum && !f.momentum.includes(f.last_move)
@@ -488,8 +496,10 @@ function formatStateView(state, mode = 'full') {
             if (char.tier === 'UNKNOWN') continue;
             // In intimacy mode, skip KNOWN (their reads are low-fidelity)
             if (isIntimacy && !isFull && char.tier === 'KNOWN') continue;
-            const readOfPc = char.reads?.pc || char.reads?.[state.pc.name] || char.stance_toward_pc;
-            if (readOfPc) pcReputation.push({ who: char.name || char.id, read: readOfPc });
+            const readsLog = char.reads?.pc || char.reads?.[state.pc.name];
+            const readsArr = Array.isArray(readsLog) ? readsLog : (readsLog ? [readsLog] : null);
+            const readOfPc = readsArr ? readsArr[readsArr.length - 1] : char.stance_toward_pc;
+            if (readOfPc) pcReputation.push({ who: char.name || char.id, read: readOfPc, log: readsArr });
         }
         // Legacy pc.reputation entries not covered by character reads
         const legacyRep = (state.pc.reputation && typeof state.pc.reputation === 'object' && !Array.isArray(state.pc.reputation)) ? state.pc.reputation : {};
@@ -500,8 +510,13 @@ function formatStateView(state, mode = 'full') {
         }
         if (pcReputation.length) {
             lines.push(`  How others see PC:`);
-            for (const { who, read } of pcReputation) {
-                lines.push(`    ${who}: ${read}`);
+            for (const { who, read, log } of pcReputation) {
+                if (isFull && log && log.length > 1) {
+                    lines.push(`    ${who} (${log.length} reads):`);
+                    for (const entry of log) lines.push(`      - ${entry}`);
+                } else {
+                    lines.push(`    ${who}: ${read}`);
+                }
             }
         }
     }
@@ -704,7 +719,7 @@ APPEND — add to an array field
 REMOVE — remove from an array field
   > REMOVE char:tifa field=noticed_details value="Scratches on bracer" -- Detail resolved
 
-READ — set a character's read on someone (shorthand for MAP_SET on reads)
+READ — append a read entry (shorthand for MAP_SET on reads; engine caps log at 5, newest wins)
   > READ char:tifa target=cloud "Something wrong with his memories" -- Updated after evasion
 
 MAP_SET — set a key in a map field
