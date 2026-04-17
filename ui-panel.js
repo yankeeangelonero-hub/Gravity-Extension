@@ -917,6 +917,28 @@ function renderWorld(state) {
                     }
                 }
             }
+            if (f.intel_on && typeof f.intel_on === 'object' && Object.keys(f.intel_on).length) {
+                parts.push(`<div class="gl-d-detail"><b>Intel on:</b></div>`);
+                for (const [subject, si] of Object.entries(f.intel_on)) {
+                    if (typeof si !== 'object' || Array.isArray(si)) {
+                        parts.push(`<div class="gl-d-detail" style="padding-left:1em"><b>${esc(subject)}:</b> ${esc(String(si))}</div>`);
+                        continue;
+                    }
+                    const siItems = [];
+                    for (const bucket of ['knows', 'unknown', 'hiding', 'misreading']) {
+                        const map = si[bucket];
+                        if (map && typeof map === 'object') {
+                            for (const [k, v] of Object.entries(map)) {
+                                const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
+                                siItems.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(k)}:</b> ${esc(String(v))}</li>`);
+                            }
+                        }
+                    }
+                    if (siItems.length) {
+                        parts.push(`<div class="gl-d-detail" style="padding-left:1em"><b>${esc(subject)}:</b><ul class="gl-d-kalist">${siItems.join('')}</ul></div>`);
+                    }
+                }
+            }
             parts.push(`</div>`);
         }
     }

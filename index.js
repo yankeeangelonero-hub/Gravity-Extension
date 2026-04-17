@@ -1475,7 +1475,7 @@ After the thinking pass closes, visible output is:
 
 Update current_scene, location, and condition when they materially change or the scene would be hard to reconstruct without them.
 Knowledge firewall: characters only act on what their reads, noticed_details, knowledge_asymmetry, faction intel, and plausible information channels make possible. Hidden facts stay hidden until learned, revealed, reported, sensed, or inferred honestly.
-Remote factions are not live-omniscient. Use faction comms_latency, last_verified_at, intel_posture, blindspots, intel_on, and false_beliefs to decide what they know right now.
+Remote factions are not live-omniscient. Use faction comms_latency, last_verified_at, intel_posture, and intel_on (knows/unknown/hiding/misreading per subject) to decide what they know right now.
 When a character re-enters after time away, use last_seen_at plus summary residue and faction intel to refresh what they plausibly learned, missed, guessed, or got wrong while absent.
 CLEANUP (REMOVE/DESTROY): max 3 per regular turn. Save bulk for eval or chapter close.
 

@@ -217,7 +217,7 @@ ${answers.power_scale ? '> MAP_SET world field=constants key=power_scale value="
 
 8. Any scenario NPCs as KNOWN:
 > CREATE char:npc-slug name="[NPC Name]" tier=KNOWN
-KNOWN characters inherit knowledge from their faction's intel_on and false_beliefs maps. Do NOT set individual knowledge_asymmetry — only TRACKED/PRINCIPAL characters get it.
+KNOWN characters inherit knowledge from their faction's intel_on map. Do NOT set individual knowledge_asymmetry — only TRACKED/PRINCIPAL characters get it.
 If any recurring or important NPC is combat-capable, assign:
 > SET char:npc-slug field=power_base value=[earned_rating]
 > SET char:npc-slug field=power value=[current_effective_rating]

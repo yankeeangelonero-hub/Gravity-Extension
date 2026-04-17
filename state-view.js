@@ -419,18 +419,28 @@ function formatStateView(state, mode = 'full') {
                 if (f.comms_latency) lines.push(`    Comms latency: ${f.comms_latency}`);
                 if (f.last_verified_at) lines.push(`    Last verified at: ${f.last_verified_at}`);
                 if (f.intel_posture) lines.push(`    Intel posture: ${f.intel_posture}`);
-                if (f.blindspots) lines.push(`    Blindspots: ${f.blindspots}`);
             }
             if (f.intel_on && typeof f.intel_on === 'object' && Object.keys(f.intel_on).length) {
                 lines.push('    Intel on:');
-                for (const [subject, intel] of Object.entries(f.intel_on)) {
-                    lines.push(`      ${subject}: ${intel}`);
-                }
-            }
-            if (f.false_beliefs && typeof f.false_beliefs === 'object' && Object.keys(f.false_beliefs).length) {
-                lines.push('    False beliefs:');
-                for (const [subject, belief] of Object.entries(f.false_beliefs)) {
-                    lines.push(`      ${subject}: ${belief}`);
+                for (const [subject, si] of Object.entries(f.intel_on)) {
+                    if (typeof si !== 'object' || Array.isArray(si)) {
+                        lines.push(`      ${subject}: ${si}`);
+                        continue;
+                    }
+                    const siLines = [];
+                    for (const bucket of ['knows', 'unknown', 'hiding', 'misreading']) {
+                        const map = si[bucket];
+                        if (map && typeof map === 'object' && Object.keys(map).length) {
+                            const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
+                            for (const [k, v] of Object.entries(map)) {
+                                siLines.push(`        [${label}] ${k}: ${v}`);
+                            }
+                        }
+                    }
+                    if (siLines.length) {
+                        lines.push(`      ${subject}:`);
+                        lines.push(...siLines);
+                    }
                 }
             }
             if (f.relations && typeof f.relations === 'object') {
@@ -539,8 +549,9 @@ char:elena.knowledge_asymmetry.knows.weapon: "PC is armed"
 char:elena.knowledge_asymmetry.unknown.sender: "does not know who sent them"
 char:elena.knowledge_asymmetry.hiding.owner-warn: "already warned the owner"
 char:elena.last_seen_at: "[Day 2 - 19:10]"
-faction:zaft.intel_on.archangel: "Believes the ship escaped damaged; does not know who the Strike pilot is"
-faction:zaft.false_beliefs.strike-pilot: "Assumes the pilot identity is still unconfirmed"
+faction:zaft.intel_on.archangel.knows.status: "ship escaped damaged"
+faction:zaft.intel_on.archangel.unknown.pilot: "Strike pilot identity unknown"
+faction:zaft.intel_on.archangel.misreading.pilot-identity: "Assumes pilot still unconfirmed"
 collision:trust-vs-duty.distance: 4
 constraint:c1.integrity: STRESSED
 char:elena.reads.pc: "Cautious ally"
@@ -571,9 +582,10 @@ COMMON PATHS:
   faction:id.comms_latency
   faction:id.last_verified_at
   faction:id.intel_posture
-  faction:id.blindspots
-  faction:id.intel_on.subject
-  faction:id.false_beliefs.subject
+  faction:id.intel_on.<subject>.knows.<key>
+  faction:id.intel_on.<subject>.unknown.<key>
+  faction:id.intel_on.<subject>.hiding.<key>
+  faction:id.intel_on.<subject>.misreading.<key>
   collision:id.name
   collision:id.forces
   collision:id.details
@@ -621,7 +633,7 @@ DISCIPLINE:
   KNOWN characters inherit knowledge from their faction's intel_on map. Only set individual knowledge_asymmetry keys on a KNOWN character when they learn something their faction does not know yet.
   If the protagonist also exists as char:<pc-id>, treat pc and char:<pc-id> as separate surfaces: pc carries immediate scene/body state, while char:<pc-id> carries the social/knowledge dossier. Updating pc.* does not update the mirrored char dossier.
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
-  Use faction intel fields for remote awareness: comms_latency, last_verified_at, intel_posture, blindspots, intel_on, and false_beliefs.
+  Use faction intel fields for remote awareness: comms_latency, last_verified_at, intel_posture, and intel_on. Each intel_on subject has the same four buckets as knowledge_asymmetry: knows, unknown, hiding, misreading.
   No provenance, no knowledge: distant factions and characters do not know live scene truth unless it plausibly reached them.
   Every live collision needs a story capsule: what is converging, who or what is caught in it, what it costs, and the forced choice looming.
   Pressure points are seeds, not history. If a seam fired, resolved, or became a collision, REMOVE it.
@@ -798,14 +810,15 @@ FACTIONS — create and manage factions with political simulation
   > MAP_SET faction:shinra field=relations key=avalanche value="Hostile — active operations against" -- Inter-faction relation
   > SET faction:zaft field=comms_latency value="Ship-to-ship near-real-time; long-range relay delayed by jamming" -- Intel travel speed
   > SET faction:zaft field=last_verified_at value="[Day 4 — 09:20]" -- Last trustworthy refresh
-  > MAP_SET faction:zaft field=intel_on key=archangel value="Believes the ship escaped damaged; pilot identity still uncertain" -- Current intel snapshot
-  > MAP_SET faction:zaft field=false_beliefs key=strike-pilot value="Assumes the pilot is still unknown" -- Important wrong belief
+  > MAP_SET faction:zaft field=intel_on key=archangel.knows.status value="Ship escaped damaged" -- Confirmed intel
+  > MAP_SET faction:zaft field=intel_on key=archangel.unknown.pilot value="Strike pilot identity" -- Known gap
+  > MAP_SET faction:zaft field=intel_on key=archangel.misreading.pilot-identity value="Assumes pilot still unconfirmed" -- False belief
 
   Faction fields: name, objective, resources, stance_toward_pc, power (rising/stable/declining/collapsed),
   momentum (current action), last_move (last visible action), leverage, vulnerability,
   relations (map: faction_id → stance string). Optional: doctrine, leadership, territory, alliances,
-  comms_latency, last_verified_at, intel_posture, blindspots, intel_on (map: subject → belief snapshot),
-  false_beliefs (map: subject → important wrong assumption).
+  comms_latency, last_verified_at, intel_posture,
+  intel_on (nested map: subject → {knows, unknown, hiding, misreading} — four buckets per subject).
   Pressure points generated from faction conflicts are collision fuel — during advance turns,
   they compress existing collision distances or spawn new collisions.
   A pressure point should stay SHORT: a seam, signal, or pending break.
