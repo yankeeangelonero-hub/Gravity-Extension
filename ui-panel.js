@@ -1093,11 +1093,10 @@ function renderCombat(state) {
     if (combat) {
         parts.push(`<div class="gl-d-section"><b>Combat Entity:</b></div>`);
         parts.push(`<div class="gl-d-row"><b>Status:</b> ${esc(combat.status || 'ACTIVE')}</div>`);
-        if (combat.situation) parts.push(`<div class="gl-d-row"><b>Situation:</b> ${esc(combat.situation)}</div>`);
-        if (combat.terrain) parts.push(`<div class="gl-d-row"><b>Terrain:</b> ${esc(combat.terrain)}</div>`);
-        if (combat.threat) parts.push(`<div class="gl-d-row"><b>Threat:</b> ${esc(combat.threat)}</div>`);
-        if (combat.participants) parts.push(`<div class="gl-d-row"><b>Participants:</b> ${esc(Array.isArray(combat.participants) ? combat.participants.join(', ') : combat.participants)}</div>`);
-        if (combat.hostiles) parts.push(`<div class="gl-d-row"><b>Hostiles:</b> ${esc(Array.isArray(combat.hostiles) ? combat.hostiles.join(', ') : combat.hostiles)}</div>`);
+        if (combat.primary_enemy) parts.push(`<div class="gl-d-row"><b>Primary enemy:</b> ${esc(typeof combat.primary_enemy === 'object' ? combat.primary_enemy.name || combat.primary_enemy.id || '?' : combat.primary_enemy)}</div>`);
+        if (combat.opened_from) parts.push(`<div class="gl-d-row"><b>Opened from:</b> collision:${esc(combat.opened_from)}</div>`);
+        if (combat.outcome) parts.push(`<div class="gl-d-row"><b>Outcome:</b> ${esc(combat.outcome)}</div>`);
+        if (combat.aftermath) parts.push(`<div class="gl-d-row"><b>Aftermath:</b> ${esc(combat.aftermath)}</div>`);
     } else {
         parts.push(`<div class="gl-d-row"><b>Combat Entity:</b> not created yet</div>`);
     }
