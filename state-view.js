@@ -76,7 +76,40 @@ function formatPowerTag(entity) {
  * @param {import('./state-compute.js').ComputedState} state
  * @returns {string}
  */
-function formatStateView(state, mode = 'full') {
+
+/**
+ * Format the collision_archive injection block. Returns empty string when
+ * archive is empty or pool is not thin (§4.3).
+ * @param {Object} state
+ * @returns {string}
+ */
+function formatCollisionArchive(state) {
+    const archiveEntries = Array.isArray(state?.world?.collision_archive) ? state.world.collision_archive : [];
+    if (!archiveEntries.length) return '';
+    const activeCollisionCount = Object.values(state?.collisions || {})
+        .filter(c => (c.status || '').toUpperCase() === 'ACTIVE').length;
+    if (activeCollisionCount > 2) return '';
+    const lines = ['Collision Archive (last resolved — pool is thin, seed new collisions from these hooks):'];
+    for (const entry of archiveEntries.slice(-5)) {
+        lines.push(`  • ${entry}`);
+    }
+    return lines.join('\n');
+}
+
+/**
+ * Hash used by injectPrompt to skip redundant archive re-injection. §4.3.
+ * @param {Object} state
+ * @returns {string}
+ */
+function computeArchiveVersion(state) {
+    const archiveEntries = Array.isArray(state?.world?.collision_archive) ? state.world.collision_archive : [];
+    const activeCollisionCount = Object.values(state?.collisions || {})
+        .filter(c => (c.status || '').toUpperCase() === 'ACTIVE').length;
+    const thin = activeCollisionCount <= 2 ? 'thin' : 'ok';
+    return `${archiveEntries.length}:${thin}`;
+}
+
+function formatStateView(state, mode = 'full', includeArchive = true) {
     const lines = [];
     // ── Mode flags ────────────────────────────────────────────────────────
     const isLite = (mode === 'lite');
@@ -449,14 +482,11 @@ function formatStateView(state, mode = 'full') {
     }
 
     // Collision archive — inject last 5 entries when active pool is thin (≤ 2) (§4.3)
-    const archiveEntries = Array.isArray(state.world?.collision_archive) ? state.world.collision_archive : [];
-    const activeCollisionCount = Object.values(state.collisions || {})
-        .filter(c => (c.status || '').toUpperCase() === 'ACTIVE').length;
-    if (archiveEntries.length && activeCollisionCount <= 2) {
-        lines.push('');
-        lines.push('Collision Archive (last resolved — pool is thin, seed new collisions from these hooks):');
-        for (const entry of archiveEntries.slice(-5)) {
-            lines.push(`  • ${entry}`);
+    if (includeArchive) {
+        const archiveBlock = formatCollisionArchive(state);
+        if (archiveBlock) {
+            lines.push('');
+            lines.push(archiveBlock);
         }
     }
 
@@ -906,4 +936,6 @@ OOC COMMANDS (player types in chat):
 export {
     formatStateView,
     formatReadme,
+    formatCollisionArchive,
+    computeArchiveVersion,
 };

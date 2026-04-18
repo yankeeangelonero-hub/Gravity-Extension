@@ -11,7 +11,7 @@ import { init as initLedger, reset as resetLedger, append, getAllTransactions, g
 import { initSnapshots, computeCurrentState, createSnapshot } from './snapshot-mgr.js';
 import { validateBatch, formatErrors } from './consistency.js';
 import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel, CATEGORY_DISTANCES } from './state-compute.js';
-import { formatStateView, formatReadme } from './state-view.js';
+import { formatStateView, formatReadme, computeArchiveVersion } from './state-view.js';
 import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
 import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
@@ -77,12 +77,13 @@ let _advanceLocked = false;
 // clearing the _arrival slot on the same turn an IMMEDIATE collision arrived.
 let _arrivalLastFiredTurn = -1;
 let _archiveCorrectionAttempts = new Map(); // collision id → attempt count for archive-presence corrections
+let _archiveInjectedVersion = null; // hash: `${archiveLength}:${thin|ok}` — see §4.3
 let _pendingNudgeText = null; // rotating nudge maintenance text for next injectPrompt call (§4.4)
 
 // Phase 2: Rotating nudge system chatMetadata keys (§4.4)
 const NUDGE_COUNTER_KEY = 'gravity_nudge_counter';
 const NUDGE_SLOT_KEY = 'gravity_nudge_slot';
-const NUDGE_CHAR_ROTATION_KEY = 'gravity_nudge_char_rotation';
+const NUDGE_ROTATION_INDEX_KEY = 'gravity_nudge_rotation_index';
 const NUDGE_SLOT_NAMES = ['agenda_check', 'pressure_scan', 'consolidation_check', 'collision_health', 'relationship_pulse', 'collision_validity', 'destroyed_cleanup'];
 
 const ARCANA_TABLE = [
@@ -939,15 +940,15 @@ function getNudgeState() {
     return {
         counter: meta[NUDGE_COUNTER_KEY] ?? -3,
         slot: meta[NUDGE_SLOT_KEY] ?? 0,
-        charRotation: meta[NUDGE_CHAR_ROTATION_KEY] ?? 0,
+        rotIdx: meta[NUDGE_ROTATION_INDEX_KEY] ?? 0,
     };
 }
 
-function saveNudgeState(counter, slot, charRotation) {
+function saveNudgeState(counter, slot, rotIdx) {
     const meta = SillyTavern.getContext().chatMetadata;
     meta[NUDGE_COUNTER_KEY] = counter;
     meta[NUDGE_SLOT_KEY] = slot;
-    meta[NUDGE_CHAR_ROTATION_KEY] = charRotation;
+    meta[NUDGE_ROTATION_INDEX_KEY] = rotIdx;
     saveMetadataDebounced();
 }
 
@@ -1013,26 +1014,24 @@ function buildNudge_destroyedCleanup(state) {
  */
 function maybeComputeNudge(state, mode) {
     if (!state || mode === 'advance') return null;
-    const { counter, slot, charRotation } = getNudgeState();
+    const { counter, slot, rotIdx } = getNudgeState();
     const newCounter = counter + 1;
     if (counter % 4 !== 0) {
-        saveNudgeState(newCounter, slot, charRotation);
+        saveNudgeState(newCounter, slot, rotIdx);
         return null;
     }
     // Fire the nudge for current slot
     const slotName = NUDGE_SLOT_NAMES[slot];
-    let newCharRotation = charRotation;
     let text = null;
     if (slotName === 'agenda_check' || slotName === 'relationship_pulse') {
         const eligible = Object.entries(state.characters || {})
             .filter(([, c]) => c.tier === 'PRINCIPAL' || c.tier === 'TRACKED')
             .map(([id]) => id);
         if (eligible.length > 0) {
-            const charId = eligible[charRotation % eligible.length];
+            const charId = eligible[rotIdx % eligible.length];
             text = slotName === 'agenda_check'
                 ? buildNudge_agendaCheck(state, charId)
                 : buildNudge_relationshipPulse(state, charId);
-            newCharRotation = (charRotation + 1) % Math.max(1, eligible.length);
         }
     } else if (slotName === 'pressure_scan') {
         text = buildNudge_pressureScan(state);
@@ -1045,7 +1044,10 @@ function maybeComputeNudge(state, mode) {
     } else if (slotName === 'destroyed_cleanup') {
         text = buildNudge_destroyedCleanup(state);
     }
-    saveNudgeState(newCounter, (slot + 1) % 7, newCharRotation);
+    // Rotation advances only after slot 0 (agenda_check) and slot 4 (relationship_pulse).
+    // Monotonic growth — no modulo — ensures cadence is unaffected by empty eligibility.
+    const nextRotIdx = (slot === 0 || slot === 4) ? rotIdx + 1 : rotIdx;
+    saveNudgeState(newCounter, (slot + 1) % 7, nextRotIdx);
     return text;
 }
 
@@ -1090,9 +1092,12 @@ function injectPrompt(mode) {
 
         // State view — four modes: lite, combat, intimacy, full
         if (_currentState) {
+            const archiveVersion = computeArchiveVersion(_currentState);
+            const includeArchive = archiveVersion !== _archiveInjectedVersion;
             const stateViewMode = getStateViewMode(isRegular, isAdvance, isIntegration, challengeRuntimeActive, nextReasonMode);
-            const stateView = formatStateView(_currentState, stateViewMode);
+            const stateView = formatStateView(_currentState, stateViewMode, includeArchive);
             setExtensionPrompt(`${MODULE_NAME}_state`, stateView, PROMPT_IN_CHAT, 0);
+            if (includeArchive) _archiveInjectedVersion = archiveVersion;
         }
 
         // Format readme — core on regular/advance, full on integration
@@ -1612,26 +1617,32 @@ async function onMessageReceived(messageId) {
     }
 
     // ── Archive presence check (§2.2.1, §6.1) ──────────────────────────────────
-    // After each commit, scan for terminal collision TRs without a matching archive append.
+    // After each commit, scan for terminal collision TRs without a matching archive entry
+    // that references the collision by id or name. Checks full world.collision_archive,
+    // not just same-turn commits, so late archives (turn N+1) satisfy earlier terminals.
     if (committedTxns.length > 0) {
-        const terminalIds = committedTxns
+        const terminalTxns = committedTxns
             .filter(tx => tx.op === 'TR' && tx.e === 'collision'
                 && (tx.d?.to === 'RESOLVED' || tx.d?.to === 'CRASHED'))
-            .map(tx => tx.id);
+            .map(tx => ({ id: tx.id, to: tx.d.to }));
 
-        const archiveAppended = committedTxns.some(tx =>
-            tx.op === 'A' && tx.e === 'world' && tx.d?.f === 'collision_archive'
-        );
+        const archive = Array.isArray(_currentState?.world?.collision_archive)
+            ? _currentState.world.collision_archive
+            : [];
 
-        for (const colId of terminalIds) {
-            if (archiveAppended) {
+        for (const { id: colId } of terminalTxns) {
+            const col = _currentState.collisions?.[colId];
+            const nameToken = col?.name ? String(col.name) : '';
+            const matched = archive.some(entry => {
+                const s = String(entry || '');
+                return s.includes(colId) || (nameToken && s.includes(nameToken));
+            });
+            if (matched) {
                 _archiveCorrectionAttempts.delete(colId);
                 continue;
             }
             const attempts = (_archiveCorrectionAttempts.get(colId) || 0) + 1;
             if (attempts > MAX_CORRECTION_ATTEMPTS) {
-                // Auto-generate fallback archive entry
-                const col = _currentState.collisions?.[colId];
                 if (col) {
                     const fallback = `[collision] ${col.name || colId} [resolution] ${col.outcome_type || col.status} — auto-generated (archive missing after ${MAX_CORRECTION_ATTEMPTS} attempts) [hook] none [aftermath] ${col.aftermath || 'unknown'}`;
                     try {
@@ -1644,7 +1655,7 @@ async function onMessageReceived(messageId) {
                 _archiveCorrectionAttempts.set(colId, attempts);
                 queueCorrections([{
                     raw: `[collision:${colId} archive]`,
-                    error: `Missing archive entry for resolved collision ${colId}. Add: A world field=collision_archive value="[collision] ... [resolution] ... [hook] ... [aftermath] ..."`,
+                    error: `Missing archive entry for resolved collision ${colId}. Add: A world field=collision_archive value="[collision] ${col?.name || colId} ... [resolution] ... [hook] ... [aftermath] ..."`,
                 }]);
             }
         }
@@ -1748,7 +1759,7 @@ async function onMessageReceived(messageId) {
     }
 
     // ── Rotating nudge (§4.4) — compute before inject so slot clears if not firing ──
-    _pendingNudgeText = maybeComputeNudge(_currentState, 'regular');
+    _pendingNudgeText = maybeComputeNudge(_currentState, _lastCompletedMode || 'regular');
 
     injectPrompt();
     updatePanel(_currentState, _turnCounter, committedTxns.map(tx => tx.tx));
@@ -1821,11 +1832,14 @@ Then write prose, render the choices, and end with a compact STATE block.`,
         _uncappedTurn = /ooc:\s*(eval|cleanup)\b/i.test(message.mes);
         _pendingReinforcement = result.injection;
         _currentState = computeCurrentState();
-        // Rollback resets arrival/foreshadow state — the rolled-back collisions may re-arrive
+        // Rollback resets arrival/foreshadow/archive runtime state — rolled-back collisions
+        // may re-arrive, and the archive may be shorter post-rollback so we must re-inject.
         if (/ooc:\s*rollback\b/i.test(message.mes)) {
             _firedCollisionArrivals = new Set();
             _foreshadowedCollisions = new Map();
             _arrivalLastFiredTurn = -1;
+            _archiveCorrectionAttempts = new Map();
+            _archiveInjectedVersion = null;
         }
         injectPrompt();
         updatePanel(_currentState, _turnCounter);
@@ -2157,6 +2171,9 @@ async function handleNewLedger() {
     delete chatMetadata['gravity_combat_settings'];
     delete chatMetadata['gravity_challenge_runtime'];
     delete chatMetadata['gravity_challenge_settings'];
+    delete chatMetadata[NUDGE_COUNTER_KEY];
+    delete chatMetadata[NUDGE_SLOT_KEY];
+    delete chatMetadata[NUDGE_ROTATION_INDEX_KEY];
     await saveMetadata();
     resetLedger();
     _pendingCorrections = [];
@@ -2165,6 +2182,7 @@ async function handleNewLedger() {
     _foreshadowedCollisions = new Map();
     _arrivalLastFiredTurn = -1;
     _archiveCorrectionAttempts = new Map();
+    _archiveInjectedVersion = null;
     await initialize(true);
 }
 
@@ -2181,6 +2199,9 @@ async function handleImportData(data) {
     delete chatMetadata['gravity_combat_settings'];
     delete chatMetadata['gravity_challenge_runtime'];
     delete chatMetadata['gravity_challenge_settings'];
+    delete chatMetadata[NUDGE_COUNTER_KEY];
+    delete chatMetadata[NUDGE_SLOT_KEY];
+    delete chatMetadata[NUDGE_ROTATION_INDEX_KEY];
     await importData(data);
     _pendingCorrections = [];
     _pendingReinforcement = null;
@@ -2188,6 +2209,7 @@ async function handleImportData(data) {
     _foreshadowedCollisions = new Map();
     _arrivalLastFiredTurn = -1;
     _archiveCorrectionAttempts = new Map();
+    _archiveInjectedVersion = null;
     await initialize(true);
 }
 
