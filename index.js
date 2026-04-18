@@ -68,6 +68,10 @@ let _foreshadowedCollisions = new Map();
 
 // Phase 2: Timeskip multipliers (§3.2)
 const TICK = { HOURS: 1, DAYS: 3, WEEKS: 10, MONTHS: 20 };
+// Phase 2: Pool caps (§4.1, §4.2, §2.2.1)
+const MAX_PRESSURE_POINTS = 5;
+const MAX_COLLISIONS = 5;
+const MAX_COLLISION_ARCHIVE = 20;
 let _advanceLocked = false;
 // Tracks the last turn on which buildAndInjectArrivals fired — prevents injectPrompt from
 // clearing the _arrival slot on the same turn an IMMEDIATE collision arrived.
@@ -395,261 +399,7 @@ function buildCollisionNarrativeWarnings(id, col, status) {
     return warnings;
 }
 
-function getPressurePoints(state) {
-    const raw = state?.world?.pressure_points;
-    if (Array.isArray(raw)) return raw.map(p => normalizeText(p)).filter(Boolean);
-    if (raw) return [normalizeText(raw)].filter(Boolean);
-    return [];
-}
-
-function getPressurePointAgeTx(state, point) {
-    const history = getArrayItemHistory(state, 'world', '_', 'pressure_points', point);
-    const lastAdd = [...history].reverse().find(entry => entry.to !== undefined);
-    return lastAdd ? Math.max(0, (state?.lastTxId || 0) - (lastAdd.tx || 0)) : null;
-}
-
-function classifyPressurePointAge(ageTx) {
-    if (ageTx == null) return 'unknown';
-    if (ageTx >= 18) return 'stale';
-    if (ageTx >= 8) return 'aging';
-    return 'fresh';
-}
-
-function buildPressurePointAudit(state) {
-    const pressurePoints = getPressurePoints(state);
-    if (pressurePoints.length === 0) return null;
-
-    const liveCollisions = Object.entries(state?.collisions || {})
-        .filter(([, col]) => normalizeText(col?.status).toUpperCase() !== 'RESOLVED')
-        .map(([id, col]) => ({
-            id,
-            name: col?.name || id,
-            text: normalizeText([
-                col?.name,
-                col?.details,
-                getCollisionForcesText(col),
-                col?.cost,
-            ].filter(Boolean).join(' | ')),
-        }));
-
-    const warnings = [];
-    const embodied = [];
-    const duplicates = [];
-    const candidates = [];
-    const seen = [];
-    const annotated = [];
-
-    for (const point of pressurePoints) {
-        const duplicateOf = seen.find(prev => stringSimilarity(prev, point) > 0.82);
-        if (duplicateOf) {
-            duplicates.push({ point, duplicateOf });
-            continue;
-        }
-        seen.push(point);
-
-        const matchedCollision = liveCollisions.find(col => {
-            const pointText = point.toLowerCase();
-            const collisionText = col.text.toLowerCase();
-            const collisionName = normalizeText(col.name).toLowerCase();
-            return stringSimilarity(point, col.text) > 0.5
-                || (collisionName && pointText.includes(collisionName))
-                || (collisionName && collisionText.includes(pointText))
-                || (pointText.length > 12 && collisionText.includes(pointText));
-        });
-
-        const ageTx = getPressurePointAgeTx(state, point);
-        const ageClass = classifyPressurePointAge(ageTx);
-        if (matchedCollision) {
-            embodied.push({ point, collision: matchedCollision.name, ageTx, ageClass });
-        } else {
-            candidates.push({ point, ageTx, ageClass });
-        }
-        annotated.push({ point, ageTx, ageClass, matchedCollision: matchedCollision?.name || '' });
-    }
-
-    if (pressurePoints.length > 5) {
-        warnings.push(`PRESSURE_POINTS: ${pressurePoints.length} live seams — trim stale ones and convert the hottest seam into a collision if it now has actors, cost, and a forced choice.`);
-    }
-    for (const dup of duplicates.slice(0, 3)) {
-        warnings.push(`Pressure point "${dup.point}" duplicates "${dup.duplicateOf}" — REMOVE one duplicate. Pressure points are seeds, not a backlog.`);
-    }
-    for (const item of embodied.slice(0, 3)) {
-        warnings.push(`Pressure point "${item.point}" appears to already be embodied by live collision "${item.collision}" — REMOVE the pressure point if that seam has already graduated into the collision.`);
-    }
-    for (const item of candidates.filter(item => item.ageClass === 'stale').slice(0, 3)) {
-        warnings.push(`Pressure point "${item.point}" has been live for ${item.ageTx} tx without graduating — REMOVE it as stale or ESCALATE it into a collision now.`);
-    }
-    if (liveCollisions.length === 0 && candidates.length > 0) {
-        warnings.push(`No live collision currently carries these seams — escalate the hottest pressure point into a collision unless it is stale.`);
-    } else if (candidates.length > liveCollisions.length + 1) {
-        warnings.push(`There are ${candidates.length} pressure points not clearly carried by live collisions — prune stale seams or graduate one into a collision this turn.`);
-    }
-
-    const candidateLines = annotated.slice(0, 5).map(item => {
-        const ageText = item.ageTx == null ? 'age unknown' : `${item.ageTx} tx old`;
-        const statusText = item.matchedCollision
-            ? `already embodied by collision "${item.matchedCollision}"`
-            : item.ageClass === 'stale'
-                ? 'stale if not escalated now'
-                : item.ageClass === 'aging'
-                    ? 'aging seam'
-                    : 'fresh seam';
-        return `  • ${item.point} — ${ageText}; ${statusText}`;
-    });
-    const prompt = `[PRESSURE POINT CHECK:
-${candidateLines.length ? candidateLines.join('\n') : '  • Review current seams and remove any that already fired.'}
-Pressure points are SEEDS, not history.
-For each pressure point, decide one:
-  KEEP — only if it is still a live seam but not yet specific enough to become a collision.
-  REMOVE — if it fired, resolved, became irrelevant, or is already embodied by a live collision.
-  ESCALATE — if it now has actors, a concrete cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point in the same turn.
-If no live collision currently carries the world's pressure, at least one surviving pressure point should either escalate into a collision or be pruned as stale.]`;
-
-    return { warnings, prompt };
-}
-
-/**
- * Pressure ignition engine — selects a pressure point to ignite as a flash collision.
- *
- * Selection logic (from v15 spec F2.2):
- *   stale  (18+ tx): MANDATORY flash at dist 0
- *   aging  (8-17 tx): RECOMMENDED flash at dist 0-1 if score > 0
- *   fresh  (<8 tx):  OPTIONAL — only if score >= 3
- *
- * Returns null if no pressure point qualifies this turn.
- *
- * @param {Object} state - Current computed state
- * @param {Object} draw - Current divination draw (from drawDivination())
- * @returns {{ point: string, dist: number, mandate: 'mandatory'|'recommended'|'optional', score: number } | null}
- */
-function buildFlashIgnition(state, draw) {
-    const pressurePoints = getPressurePoints(state);
-    if (pressurePoints.length === 0) return null;
-
-    // Annotate each point with age and score
-    const annotated = pressurePoints.map(point => {
-        const ageTx = getPressurePointAgeTx(state, point);
-        const ageClass = classifyPressurePointAge(ageTx);
-        const score = scorePressurePointAgainstDraw(point, draw);
-        return { point, ageTx, ageClass, score };
-    });
-
-    // Sort: stale first, then by score descending within each age class
-    annotated.sort((a, b) => {
-        const ageOrder = { stale: 0, aging: 1, fresh: 2, unknown: 3 };
-        const aOrder = ageOrder[a.ageClass] ?? 3;
-        const bOrder = ageOrder[b.ageClass] ?? 3;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        return b.score - a.score;
-    });
-
-    for (const item of annotated) {
-        if (item.ageClass === 'stale') {
-            // Mandatory flash — this seam has waited too long
-            return { point: item.point, dist: 0, mandate: 'mandatory', score: item.score };
-        }
-        if (item.ageClass === 'aging' && item.score > 0) {
-            // Recommended flash — aging seam resonates with the draw
-            const dist = item.score >= 2 ? 0 : 1;
-            return { point: item.point, dist, mandate: 'recommended', score: item.score };
-        }
-        if (item.ageClass === 'fresh' && item.score >= 3) {
-            // Optional flash — fresh but strongly resonates with draw themes
-            return { point: item.point, dist: 2, mandate: 'optional', score: item.score };
-        }
-    }
-
-    return null;
-}
-
-function pickAdvanceFocus() {
-    const totalWeight = ADVANCE_FOCUS_TABLE.reduce((sum, f) => sum + f.weight, 0);
-    let roll = Math.random() * totalWeight;
-    for (const focus of ADVANCE_FOCUS_TABLE) {
-        roll -= focus.weight;
-        if (roll <= 0) return focus;
-    }
-    return ADVANCE_FOCUS_TABLE[0]; // fallback
-}
-
-// ─── Divination System ─────────────────────────────────────────────────────
-
-const NARRATIVE_FORCING = 'NARRATIVE FORCING: The draw must visibly alter the scene — not just color the mood. Something HAPPENS because of this draw. A person appears, a plan fails, a door opens, a body drops, a truth surfaces. The draw is not a metaphor — it is an event. Find the coolest, most unexpected intersection with the current scene and MAKE IT HAPPEN in the prose.\nDO NOT call any dice tool or function. DO NOT use the D&D Dice tool. The number above was generated by the extension — it IS the result. Just use it.';
-
-const CLASSIC_TABLE = `| Roll | Conditions |
-| 2 | Worst conditions. Maximum preparation on opposing side. A second complication compounds the first. The board shifts. |
-| 3-5 | Heavy. The force arrives prepared and hostile. No easy angles. |
-| 6-9 | Hard. Direct, no advantages for anyone. Exactly as serious as it looks. |
-| 10-14 | Contested. Mixed signals, incomplete information. Neither side has clean advantage. |
-| 15-18 | Exploitable. A vulnerability, a gap, a piece of timing that gives an opening. |
-| 19 | Favorable. The force arrives weakened, distracted, or compromised. |
-| 20 | The board changes shape. A second collision crashes into the first. Nobody predicted this. |
-2 and 20 are special. Both reshape the board. Dice never override logic.`;
-
-
-const ARCANA_ROMAN = ['0', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX', 'XXI'];
-
-// ─── Divination Theme Table (for pressure ignition scoring) ──────────────────
-// Each entry maps an Arcana card to themes. Used to score pressure points
-// against the current draw — higher score = better ignition candidate.
-const DIVINATION_THEME_TABLE = [
-    // 0  The Fool
-    ['beginning', 'unknown', 'risk', 'leap', 'accident', 'naive'],
-    // 1  The Magician
-    ['skill', 'opportunity', 'resources', 'manipulation', 'capability', 'plan'],
-    // 2  The High Priestess
-    ['secret', 'hidden', 'knowledge', 'intuition', 'mystery', 'silence'],
-    // 3  The Empress
-    ['protection', 'abundance', 'ally', 'shelter', 'comfort', 'care'],
-    // 4  The Emperor
-    ['authority', 'control', 'hierarchy', 'order', 'power', 'institution'],
-    // 5  The Hierophant
-    ['tradition', 'rule', 'belief', 'obligation', 'loyalty', 'duty'],
-    // 6  The Lovers
-    ['choice', 'relationship', 'bond', 'desire', 'tension', 'connection'],
-    // 7  The Chariot
-    ['will', 'conflict', 'victory', 'struggle', 'drive', 'force'],
-    // 8  Strength
-    ['patience', 'restraint', 'quiet', 'endurance', 'suppression', 'calm'],
-    // 9  The Hermit
-    ['isolation', 'truth', 'solitude', 'search', 'distance', 'alone'],
-    // 10 Wheel of Fortune
-    ['fate', 'change', 'chance', 'reversal', 'timing', 'luck'],
-    // 11 Justice
-    ['consequence', 'balance', 'debt', 'fair', 'exact', 'truth'],
-    // 12 The Hanged Man
-    ['sacrifice', 'wait', 'suspend', 'perspective', 'cost', 'pause'],
-    // 13 Death
-    ['end', 'transform', 'loss', 'change', 'death', 'transition'],
-    // 14 Temperance
-    ['balance', 'compromise', 'blend', 'patience', 'synthesis', 'middle'],
-    // 15 The Devil
-    ['trap', 'obsession', 'chain', 'comfort', 'addiction', 'bind'],
-    // 16 The Tower
-    ['collapse', 'revelation', 'shock', 'violence', 'destruction', 'upheaval'],
-    // 17 The Star
-    ['hope', 'recover', 'trust', 'guide', 'calm', 'future'],
-    // 18 The Moon
-    ['fear', 'illusion', 'deception', 'hidden', 'instinct', 'shadow'],
-    // 19 The Sun
-    ['success', 'clarity', 'win', 'joy', 'visible', 'open'],
-    // 20 Judgement
-    ['reckoning', 'past', 'account', 'call', 'answer', 'wake'],
-    // 21 The World
-    ['complete', 'cycle', 'closure', 'whole', 'end', 'arrival'],
-];
-
-/**
- * Score a pressure point string against a divination draw.
- * Returns 0-6: number of theme keywords that appear in the pressure point text.
- * @param {string} point - The pressure point text
- * @param {{ index: number }} draw - The divination draw (must have .index for arcana)
- * @returns {number}
- */
-function scorePressurePointAgainstDraw(point, draw) {
-    if (!draw || draw.index == null || !DIVINATION_THEME_TABLE[draw.index]) return 0;
-    const themes = DIVINATION_THEME_TABLE[draw.index];
-    return themes.filter(theme => new RegExp(`\\b${theme}\\b`, 'i').test(point || '')).length;
+\\b`, 'i').test(point || '')).length;
 }
 
 /**
@@ -1287,18 +1037,6 @@ function injectPrompt(mode) {
             setExtensionPrompt(`${MODULE_NAME}_exemplars`, '', PROMPT_NONE, 0);
         }
 
-        // Pressure point audit — keep seams live, prune stale ones, and graduate them into collisions
-        if (_currentState) {
-            const pressureAudit = buildPressurePointAudit(_currentState);
-            if (pressureAudit) {
-                setExtensionPrompt(`${MODULE_NAME}_pressure`, pressureAudit.prompt, PROMPT_IN_CHAT, 0);
-            } else {
-                setExtensionPrompt(`${MODULE_NAME}_pressure`, '', PROMPT_NONE, 0);
-            }
-        } else {
-            setExtensionPrompt(`${MODULE_NAME}_pressure`, '', PROMPT_NONE, 0);
-        }
-
         // Faction heartbeat — every 10 turns on regular turns only (advance/integration handle factions directly)
         if (isRegular && !challengeSessionLocked && _turnCounter > 0 && _turnCounter % 10 === 0 && _currentState) {
             const factions = Object.values(_currentState.factions || {});
@@ -1348,10 +1086,6 @@ function injectPrompt(mode) {
         // ── Collision Audit (warnings + closure checks) ───────────────────────
         if (_currentState) {
             const collisionWarnings = [];
-            const pressureAudit = buildPressurePointAudit(_currentState);
-            if (pressureAudit?.warnings?.length) {
-                collisionWarnings.push(...pressureAudit.warnings.map(w => `[PRESSURE POINT AUDIT] ${w}`));
-            }
 
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
                 const status = (col.status || '').trim().toUpperCase();
@@ -1470,7 +1204,6 @@ Gravity tracks what prose can't: asymmetries, pressures, distances, reads-over-t
 // ─── Array Size Checks ────────────────────────────────────────────────────────
 
 const ARRAY_SIZE_LIMITS = {
-    pressure_points: { path: s => s.world?.pressure_points, label: 'PRESSURE_POINTS', cap: 15 },
     demonstrated_traits: { path: s => s.pc?.demonstrated_traits, label: 'PC TRAITS', cap: 20 },
 };
 
@@ -1845,6 +1578,30 @@ async function onMessageReceived(messageId) {
         }
     }
 
+    // ── Pressure FIFO cap (§4.1) — auto-drop oldest when pool exceeds 5 ────────
+    if (_currentState) {
+        const pressureCRs = committedTxns.filter(tx => tx.op === 'CR' && tx.e === 'pressure');
+        if (pressureCRs.length > 0) {
+            const pressureIds = Object.keys(_currentState.pressures || {});
+            if (pressureIds.length > MAX_PRESSURE_POINTS) {
+                const sorted = pressureIds
+                    .map(id => ({ id, created_at_tx: _currentState.pressures[id].created_at_tx ?? 0 }))
+                    .sort((a, b) => a.created_at_tx - b.created_at_tx);
+                const toDrop = sorted.slice(0, sorted.length - MAX_PRESSURE_POINTS);
+                const dropTxns = toDrop.map(p => ({
+                    op: 'D', e: 'pressure', id: p.id,
+                    r: 'system:pressure:fifo-overflow',
+                }));
+                if (dropTxns.length > 0) {
+                    try {
+                        const dropped = await append(dropTxns);
+                        _currentState = computeState(_currentState, dropped);
+                    } catch (_) { /* non-critical */ }
+                }
+            }
+        }
+    }
+
     injectPrompt();
     updatePanel(_currentState, _turnCounter, committedTxns.map(tx => tx.tx));
 }
@@ -1960,17 +1717,16 @@ async function handleSetupButton() {
  *
  * Beat structure (F1.1):
  *   Beat 1 — PLAYER RESOLUTION (mandatory): acknowledge player action + time + result
- *   Beats 2-N — WORLD MOVEMENT: arrived collisions, flash ignitions, general focus
+ *   Beats 2-N — WORLD MOVEMENT: arrived collisions, general focus
  *   Final beat — RETURN HOOK (mandatory): consequence arrives at player
  *
  * @param {Object} state - Current computed state
  * @param {Object} draw - Primary divination draw
  * @param {Array<{id: string, col: Object}>} ripeCollisions - Collisions at dist 0, not yet in resolution tracker
  * @param {Array<{id: string, col: Object}>} inProgressCollisions - RESOLVING or already-tracked at dist 0
- * @param {{ point: string, dist: number, mandate: string, score: number } | null} ignition - Flash ignition result
  * @returns {string} The instruction block for the advance injection
  */
-function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ignition, compressed = []) {
+function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, compressed = []) {
     const pcName = state?.pc?.name || '{{user}}';
     const lines = [];
 
@@ -2018,25 +1774,8 @@ function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ig
         beatNum++;
     }
 
-    // Flash ignition — a pressure point fires as a new collision
-    if (ignition) {
-        const mandateLabel = ignition.mandate === 'mandatory'
-            ? 'MANDATORY — this seam has been live too long, it fires now'
-            : ignition.mandate === 'recommended'
-                ? `RECOMMENDED — draw resonates with this seam (score ${ignition.score})`
-                : `OPTIONAL — fresh seam, strongly resonant with draw (score ${ignition.score})`;
-        lines.push(`BEAT ${beatNum} — FLASH IGNITION (${mandateLabel}):`);
-        lines.push(`  Seam: "${ignition.point}"`);
-        lines.push(`  This pressure point graduates into a flash collision now.`);
-        lines.push(`  Flash collisions start ACTIVE (not SEEDED). Starting distance: ${ignition.dist}.`);
-        lines.push(`  CREATE collision:<id> name="<name>" tier=flash status=ACTIVE distance=${ignition.dist} forces="<poles>" details="<capsule>" cost="<cost>" target_constraint=<id-or-none>`);
-        lines.push(`  REMOVE the pressure point from world.pressure_points this same turn.`);
-        lines.push('');
-        beatNum++;
-    }
-
-    // If no collisions and no ignition, use a general focus beat
-    if (ripeCollisions.length === 0 && inProgressCollisions.length === 0 && !ignition) {
+    // If no collisions, use a general focus beat
+    if (ripeCollisions.length === 0 && inProgressCollisions.length === 0) {
         const focus = pickAdvanceFocus();
         const FOCUS_PROMPTS = {
             scene: `  FOCUS: THE SCENE — something local moves. An NPC acts, the environment shifts, someone arrives or leaves, a noticed detail fires.`,
@@ -2173,8 +1912,7 @@ async function handleAdvanceButton() {
     }
 
     const draw = drawDivination();
-    const ignition = buildFlashIgnition(_currentState, draw);
-    const beatBlock = buildAdvanceBeats(_currentState, draw, ripeCollisions, inProgressCollisions, ignition, compressed);
+    const beatBlock = buildAdvanceBeats(_currentState, draw, ripeCollisions, inProgressCollisions, compressed);
 
     const markers = [MODE_LOREBOOK_KEYS.advanceCore, MODE_LOREBOOK_KEYS.advanceOptional, MODE_LOREBOOK_KEYS.proseAdvance];
     _pendingOOCInjection = buildModeInjection('GRAVITY ADVANCE', beatBlock, markers);

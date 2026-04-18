@@ -13,7 +13,7 @@
 // ─── Valid Values ──────────────────────────────────────────────────────────────
 
 const VALID_OPS = ['CR', 'TR', 'S', 'A', 'R', 'MS', 'MR', 'D', 'SNAP', 'ROLL', 'AMEND'];
-const VALID_ENTITIES = ['char', 'constraint', 'collision', 'combat', 'faction', 'place', 'world', 'pc', 'divination', 'summary'];
+const VALID_ENTITIES = ['char', 'constraint', 'collision', 'combat', 'faction', 'place', 'pressure', 'world', 'pc', 'divination', 'summary'];
 
 // Required fields per operation type
 const OP_REQUIRED_FIELDS = {

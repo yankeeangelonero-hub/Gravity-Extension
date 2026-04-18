@@ -309,6 +309,7 @@ function renderAllSections() {
         { id: 'collisions', icon: 'fa-burst', title: 'Collisions', html: renderCollisions(_lastState) },
         { id: 'combat', icon: 'fa-crosshairs', title: 'Combat', html: renderCombat(_lastState) },
         { id: 'places', icon: 'fa-map-location-dot', title: 'Places', html: renderPlaces(_lastState) },
+        { id: 'pressures', icon: 'fa-fire-flame-simple', title: 'Pressures', html: renderPressures(_lastState) },
         { id: 'divination', icon: 'fa-star', title: 'Divination', html: renderDivination(_lastState) },
         { id: 'exemplars', icon: 'fa-thumbs-up', title: 'Style Exemplars', html: renderExemplars() },
     ];
@@ -479,7 +480,7 @@ function updatePanel(state, turn, committedTxIds) {
 
 function computeChangedKeys(prev, curr, prefix) {
     if (!prev || !curr) return;
-    for (const collection of ['characters', 'constraints', 'collisions', 'combats', 'factions', 'places']) {
+    for (const collection of ['characters', 'constraints', 'collisions', 'combats', 'factions', 'places', 'pressures']) {
         const pc = prev[collection] || {};
         const cc = curr[collection] || {};
         for (const id of new Set([...Object.keys(pc), ...Object.keys(cc)])) {
@@ -964,33 +965,6 @@ function renderWorld(state) {
         }
     }
 
-    // Pressure points
-    const pp = toArr(state.world.pressure_points);
-    if (pp.length) {
-        parts.push(`<div class="gl-d-section"><b>Pressure Points:</b></div>`);
-        for (const p of pp) {
-            const hist = getArrayItemHistory(state, 'world', '_', 'pressure_points', p);
-            const lastAdd = [...hist].reverse().find(entry => entry.to !== undefined);
-            const ageTx = lastAdd ? Math.max(0, (state.lastTxId || 0) - (lastAdd.tx || 0)) : null;
-            const ageLabel = ageTx == null ? '' : ageTx >= 18 ? `stale (${ageTx} tx)` : ageTx >= 8 ? `aging (${ageTx} tx)` : `fresh (${ageTx} tx)`;
-            const match = liveCollisions.find(col => {
-                const hay = `${col.name || ''} ${col.details || ''} ${col.forces || ''} ${col.cost || ''}`.toLowerCase();
-                const needle = String(p).toLowerCase();
-                return needle.length > 8 && hay.includes(needle);
-            });
-
-            parts.push(`<div class="gl-collision-card">`);
-            parts.push(`<div class="gl-collision-name">${esc(p)}${ageLabel ? ` <span class="gl-history-time">${esc(ageLabel)}</span>` : ''}</div>`);
-            if (match) parts.push(`<div class="gl-d-detail"><b>Likely embodied by:</b> ${esc(match.name || match.id)}</div>`);
-            if (lastAdd?.r) parts.push(`<div class="gl-d-detail"><b>Last reason:</b> ${esc(lastAdd.r)}</div>`);
-            if (hist.length > 1) {
-                parts.push(`<div class="gl-history-toggle">History (${hist.length})</div>`);
-                parts.push(`<div class="gl-history-list" style="display:none">${hist.map(arrayHistoryLine).join('<br>')}</div>`);
-            }
-            parts.push(`</div>`);
-        }
-    }
-
     return parts.length ? parts.join('') : '<div class="gl-empty">No world data</div>';
 }
 
@@ -1165,6 +1139,26 @@ function renderPlaces(state) {
         parts.push(`<div class="gl-collision-name">${esc(p.name || p.id)} ${badge(p.state || 'unknown')}</div>`);
         parts.push(`<div class="gl-d-detail"><b>Reach:</b> ${esc(p.reach || 'LOCAL')} <b>id:</b> ${esc(p.id)}</div>`);
         if (p.description) parts.push(`<div class="gl-d-detail">${esc(p.description)}</div>`);
+        parts.push(`</div>`);
+    }
+    return parts.join('');
+}
+
+// ─── Tab: Pressures ─────────────────────────────────────────────────────────────
+
+function renderPressures(state) {
+    const pressures = Object.values(state.pressures || {});
+    if (!pressures.length) return '<div class="gl-empty">No pressure points</div>';
+
+    const parts = [];
+    for (const p of pressures) {
+        const related = Array.isArray(p.related_to) && p.related_to.length
+            ? p.related_to.join(', ')
+            : '';
+        parts.push(`<div class="gl-collision-card">`);
+        parts.push(`<div class="gl-collision-name">${esc(p.name || p.id)}</div>`);
+        parts.push(`<div class="gl-d-detail"><b>Source:</b> ${esc(p.source || '?')} <b>tx:</b> ${p.created_at_tx ?? '?'} <b>id:</b> ${esc(p.id)}</div>`);
+        if (related) parts.push(`<div class="gl-d-detail"><b>Related:</b> ${esc(related)}</div>`);
         parts.push(`</div>`);
     }
     return parts.join('');

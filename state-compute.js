@@ -56,9 +56,10 @@ function createEmptyState() {
         combats: {},
         factions: {},
         places: {},
+        pressures: {},
         world: {
             world_state: '',
-            pressure_points: [],
+            collision_archive: [],
             constants: {},
         },
         pc: {
@@ -174,6 +175,7 @@ function getCollectionName(entityType) {
         combat: 'combats',
         faction: 'factions',
         place: 'places',
+        pressure: 'pressures',
         world: 'world',
         pc: 'pc',
         divination: 'divination',
@@ -250,6 +252,12 @@ function applyTransaction(state, tx) {
         return state;
     }
 
+    // Silently drop old world.pressure_points array ops (replaced by pressure:<id> entities)
+    if (tx.e === 'world' && (tx.op === 'A' || tx.op === 'R') && tx.d?.f === 'pressure_points') {
+        state.lastTxId = tx.tx;
+        return state;
+    }
+
     switch (tx.op) {
         case 'CR': {
             if (isSingleton) {
@@ -270,6 +278,10 @@ function applyTransaction(state, tx) {
                 if (tx.e === 'place') {
                     if (!data.reach) data.reach = 'LOCAL';
                     if (!data.state) data.state = 'unknown';
+                }
+                // Pressure entity: engine stamps created_at_tx from tx.tx (LLM-supplied value overwritten)
+                if (tx.e === 'pressure') {
+                    data.created_at_tx = tx.tx;
                 }
                 // Phase 2: distance_category → canonical starting distance
                 if (tx.e === 'collision') {
@@ -336,6 +348,13 @@ function applyTransaction(state, tx) {
                 if (!isDuplicate) {
                     target[tx.d.f].push(tx.d.v);
                     recordHistory(state, tx.e, tx.id, `${tx.d.f}[]`, undefined, tx.d.v, tx);
+                    // Auto-trim collision_archive to MAX_COLLISION_ARCHIVE (20) entries
+                    if (tx.e === 'world' && tx.d.f === 'collision_archive') {
+                        const arr = state.world.collision_archive;
+                        if (Array.isArray(arr) && arr.length > 20) {
+                            state.world.collision_archive = arr.slice(-20);
+                        }
+                    }
                 }
             }
             break;
@@ -501,7 +520,7 @@ function computeState(snapshot, transactions) {
 
 function diffStates(before, after) {
     const changes = [];
-    for (const col of ['characters', 'constraints', 'collisions', 'factions', 'places']) {
+    for (const col of ['characters', 'constraints', 'collisions', 'factions', 'places', 'pressures']) {
         const bc = before[col] || {};
         const ac = after[col] || {};
         for (const id of Object.keys(ac)) {

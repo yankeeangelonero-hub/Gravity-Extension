@@ -50,15 +50,6 @@ function getCollisionNarrativeLines(col, options = {}) {
     return lines;
 }
 
-function getPressurePointMeta(state, point) {
-    const history = getArrayItemHistory(state, 'world', '_', 'pressure_points', point);
-    const lastAdd = [...history].reverse().find(entry => entry.to !== undefined);
-    if (!lastAdd) return '';
-    const ageTx = Math.max(0, (state?.lastTxId || 0) - (lastAdd.tx || 0));
-    if (ageTx >= 18) return `stale (${ageTx} tx)`;
-    if (ageTx >= 8) return `aging (${ageTx} tx)`;
-    return `fresh (${ageTx} tx)`;
-}
 
 function toList(value) {
     if (!value) return [];
@@ -257,7 +248,7 @@ function formatStateView(state, mode = 'full') {
     // Singletons — PC fields are mode-aware
     lines.push('');
     lines.push('Singletons (no id needed):');
-    lines.push('  world — constants, pressure_points, world_state');
+    lines.push('  world — constants, world_state, collision_archive');
     if (state.pc.name) {
         let pcSingleton = `  pc — "${state.pc.name}"`;
         // Only show location when current_scene is not set (scene subsumes location)
@@ -444,22 +435,16 @@ function formatStateView(state, mode = 'full') {
         }
     }
 
-    // Pressure points — lite: only fresh (< 8 tx age); others: all
-    const pressurePoints = Array.isArray(state.world.pressure_points) ? state.world.pressure_points : (state.world.pressure_points ? [String(state.world.pressure_points)] : []);
-    if (pressurePoints.length) {
-        const displayPoints = isLite
-            ? pressurePoints.filter(pp => {
-                const meta = getPressurePointMeta(state, pp);
-                return !meta.startsWith('stale');
-            })
-            : pressurePoints;
-        if (displayPoints.length) {
-            lines.push('');
-            lines.push('PRESSURE POINTS');
-            for (const pp of displayPoints) {
-                const meta = getPressurePointMeta(state, pp);
-                lines.push(`  - ${pp}${meta ? ` [${meta}]` : ''}`);
-            }
+    // Pressure points — compact bullet list from pressure:<id> entities (§2.5)
+    const pressureEntities = Object.values(state.pressures || {});
+    if (pressureEntities.length) {
+        lines.push('');
+        lines.push('Pressure Points:');
+        for (const p of pressureEntities) {
+            const related = Array.isArray(p.related_to) && p.related_to.length
+                ? ` → ${p.related_to.join(', ')}`
+                : '';
+            lines.push(`  • ${p.name || p.id} [${p.source || '?'}]${related}`);
         }
     }
 
@@ -555,7 +540,7 @@ faction:zaft.intel_on.archangel.misreading.pilot-identity: "Assumes pilot still 
 collision:trust-vs-duty.distance_category: SHORT
 constraint:c1.integrity: STRESSED
 char:elena.reads.pc: "Cautious ally"
-world.pressure_points+: "A new seam in the world"
+world.collision_archive+: "[collision] ... [resolution] ... [hook] ... [aftermath] ..."
 ---END STATE---
 
 PATH RULES:
@@ -612,8 +597,10 @@ COMMON PATHS:
   combat:id.aftermath
   constraint:id.integrity
   world.world_state
-  world.pressure_points+
-  world.pressure_points-
+  pressure:id.name
+  pressure:id.source
+  pressure:id.related_to
+  world.collision_archive+
   divination.last_draw
 
 STATE MACHINES:
@@ -626,6 +613,8 @@ For these fields, write the NEW state only. The extension will compile the trans
 RARE OPS INSIDE STATE BLOCK:
   create char:dak name="Dak" tier=KNOWN location="The Stray Dog"
   create place:warehouse-district name="Warehouse District" state=contested reach=DISTRICT description="Industrial sprawl south of the river."
+  create pressure:border-tension name="Border tension" source="faction:vela" related_to=[char:pc,faction:vela]
+  destroy pressure:border-tension
   destroy char:minor-npc
 If a turn gets structurally complicated, switch to a full ---LEDGER--- block instead.
 
@@ -640,8 +629,9 @@ DISCIPLINE:
   No provenance, no knowledge: distant factions and characters do not know live scene truth unless it plausibly reached them.
   Combat is a thin container. Scene prose carries terrain and tactical narrative; the spawning collision carries cost and forces. Combat tracks only: who's fighting whom (primary_enemy), and what ended where (outcome + aftermath on RESOLVED).
   Every live collision needs a story capsule: what is converging, who or what is caught in it, what it costs, and the forced choice looming.
-  Pressure points are seeds, not history. If a seam fired, resolved, or became a collision, REMOVE it.
-  If a pressure point gains actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point the same turn.
+  Pressure points (pressure:<id>) are seeds — small tensions not yet a collision. Cap is 5; oldest auto-drops on overflow. Destroy when consumed: D pressure:<id>.
+  If 3+ related pressure points accumulate, combine them into a collision (CR collision) and destroy the consumed pressures.
+  WEEKS or MONTHS timeskips automatically clear all pressure points — the engine handles this.
   key_moments are permanent; do not remove them.
   Cleanup is still capped on normal turns; save bulk pruning for eval or OOC: eval.
   On advance turns, emit: world.timeskip_scale: HOURS|DAYS|WEEKS|MONTHS (default HOURS). WEEKS and MONTHS clear all pressure points.
@@ -673,7 +663,7 @@ Empty turn (nothing changed):
 SYNTAX: > [timestamp] OPERATION entity_type:entity_id key=value key="multi word" -- reason
   - One line per transaction. Each line is independent.
   - Timestamps: [Day N — HH:MM]
-  - Entity types: char, constraint, collision, combat, faction, place, world, pc, divination
+  - Entity types: char, constraint, collision, combat, faction, place, pressure, world, pc, divination
   - Singletons (no :id needed): world, pc, divination
   - IDs: kebab-case, stable, never change once assigned
   - Reason after -- is required, keep it brief like margin notes
@@ -707,7 +697,7 @@ SET — overwrite a field
 
 APPEND — add to an array field
   > APPEND char:tifa field=key_moments value="[Day 1 — 22:00] Confronted Cloud about memories at the well." -- Pivotal scene
-  > APPEND world field=pressure_points value="Shinra patrols increasing in slums" -- Rising tension
+  > APPEND world field=collision_archive value="[collision] Ada betrayal [resolution] on-screen — PC caught her at the handoff [hook] the flash drive she dropped; eye contact [aftermath] trust cracked" -- Resolved collision
 
 REMOVE — remove from an array field
   > REMOVE char:tifa field=noticed_details value="Scratches on bracer" -- Detail resolved
@@ -827,13 +817,11 @@ FACTIONS — create and manage factions with political simulation
   relations (map: faction_id → stance string). Optional: doctrine, leadership, territory, alliances,
   comms_latency, last_verified_at, intel_posture,
   intel_on (nested map: subject → {knows, unknown, hiding, misreading} — four buckets per subject).
-  Pressure points generated from faction conflicts are collision fuel — during advance turns,
-  they compress existing collision distances or spawn new collisions.
-  A pressure point should stay SHORT: a seam, signal, or pending break.
-  Once it has named actors, a concrete cost, and a looming forced choice, it is ready to graduate:
-  > APPEND world field=pressure_points value="Demon scouts are testing the church perimeter at dusk." -- New seam
-  > CREATE collision:closing-perimeter name="The Closing Perimeter" status=ACTIVE distance=3 forces="demon advance, trapped survivors" details="Demon scouts have stopped probing and started shaping the block into a kill-box. Survivors are still inside, the exits are narrowing, and every delay gives the Prince a cleaner entrance." cost="Every minute they stay, the perimeter tightens. Moving means fighting through demons. Staying means the Prince arrives." target_constraint=c1-protector -- Pressure graduates into collision
-  > REMOVE world field=pressure_points value="Demon scouts are testing the church perimeter at dusk." -- The seam is now embodied by the collision
+  Pressure points (pressure:<id> entities) are collision fuel — small tensions not yet collisions.
+  Cap is 5; oldest auto-drops on overflow. Destroy when consumed into a collision.
+  > CREATE pressure:perimeter-tension name="Demon scouts testing church perimeter" source="faction:demon-vanguard" related_to=[char:pc,place:church] -- New seam
+  > CREATE collision:closing-perimeter name="The Closing Perimeter" distance_category=SHORT forces="demon advance, trapped survivors" involved_chars=[pc] location=church -- Seam graduates
+  > DESTROY pressure:perimeter-tension -- Consumed into collision
 
 DIVINATION — record current draw only (no history accumulation)
   > SET divination field=last_draw value="XIV — Temperance" -- Record draw (overwrites previous)
@@ -842,8 +830,7 @@ STATE MACHINES (MOVE between adjacent states only, no skipping):
   Character tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL
   Constraint integrity: STABLE → STRESSED → CRITICAL → BREACHED (terminal)
     Relief reverse:     CRITICAL → STRESSED → STABLE
-  Collision status:     SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED
-  Chapter status:       PLANNED → OPEN → CLOSING → CLOSED
+  Collision status:     ACTIVE → RESOLVED (or ACTIVE → CRASHED if ignored)
 
 COLLISIONS ARE STORY ENGINES, NOT LABELS:
   Every live collision should tell you, cold:
