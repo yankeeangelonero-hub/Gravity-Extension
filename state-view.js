@@ -448,6 +448,18 @@ function formatStateView(state, mode = 'full') {
         }
     }
 
+    // Collision archive — inject last 5 entries when active pool is thin (≤ 2) (§4.3)
+    const archiveEntries = Array.isArray(state.world?.collision_archive) ? state.world.collision_archive : [];
+    const activeCollisionCount = Object.values(state.collisions || {})
+        .filter(c => (c.status || '').toUpperCase() === 'ACTIVE').length;
+    if (archiveEntries.length && activeCollisionCount <= 2) {
+        lines.push('');
+        lines.push('Collision Archive (last resolved — pool is thin, seed new collisions from these hooks):');
+        for (const entry of archiveEntries.slice(-5)) {
+            lines.push(`  • ${entry}`);
+        }
+    }
+
     // PC dossier — traits & reads (intimacy and full modes)
     if (showIntimacy && state.pc.name) {
         lines.push('');
