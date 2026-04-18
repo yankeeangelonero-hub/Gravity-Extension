@@ -686,7 +686,7 @@ OPERATIONS:
 CREATE — new entity
   > CREATE char:tifa name="Tifa Lockhart" tier=KNOWN -- First encounter
   > CREATE constraint:c1-steady name="The Steady One" owner_id=tifa integrity=STABLE prevents="Showing vulnerability or exhaustion" threshold="Sustained pressure from someone trusted" replacement="Regression — stillness without purpose" replacement_type=regression shedding_order=2 -- Core constraint
-  > CREATE collision:trust-vs-duty name="Trust vs Duty" forces="trust,duty" status=SEEDED distance=10 details="Trust and duty are converging. Autumn's loyalty demands she tell Kenji the truth. Her mission demands she doesn't." cost="If it detonates: one of them walks away for good" target_constraint=c1-the-steady-one -- Central tension
+  > CREATE collision:trust-vs-duty name="Trust vs Duty" distance_category=MEDIUM forces="Trust and duty converging — loyalty demands truth, mission demands silence." involved_chars=[tifa,kenji] location=7th-heaven -- Central tension
   > CREATE combat:alley-fight status=ACTIVE exchange=1 primary_enemy="shinra-sweep" opened_from=ambush-trap -- Thin combat container; scene + collision carry the tactical narrative
   > CREATE place:warehouse-district name="Warehouse District" state=contested reach=DISTRICT description="Industrial sprawl south of the river. Quiet during daylight." -- New anchor
 
@@ -700,10 +700,9 @@ CREATE — new entity
 MOVE — state machine transition (no skipping levels)
   > MOVE char:tifa field=tier KNOWN->TRACKED -- Promoted after trust scene
   > MOVE constraint:c1-secret field=integrity STABLE->STRESSED -- Pressure from collision
-  > MOVE collision:trust-vs-duty field=status SIMMERING->ACTIVE -- Costs now concrete
+  > MOVE collision:trust-vs-duty field=status ACTIVE->RESOLVED -- Collision resolved on-screen
 
 SET — overwrite a field
-  > SET collision:trust-vs-duty field=distance value=6 -- Closer after confrontation
   > SET world field=world_state value="Martial law declared" -- Major world change
   > SET combat:alley-fight field=exchange value=2 -- New exchange begins
   > SET combat:alley-fight field=outcome value="Team broke left, neutralized sweep, runner made the doorway" -- On RESOLVED

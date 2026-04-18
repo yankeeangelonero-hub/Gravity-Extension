@@ -71,6 +71,10 @@ const RESOLUTION_PRESSURE_TURNS = 2;  // turns 1-2: oracle bleeds into atmospher
 const RESOLUTION_INTRUSION_TURNS = 4; // turns 3-4: oracle manifests, direct intrusion
 const RESOLUTION_CRASH_TURNS = 6;     // turn 5+: oracle decides, crash if unresolved
 
+// Phase 2: Timeskip multipliers (§3.2)
+const TICK = { HOURS: 1, DAYS: 3, WEEKS: 10, MONTHS: 20 };
+let _advanceLocked = false;
+
 const ARCANA_TABLE = [
     'The Fool — A leap into the unknown. Something begins that nobody planned.',
     'The Magician — Resources align. Skill meets opportunity.',
@@ -1964,42 +1968,80 @@ function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, ig
 }
 
 async function handleAdvanceButton() {
+    if (_advanceLocked) return;
+    _advanceLocked = true;
+
+    // Lock DOM button immediately; re-enable on next MESSAGE_RECEIVED
+    const advBtn = document.getElementById('gl-input-advance');
+    if (advBtn) {
+        advBtn.disabled = true;
+        const reenableAdvBtn = () => {
+            advBtn.disabled = false;
+            _advanceLocked = false;
+            eventSource.off(event_types.MESSAGE_RECEIVED, reenableAdvBtn);
+        };
+        eventSource.on(event_types.MESSAGE_RECEIVED, reenableAdvBtn);
+    }
+
+    try {
     _pendingDeductionType = 'advance';
 
-    // ── Engine-side distance compression ─────────────────────────────────────
-    // Decrease distance by 1 for all SIMMERING/ACTIVE collisions with distance > 0.
-    // This guarantees collisions advance even if the LLM forgets to decrease.
+    // ── Advance preconditions (§3.2) ──────────────────────────────────────────
+    if (_currentState) {
+        // Hard block: any ACTIVE collision at distance 0 must be resolved first
+        const unresolved = Object.values(_currentState.collisions || {}).find(col =>
+            (col.status || '').toUpperCase() === 'ACTIVE' &&
+            parseFloat(col.distance) <= 0
+        );
+        if (unresolved) {
+            toastr.error(`Unresolved arrival: "${unresolved.name || unresolved.id}" has arrived (distance 0). Resolve it before advancing.`);
+            if (advBtn) { advBtn.disabled = false; }
+            _advanceLocked = false;
+            return;
+        }
+
+        // Advisory: PC in active combat
+        const pcInCombat = Object.values(_currentState.combats || {}).some(c => (c.status || '').toUpperCase() === 'ACTIVE');
+        if (pcInCombat) {
+            toastr.warning('PC is not in a safe position to timeskip. Consider resolving the current situation before advancing.');
+        }
+    }
+
+    // ── Engine-side distance compression (timeskip-scale-aware, §3.2) ────────
     const compressed = [];
     if (_currentState) {
-        const txns = [];
+        const scale = (_currentState.world?.timeskip_scale || 'HOURS').toString().toUpperCase();
+        const tickDelta = TICK[scale] ?? 1;
+
+        const tickTxns = [];
         for (const [id, col] of Object.entries(_currentState.collisions || {})) {
             const dist = parseFloat(col.distance);
             const status = (col.status || '').trim().toUpperCase();
-            if ((status === 'SIMMERING' || status === 'ACTIVE') && !isNaN(dist) && dist > 0) {
-                const newDist = dist - 1;
-                txns.push({ op: 'S', e: 'collision', id, d: { f: 'distance', v: newDist }, r: 'system:advance:distance-compress' });
+            if (status !== 'ACTIVE') continue;
+            if (col.distance_category === 'IMMEDIATE') continue;
+            if (isNaN(dist) || dist <= 0) continue;
+            const newDist = Math.max(0, dist - tickDelta);
+            if (newDist !== dist) {
+                tickTxns.push({ op: 'S', e: 'collision', id, d: { f: 'distance', v: newDist }, r: 'system:advance:tick' });
                 compressed.push({ id, name: col.name || id, oldDist: dist, newDist });
             }
         }
-        if (txns.length > 0) {
-            await append(txns);
+
+        // WEEKS / MONTHS clears pressure points — stale small tensions lapse
+        if (scale === 'WEEKS' || scale === 'MONTHS') {
+            for (const id of Object.keys(_currentState.pressures || {})) {
+                tickTxns.push({ op: 'D', e: 'pressure', id, r: `system:advance:${scale.toLowerCase()}-clear-pressure` });
+            }
+        }
+
+        if (tickTxns.length > 0) {
+            await append(tickTxns);
             _currentState = computeCurrentState();
         }
 
-        // ── Collision auto-transition on distance 0 (C) ─────────────────────
-        // After compression: SIMMERING at dist 0 → ACTIVE
-        const transitionTxns = [];
-        for (const c of compressed) {
-            if (c.newDist <= 0) {
-                const col = _currentState?.collisions?.[c.id];
-                const colStatus = (col?.status || '').trim().toUpperCase();
-                if (colStatus === 'SIMMERING') {
-                    transitionTxns.push({ op: 'TR', e: 'collision', id: c.id, d: { f: 'status', from: 'SIMMERING', to: 'ACTIVE' }, r: 'system:advance:arrival-transition' });
-                }
-            }
-        }
-        if (transitionTxns.length > 0) {
-            await append(transitionTxns);
+        // Reset timeskip_scale after consuming — use '' to survive JSON round-trip
+        if (_currentState.world?.timeskip_scale) {
+            await append([{ op: 'S', e: 'world', id: '_', d: { f: 'timeskip_scale', v: '' }, r: 'system:advance:reset-timeskip' }]);
             _currentState = computeCurrentState();
         }
 
@@ -2040,6 +2082,12 @@ async function handleAdvanceButton() {
     injectPrompt('advance');
     const pcName = _currentState?.pc?.name || '{{user}}';
     insertChatMessage(`*${pcName} continues.*`);
+
+    } catch (err) {
+        console.error(`${LOG_PREFIX} handleAdvanceButton error:`, err);
+        if (advBtn) { advBtn.disabled = false; }
+        _advanceLocked = false;
+    }
 }
 
 async function handleCombatButton() {
