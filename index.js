@@ -77,6 +77,13 @@ let _advanceLocked = false;
 // clearing the _arrival slot on the same turn an IMMEDIATE collision arrived.
 let _arrivalLastFiredTurn = -1;
 let _archiveCorrectionAttempts = new Map(); // collision id → attempt count for archive-presence corrections
+let _pendingNudgeText = null; // rotating nudge maintenance text for next injectPrompt call (§4.4)
+
+// Phase 2: Rotating nudge system chatMetadata keys (§4.4)
+const NUDGE_COUNTER_KEY = 'gravity_nudge_counter';
+const NUDGE_SLOT_KEY = 'gravity_nudge_slot';
+const NUDGE_CHAR_ROTATION_KEY = 'gravity_nudge_char_rotation';
+const NUDGE_SLOT_NAMES = ['agenda_check', 'pressure_scan', 'consolidation_check', 'collision_health', 'relationship_pulse', 'collision_validity', 'destroyed_cleanup'];
 
 const ARCANA_TABLE = [
     'The Fool — A leap into the unknown. Something begins that nobody planned.',
@@ -925,6 +932,123 @@ function buildForeshadowingInjection(state) {
     return lines.length > 0 ? lines.join('\n\n') : null;
 }
 
+// ─── Rotating Nudge System (§4.4) ─────────────────────────────────────────────
+
+function getNudgeState() {
+    const meta = SillyTavern.getContext().chatMetadata;
+    return {
+        counter: meta[NUDGE_COUNTER_KEY] ?? -3,
+        slot: meta[NUDGE_SLOT_KEY] ?? 0,
+        charRotation: meta[NUDGE_CHAR_ROTATION_KEY] ?? 0,
+    };
+}
+
+function saveNudgeState(counter, slot, charRotation) {
+    const meta = SillyTavern.getContext().chatMetadata;
+    meta[NUDGE_COUNTER_KEY] = counter;
+    meta[NUDGE_SLOT_KEY] = slot;
+    meta[NUDGE_CHAR_ROTATION_KEY] = charRotation;
+    saveMetadataDebounced();
+}
+
+function buildNudge_agendaCheck(state, charId) {
+    const char = state.characters[charId];
+    if (!char) return null;
+    const name = char.name || charId;
+    return `[GRAVITY NUDGE — agenda_check]\nReview ${name}'s agenda. Has this scene or recent events shifted their direction?\nIf yes: S char:${charId} field=agenda value="..."\nIf unchanged, skip.`;
+}
+
+function buildNudge_pressureScan(state) {
+    return `[GRAVITY NUDGE — pressure_scan]\nIdentify any new pressure points seeded by this scene. Seed with: CR pressure:<id> — name, source, related_to.\nIf nothing new, skip.`;
+}
+
+function buildNudge_consolidationCheck(state) {
+    const pressureCount = Object.keys(state.pressures || {}).length;
+    if (pressureCount === 0) return null;
+    return `[GRAVITY NUDGE — consolidation_check]\nReview active pressure points (${pressureCount} current). Can any be combined into an existing collision or fed to seed a new one?\nIf yes: A collision:<id> field=forces value="..." or CR collision:<id> — then D pressure:<id>.\nIf not ready, skip.`;
+}
+
+function buildNudge_collisionHealth(state) {
+    if (!state) return null;
+    const pressureCount = Object.keys(state.pressures || {}).length;
+    const activeCollisions = Object.values(state.collisions || {})
+        .filter(c => (c.status || '').toUpperCase() === 'ACTIVE').length;
+    if (pressureCount > 0 || activeCollisions > 0) return null;
+    const archiveEntries = Array.isArray(state.world?.collision_archive) ? state.world.collision_archive : [];
+    const archiveHint = archiveEntries.length
+        ? `\nArchive hooks (recent):\n${archiveEntries.slice(-3).map(e => '  • ' + e).join('\n')}`
+        : '';
+    return `[GRAVITY NUDGE — collision_health]\nBoth pressure pool and collision pool are empty — nothing is driving the narrative forward. Seed immediately from:\n  • Character agendas and wants\n  • Faction tensions and ambitions\n  • Collision archive hooks${archiveHint}\nCreate at least one pressure point (CR pressure:<id>) or collision (CR collision:<id>).`;
+}
+
+function buildNudge_relationshipPulse(state, charId) {
+    const char = state.characters[charId];
+    if (!char) return null;
+    const name = char.name || charId;
+    const isPrincipal = char.tier === 'PRINCIPAL';
+    let prompt = `[GRAVITY NUDGE — relationship_pulse]\nHas this scene affected ${name}'s relationship with the PC?`;
+    if (isPrincipal) {
+        prompt += `\nIf significant: A char:${charId} field=key_moments value="[Day X — HH:MM] ..."`;
+    }
+    prompt += `\nIf no meaningful shift, skip.`;
+    return prompt;
+}
+
+function buildNudge_collisionValidity(state) {
+    const active = Object.entries(state.collisions || {})
+        .filter(([, c]) => (c.status || '').toUpperCase() === 'ACTIVE');
+    if (!active.length) return null;
+    const names = active.map(([id, c]) => `${c.name || id} (${id})`).join(', ');
+    return `[GRAVITY NUDGE — collision_validity]\nReview active collisions: ${names}.\nHas the narrative made any irrelevant, redundant, or impossible?\nIf yes, IMPLODE: TR collision:<id> field=status from=ACTIVE to=RESOLVED + S outcome_type=IMPLODED + S aftermath="..." + A world field=collision_archive value="...".\nIf all still valid, skip.`;
+}
+
+function buildNudge_destroyedCleanup(state) {
+    return `[GRAVITY NUDGE — destroyed_cleanup]\nScan for destroyed character IDs still referenced in collision.involved_chars, faction.members, or pressure.related_to.\nRemove stale refs with S (overwrite array) or MR operations.\nIf nothing stale, skip.`;
+}
+
+/**
+ * Decide whether to fire a nudge this turn. Updates chatMetadata counters.
+ * Returns nudge text (string) or null if not firing this turn.
+ * Only fires on regular/combat/intimate turns — advance uses buildNudge_collisionHealth directly.
+ */
+function maybeComputeNudge(state, mode) {
+    if (!state || mode === 'advance') return null;
+    const { counter, slot, charRotation } = getNudgeState();
+    const newCounter = counter + 1;
+    if (counter % 4 !== 0) {
+        saveNudgeState(newCounter, slot, charRotation);
+        return null;
+    }
+    // Fire the nudge for current slot
+    const slotName = NUDGE_SLOT_NAMES[slot];
+    let newCharRotation = charRotation;
+    let text = null;
+    if (slotName === 'agenda_check' || slotName === 'relationship_pulse') {
+        const eligible = Object.entries(state.characters || {})
+            .filter(([, c]) => c.tier === 'PRINCIPAL' || c.tier === 'TRACKED')
+            .map(([id]) => id);
+        if (eligible.length > 0) {
+            const charId = eligible[charRotation % eligible.length];
+            text = slotName === 'agenda_check'
+                ? buildNudge_agendaCheck(state, charId)
+                : buildNudge_relationshipPulse(state, charId);
+            newCharRotation = (charRotation + 1) % Math.max(1, eligible.length);
+        }
+    } else if (slotName === 'pressure_scan') {
+        text = buildNudge_pressureScan(state);
+    } else if (slotName === 'consolidation_check') {
+        text = buildNudge_consolidationCheck(state);
+    } else if (slotName === 'collision_health') {
+        text = buildNudge_collisionHealth(state);
+    } else if (slotName === 'collision_validity') {
+        text = buildNudge_collisionValidity(state);
+    } else if (slotName === 'destroyed_cleanup') {
+        text = buildNudge_destroyedCleanup(state);
+    }
+    saveNudgeState(newCounter, (slot + 1) % 7, newCharRotation);
+    return text;
+}
+
 /**
  * Inject prompts based on turn mode.
  * @param {'regular'|'advance'|'integration'} [mode='regular']
@@ -1184,6 +1308,14 @@ Gravity tracks what prose can't: asymmetries, pressures, distances, reads-over-t
         }
 
         setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
+
+        // ── Nudge maintenance slot (§4.4) — rotating per-turn ledger tasks ─────
+        if (_pendingNudgeText) {
+            setExtensionPrompt(`${MODULE_NAME}_nudge_maintenance`, _pendingNudgeText, PROMPT_IN_CHAT, 0);
+            _pendingNudgeText = null;
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_nudge_maintenance`, '', PROMPT_NONE, 0);
+        }
 
         // ── Foreshadowing — pre-arrival threshold cues (§3.4) ─────────────────
         if ((isRegular || isAdvance) && _currentState) {
@@ -1615,6 +1747,9 @@ async function onMessageReceived(messageId) {
         }
     }
 
+    // ── Rotating nudge (§4.4) — compute before inject so slot clears if not firing ──
+    _pendingNudgeText = maybeComputeNudge(_currentState, 'regular');
+
     injectPrompt();
     updatePanel(_currentState, _turnCounter, committedTxns.map(tx => tx.tx));
 }
@@ -1929,6 +2064,9 @@ async function handleAdvanceButton() {
 
     const markers = [MODE_LOREBOOK_KEYS.advanceCore, MODE_LOREBOOK_KEYS.advanceOptional, MODE_LOREBOOK_KEYS.proseAdvance];
     _pendingOOCInjection = buildModeInjection('GRAVITY ADVANCE', beatBlock, markers);
+
+    // ── Advance collision_health check (§4.4) — fires regardless of nudge counter ──
+    _pendingNudgeText = buildNudge_collisionHealth(_currentState);
 
     injectPrompt('advance');
     const pcName = _currentState?.pc?.name || '{{user}}';
