@@ -1860,96 +1860,6 @@ async function handleSetupButton() {
     injectPrompt('integration');
     insertChatMessage('OOC: Begin game setup.');
 }
-/**
- * Build the structured beat sequence for an advance turn.
- *
- * Beat structure (F1.1):
- *   Beat 1 — PLAYER RESOLUTION (mandatory): acknowledge player action + time + result
- *   Beats 2-N — WORLD MOVEMENT: arrived collisions, general focus
- *   Final beat — RETURN HOOK (mandatory): consequence arrives at player
- *
- * @param {Object} state - Current computed state
- * @param {Object} draw - Primary divination draw
- * @param {Array<{id: string, col: Object}>} ripeCollisions - Collisions at dist 0, not yet in resolution tracker
- * @param {Array<{id: string, col: Object}>} inProgressCollisions - RESOLVING or already-tracked at dist 0
- * @returns {string} The instruction block for the advance injection
- */
-function buildAdvanceBeats(state, draw, ripeCollisions, inProgressCollisions, compressed = []) {
-    const pcName = state?.pc?.name || '{{user}}';
-    const lines = [];
-
-    // ── Beat 1: PLAYER RESOLUTION (mandatory) ─────────────────────────────────
-    lines.push(`BEAT 1 — PLAYER: ${pcName} continues. Time passes.`);
-    lines.push(`  Write: acknowledge what the PC actually accomplished or failed to accomplish. Concrete result, 80-150w. The camera stays on the PC first.`);
-    lines.push('');
-
-    // ── Mechanical compression notice ─────────────────────────────────────────
-    if (compressed.length > 0) {
-        lines.push(`[ENGINE — DISTANCE COMPRESSED THIS TURN]`);
-        for (const c of compressed) {
-            lines.push(`  "${c.name}" distance: ${c.oldDist} → ${c.newDist}`);
-        }
-        lines.push(`  These distances were already decreased by the engine. Do NOT decrease them again in your ledger output this turn.`);
-        lines.push('');
-    }
-
-    // ── Beats 2-N: WORLD MOVEMENT ─────────────────────────────────────────────
-    let beatNum = 2;
-
-    // Arrived collisions take priority in world movement beats
-    if (ripeCollisions.length > 0) {
-        const colBlocks = ripeCollisions.map(a => {
-            const details = buildCollisionStoryCapsule(a.id, a.col);
-            return `    COLLISION: "${a.col.name || a.id}" [dist:0]\n${details.split('\n').map(l => '    ' + l).join('\n')}`;
-        }).join('\n');
-        lines.push(`BEAT ${beatNum} — COLLISION ARRIVES:`);
-        lines.push(colBlocks);
-        lines.push(`  MOVE each arrived collision to RESOLVING.`);
-        lines.push('');
-        beatNum++;
-    }
-
-    // In-progress collisions push toward resolution
-    if (inProgressCollisions.length > 0) {
-        const colBlocks = inProgressCollisions.map(a => {
-            const details = buildCollisionStoryCapsule(a.id, a.col);
-            return `    "${a.col.name || a.id}" [${a.col.status}]\n${details.split('\n').map(l => '    ' + l).join('\n')}`;
-        }).join('\n');
-        lines.push(`BEAT ${beatNum} — COLLISION PUSHES:`);
-        lines.push(colBlocks);
-        lines.push(`  Keep it moving. Either resolve this turn or force a sharper crisis.`);
-        lines.push('');
-        beatNum++;
-    }
-
-    // If no collisions, use a general focus beat
-    if (ripeCollisions.length === 0 && inProgressCollisions.length === 0) {
-        const focus = pickAdvanceFocus();
-        const FOCUS_PROMPTS = {
-            scene: `  FOCUS: THE SCENE — something local moves. An NPC acts, the environment shifts, someone arrives or leaves, a noticed detail fires.`,
-            world: `  FOCUS: THE WORLD — cut away from ${pcName}. A faction or macro move plays out. Its consequences will land later.`,
-            offscreen: `  FOCUS: OFF-SCREEN CHARACTER — a tracked character pursues their own want. Show the beat, update what it changes.`,
-            new_threat: `  FOCUS: SOMETHING NEW — introduce a fresh complication or revelation that belongs to the current story logic.`,
-            collision: `  FOCUS: PRESSURE TIGHTENS — pick the collision that creates the most honest pressure and show why it compressed. If no existing collision can carry the beat, escalate the hottest pressure point into a new collision and REMOVE the pressure point.`,
-        };
-        lines.push(`BEAT ${beatNum} — WORLD MOVE:`);
-        lines.push(FOCUS_PROMPTS[focus.key] || FOCUS_PROMPTS.scene);
-        lines.push('');
-        beatNum++;
-    }
-
-    // ── Final Beat: RETURN HOOK (mandatory) ───────────────────────────────────
-    lines.push(`BEAT ${beatNum} — RETURN (mandatory): The world's move lands on ${pcName}.`);
-    lines.push(`  Write: the consequence of beats 2-${beatNum - 1} arrives at the PC. End on a new situation — something they must respond to. The camera returns. 80-150w.`);
-    lines.push('');
-
-    // ── Draw instruction ───────────────────────────────────────────────────────
-    lines.push(formatDrawInstruction(draw, 'The draw colors how the world moves — its character and method, not the outcome.'));
-    lines.push('');
-    lines.push(`Record divination.last_draw, then write beats in order and end with a compact STATE block.`);
-
-    return lines.join('\n');
-}
 
 async function handleAdvanceButton() {
     if (_advanceLocked) return;
@@ -1992,7 +1902,6 @@ async function handleAdvanceButton() {
     }
 
     // ── Engine-side distance compression (timeskip-scale-aware, §3.2) ────────
-    const compressed = [];
     if (_currentState) {
         const scale = (_currentState.world?.timeskip_scale || 'HOURS').toString().toUpperCase();
         const tickDelta = TICK[scale] ?? 1;
@@ -2007,7 +1916,6 @@ async function handleAdvanceButton() {
             const newDist = Math.max(0, dist - tickDelta);
             if (newDist !== dist) {
                 tickTxns.push({ op: 'S', e: 'collision', id, d: { f: 'distance', v: newDist }, r: 'system:advance:tick' });
-                compressed.push({ id, name: col.name || id, oldDist: dist, newDist });
             }
         }
 
@@ -2046,25 +1954,6 @@ async function handleAdvanceButton() {
     if (newArrivalIds.length > 0) {
         buildAndInjectArrivals(newArrivalIds, _currentState);
     }
-    // Build beat data from arrived collisions for the advance beat template
-    const ripeCollisions = newArrivalIds.map(id => ({ id, col: _currentState.collisions[id] })).filter(a => a.col);
-    // RESOLVING collisions still surfaced in advance beats for legacy back-compat (removed in PR-E)
-    const inProgressCollisions = [];
-    if (_currentState) {
-        for (const [id, col] of Object.entries(_currentState.collisions || {})) {
-            const status = (col.status || '').trim().toUpperCase();
-            if (status === 'RESOLVING') {
-                inProgressCollisions.push({ id, col });
-            }
-        }
-    }
-
-    const draw = drawDivination();
-    const beatBlock = buildAdvanceBeats(_currentState, draw, ripeCollisions, inProgressCollisions, compressed);
-
-    const markers = [MODE_LOREBOOK_KEYS.advanceCore, MODE_LOREBOOK_KEYS.advanceOptional, MODE_LOREBOOK_KEYS.proseAdvance];
-    _pendingOOCInjection = buildModeInjection('GRAVITY ADVANCE', beatBlock, markers);
-
     // ── Advance collision_health check (§4.4) — fires regardless of nudge counter ──
     _pendingNudgeText = buildNudge_collisionHealth(_currentState);
 
