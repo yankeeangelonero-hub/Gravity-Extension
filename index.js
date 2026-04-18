@@ -59,17 +59,10 @@ let _lastCompletedMode = 'regular'; // snapshot before reset — used by exempla
 let _pendingDeductionType = null; // one-shot override for combat, advance, intimacy
 let _pendingManualDivination = null; // one-shot player-supplied divination roll
 
-// ─── Collision Resolution Tracking ───────────────────────────────────────────
-
-// Map of collision ID → { phase, arrivalTurn, arrivalDraw, lastEscalationDraw }
-// phase: 'arrived' → 'pressure' → 'intrusion' → 'crash'
-// Cleared on chat change.
-let _firedCollisionArrivals = new Set(); // legacy compat — still used for one-shot arrival detection
-let _resolutionTracker = new Map();      // collision id → resolution state
-
-const RESOLUTION_PRESSURE_TURNS = 2;  // turns 1-2: oracle bleeds into atmosphere
-const RESOLUTION_INTRUSION_TURNS = 4; // turns 3-4: oracle manifests, direct intrusion
-const RESOLUTION_CRASH_TURNS = 6;     // turn 5+: oracle decides, crash if unresolved
+// ─── Collision Arrival Tracking ───────────────────────────────────────────────
+// One-shot dedup: once a collision fires the sanity-check gate it doesn't fire again.
+// Reset on chat change, snapshot rollback, and chapter change.
+let _firedCollisionArrivals = new Set();
 
 // Phase 2: Timeskip multipliers (§3.2)
 const TICK = { HOURS: 1, DAYS: 3, WEEKS: 10, MONTHS: 20 };
@@ -1114,6 +1107,13 @@ function buildAndInjectArrivals(ids, state) {
         blocks.push(buildArrivalBlock(col, draw, involvedSummary, placeName, proximityLine));
     }
     if (blocks.length > 0) {
+        if (blocks.length > 1) {
+            const names = ids
+                .filter(id => state.collisions[id])
+                .map(id => `"${state.collisions[id].name || id}"`)
+                .join(', ');
+            blocks.unshift(`[SIMULTANEOUS ARRIVALS — ${blocks.length} collisions have arrived this turn: ${names}. ONLY ONE may resolve ON-SCREEN. Apply rule of cool — pick the most dramatically compelling. Resolve the rest OFF-SCREEN (REFRAME or DISSOLVE) or IMPLODE. Every arrived collision must be committed this turn.]`);
+        }
         const ctx = SillyTavern.getContext();
         ctx.setExtensionPrompt(`${MODULE_NAME}_arrival`, blocks.join('\n\n'), PROMPT_IN_CHAT, 0);
         _arrivalLastFiredTurn = _turnCounter;
@@ -1291,99 +1291,19 @@ function injectPrompt(mode) {
             setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
         }
 
-        // ── Collision Resolution System (oracle-driven escalation) ─────────────
+        // ── Collision Audit (warnings + closure checks) ───────────────────────
         if (_currentState) {
-            const collisionBlocks = [];
             const collisionWarnings = [];
             const pressureAudit = buildPressurePointAudit(_currentState);
             if (pressureAudit?.warnings?.length) {
                 collisionWarnings.push(...pressureAudit.warnings.map(w => `[PRESSURE POINT AUDIT] ${w}`));
             }
 
-            // Clean up tracker for resolved/crashed collisions
-            for (const trackedId of _resolutionTracker.keys()) {
-                const col = (_currentState.collisions || {})[trackedId];
-                if (!col) { _resolutionTracker.delete(trackedId); continue; }
-                const st = (col.status || '').trim().toUpperCase();
-                if (st === 'RESOLVED') _resolutionTracker.delete(trackedId);
-            }
-
-            // New arrivals are now event-driven: IMMEDIATE via onMessageReceived,
-            // distance-0 via handleAdvanceButton after tick. Not detected here.
-
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
                 const status = (col.status || '').trim().toUpperCase();
                 if (status === 'RESOLVED') continue;
                 const dist = parseFloat(col.distance);
-                const colDetails = buildCollisionStoryCapsule(id, col);
                 collisionWarnings.push(...buildCollisionNarrativeWarnings(id, col, status));
-
-                // ── Resolution escalation — already tracked, RESOLVING ───────────
-                if (status === 'RESOLVING' && _resolutionTracker.has(id)) {
-                    const tracker = _resolutionTracker.get(id);
-                    const turnsSince = _turnCounter - tracker.arrivalTurn;
-
-                    if (turnsSince <= RESOLUTION_PRESSURE_TURNS) {
-                        // Phase 1: The Oracle Bleeds In — atmosphere, subtext
-                        const arrDraw = tracker.arrivalDraw;
-                        collisionBlocks.push(`═══ COLLISION RESOLVING: "${col.name || id}" — THE ORACLE BLEEDS IN (${turnsSince}/${RESOLUTION_CRASH_TURNS}) ═══
-${colDetails}
-
-Arrival draw: ${arrDraw.label}: ${arrDraw.reading}
-
-The collision is RESOLVING. Its presence permeates the current scene as atmosphere and subtext. The draw's themes color every interaction — tension in the air, loaded silences, environmental details that echo the collision's forces.
-
-DO NOT let the player ignore this. The collision's weight is in the room even if its forces aren't. Subtext in dialogue. Physical tension in body language. Environmental details that mirror the approaching confrontation.
-
-Your hidden deduction must name how this collision is affecting the current scene. If the player's action doesn't engage the collision, show how the collision's pressure bleeds into whatever they're doing instead.`);
-
-                    } else if (turnsSince <= RESOLUTION_INTRUSION_TURNS) {
-                        // Phase 2: The Oracle Manifests — direct intrusion with fresh draw
-                        const intrusionDraw = drawDivination();
-                        tracker.lastEscalationDraw = intrusionDraw;
-                        collisionBlocks.push(`═══ COLLISION RESOLVING: "${col.name || id}" — THE ORACLE MANIFESTS (${turnsSince}/${RESOLUTION_CRASH_TURNS}) ═══
-${colDetails}
-
-${intrusionDraw.label}: ${intrusionDraw.reading}${intrusionDraw.html ? `\nRender this HTML card reveal before interpreting:\n${intrusionDraw.html}` : ''}
-
-The collision is done waiting. It PHYSICALLY INTRUDES on the player's current scene THIS TURN.
-
-The oracle determines HOW it arrives. Use this draw to shape the method of intrusion — not a generic interruption, but a specific, vivid, dramatically inevitable manifestation of the collision's forces crashing into the player's reality.
-
-This is not subtext anymore. An NPC arrives. A consequence detonates. A choice is forced. The collision's forces are IN THE ROOM and they are not leaving until the player responds.
-
-You have FULL LICENSE: move NPCs, trigger events, create witnesses, use the environment. The draw is the shape. The collision is the force. Write the most dramatically honest intrusion this draw suggests.
-
-The player has ${RESOLUTION_CRASH_TURNS - turnsSince} turns before gravity resolves this without them.`);
-
-                    } else {
-                        // Phase 3: Crash threshold — gravity resolves without player
-                        const crashDraw = drawDivination();
-                        collisionBlocks.push(`═══ COLLISION RESOLVING: "${col.name || id}" — THE ORACLE DECIDES (${turnsSince}/${RESOLUTION_CRASH_TURNS}) ═══
-${colDetails}
-
-${crashDraw.label}: ${crashDraw.reading}${crashDraw.html ? `\nRender this HTML card reveal before interpreting:\n${crashDraw.html}` : ''}
-
-TIME IS UP. The player has not engaged this collision for ${turnsSince} turns. Gravity will no longer wait.
-
-MOVE this collision to RESOLVED in the update block. Set outcome_type: CRASHED and record aftermath. The oracle determines the shape of the uncontrolled outcome. Write the WORST REASONABLE OUTCOME colored by this draw.
-
-This is what ignoring a collision costs. The player had their chance — every turn for ${turnsSince} turns, the collision pushed toward them. They chose not to engage. Now gravity chooses for them.
-
-Write the crash as a scene that interrupts whatever the player is doing. It is dramatic, consequential, and permanent. Record what was lost in aftermath. If the wreckage seeds new tension, CREATE a successor collision and link it with successor_collision_ids.`);
-                    }
-                    continue;
-                }
-
-                // ── RESOLVING but not in tracker (e.g., LLM moved to RESOLVING manually) ──
-                if (status === 'RESOLVING' && !_resolutionTracker.has(id)) {
-                    _resolutionTracker.set(id, {
-                        phase: 'arrived',
-                        arrivalTurn: _turnCounter,
-                        arrivalDraw: drawDivination(),
-                    });
-                    // Will pick up escalation next turn
-                }
 
                 // ── Distance warnings ─────────────────────────────────────────────
                 const distHist = (_currentState._history || {})[`collision:${id}:distance`] || [];
@@ -1395,16 +1315,10 @@ Write the crash as a scene that interrupts whatever the player is doing. It is d
                         collisionWarnings.push(`"${col.name || id}" distance went ${last.from} → ${last.to} — collision distances are countdowns, they MUST NOT increase. SET it back to ${last.from} or lower.`);
                     }
                 }
-                // Incoherent state: RESOLVING but distance > 0
-                if (status === 'RESOLVING') {
-                    if (!isNaN(dist) && dist > 0) {
-                        collisionWarnings.push(`"${col.name || id}" is RESOLVING but distance is ${dist} — a collision cannot resolve at range. If avoided, MOVE to RESOLVED with outcome_type: CRASHED. If still approaching, MOVE back to ACTIVE.`);
-                    }
-                }
             }
 
-            // Arrival injection is now event-driven via buildAndInjectArrivals()
-            // called from onMessageReceived (IMMEDIATE) and handleAdvanceButton (distance-0).
+            // Arrival injection is event-driven via buildAndInjectArrivals()
+            // (IMMEDIATE: onMessageReceived; distance-0: handleAdvanceButton after tick).
 
             // ── Closure audit — resolved collisions missing required fields ────────
             const closureWarnings = [];
@@ -1421,10 +1335,7 @@ Write the crash as a scene that interrupts whatever the player is doing. It is d
                 collisionWarnings.push(...closureWarnings.map(w => `[CLOSURE AUDIT] ${w}`));
             }
 
-            if (collisionBlocks.length > 0) {
-                setExtensionPrompt(`${MODULE_NAME}_arrival`, collisionBlocks.join('\n\n'), PROMPT_IN_CHAT, 0);
-                console.log(`${LOG_PREFIX} Collision resolution injection: ${collisionBlocks.length} block(s)`);
-            } else if (_arrivalLastFiredTurn !== _turnCounter) {
+            if (_arrivalLastFiredTurn !== _turnCounter) {
                 // Only clear if buildAndInjectArrivals did not already set the slot this turn
                 setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
             }
@@ -1543,7 +1454,6 @@ async function initialize(force = false) {
     _pendingDeductionType = null;
     _pendingManualDivination = null;
     _firedCollisionArrivals = new Set();
-    _resolutionTracker = new Map();
     _arrivalLastFiredTurn = -1;
 
     if (!chatId) {
@@ -2107,25 +2017,28 @@ async function handleAdvanceButton() {
         updatePanel(_currentState, _turnCounter);
     }
 
-    const ripeCollisions = [];
+    // ── Arrival detection: fire sanity-check gate for newly arrived collisions ──
+    const newArrivalIds = [];
+    if (_currentState) {
+        for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+            const status = (col.status || '').toUpperCase();
+            const dist = parseFloat(col.distance);
+            if (status === 'ACTIVE' && !isNaN(dist) && dist <= 0 && !_firedCollisionArrivals.has(id)) {
+                newArrivalIds.push(id);
+            }
+        }
+    }
+    if (newArrivalIds.length > 0) {
+        buildAndInjectArrivals(newArrivalIds, _currentState);
+    }
+    // Build beat data from arrived collisions for the advance beat template
+    const ripeCollisions = newArrivalIds.map(id => ({ id, col: _currentState.collisions[id] })).filter(a => a.col);
+    // RESOLVING collisions still surfaced in advance beats for legacy back-compat (removed in PR-E)
     const inProgressCollisions = [];
     if (_currentState) {
         for (const [id, col] of Object.entries(_currentState.collisions || {})) {
-            const dist = parseFloat(col.distance);
             const status = (col.status || '').trim().toUpperCase();
-
-            if (!isNaN(dist) && dist <= 0 && status !== 'RESOLVED' && !_firedCollisionArrivals.has(id)) {
-                ripeCollisions.push({ id, col });
-                _firedCollisionArrivals.add(id);
-                _resolutionTracker.set(id, {
-                    phase: 'arrived',
-                    arrivalTurn: _turnCounter,
-                    arrivalDraw: drawDivination(),
-                });
-            } else if (
-                status === 'RESOLVING' ||
-                (!isNaN(dist) && dist <= 0 && status === 'ACTIVE' && _firedCollisionArrivals.has(id))
-            ) {
+            if (status === 'RESOLVING') {
                 inProgressCollisions.push({ id, col });
             }
         }
@@ -2342,7 +2255,6 @@ async function handleNewLedger() {
     resetLedger();
     _pendingCorrections = [];
     _pendingReinforcement = null;
-    _resolutionTracker = new Map();
     _firedCollisionArrivals = new Set();
     _arrivalLastFiredTurn = -1;
     await initialize(true);
@@ -2364,7 +2276,6 @@ async function handleImportData(data) {
     await importData(data);
     _pendingCorrections = [];
     _pendingReinforcement = null;
-    _resolutionTracker = new Map();
     _firedCollisionArrivals = new Set();
     _arrivalLastFiredTurn = -1;
     await initialize(true);
