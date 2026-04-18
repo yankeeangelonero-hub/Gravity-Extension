@@ -1519,6 +1519,7 @@ async function initialize(force = false) {
     _pendingDeductionType = null;
     _pendingManualDivination = null;
     _firedCollisionArrivals = new Set();
+    _foreshadowedCollisions = new Map();
     _arrivalLastFiredTurn = -1;
 
     if (!chatId) {
@@ -1859,6 +1860,12 @@ Then write prose, render the choices, and end with a compact STATE block.`,
         _uncappedTurn = /ooc:\s*(eval|cleanup)\b/i.test(message.mes);
         _pendingReinforcement = result.injection;
         _currentState = computeCurrentState();
+        // Rollback resets arrival/foreshadow state — the rolled-back collisions may re-arrive
+        if (/ooc:\s*rollback\b/i.test(message.mes)) {
+            _firedCollisionArrivals = new Set();
+            _foreshadowedCollisions = new Map();
+            _arrivalLastFiredTurn = -1;
+        }
         injectPrompt();
         updatePanel(_currentState, _turnCounter);
     }
@@ -2321,6 +2328,7 @@ async function handleNewLedger() {
     _pendingCorrections = [];
     _pendingReinforcement = null;
     _firedCollisionArrivals = new Set();
+    _foreshadowedCollisions = new Map();
     _arrivalLastFiredTurn = -1;
     await initialize(true);
 }
@@ -2342,6 +2350,7 @@ async function handleImportData(data) {
     _pendingCorrections = [];
     _pendingReinforcement = null;
     _firedCollisionArrivals = new Set();
+    _foreshadowedCollisions = new Map();
     _arrivalLastFiredTurn = -1;
     await initialize(true);
 }
