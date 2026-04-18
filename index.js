@@ -400,14 +400,11 @@ function buildCollisionNarrativeWarnings(id, col, status) {
         warnings.push(`"${name}" details are still too thin — rewrite collision:${id}.details as a fuller story capsule with source pressure, the people or places at risk, the present expression, and the forced choice looming.`);
     }
 
-    if ((status === 'SIMMERING' || status === 'ACTIVE' || status === 'RESOLVING') && !cost) {
+    if (status === 'ACTIVE' && !cost) {
         warnings.push(`"${name}" is ${status} but missing cost — SET collision:${id}.cost to what engagement, delay, or failure will cost.`);
     }
 
     return warnings;
-}
-
-\\b`, 'i').test(point || '')).length;
 }
 
 /**
@@ -416,8 +413,6 @@ function buildCollisionNarrativeWarnings(id, col, status) {
 function getActiveDivinationSystem() {
     const { chatMetadata } = SillyTavern.getContext();
     const stored = chatMetadata?.['gravity_divination_system'];
-    // Back-compat: old chats with iching selected fall through to arcana
-    if (stored === 'iching' || stored === 'i_ching' || stored === 'i ching') return 'arcana';
     return stored || (_currentState?.divination?.active_system || 'arcana').toLowerCase();
 }
 
@@ -1714,11 +1709,11 @@ async function onMessageReceived(messageId) {
 
     // ── IMMEDIATE collision firing (§3.3) — fire on the turn they are created ──
     if (_currentState) {
-        const immediateArrivals = committedTxns
-            .filter(tx => tx.op === 'CR' && tx.e === 'collision'
-                && tx.d?.distance_category === 'IMMEDIATE')
-            .map(tx => tx.id)
-            .filter(id => !_firedCollisionArrivals.has(id));
+        const immediateArrivals = Object.entries(_currentState.collisions || {})
+            .filter(([id, col]) => col.distance_category === 'IMMEDIATE'
+                && col.status === 'ACTIVE'
+                && !_firedCollisionArrivals.has(id))
+            .map(([id]) => id);
         if (immediateArrivals.length > 0) {
             buildAndInjectArrivals(immediateArrivals, _currentState);
         }
@@ -1726,24 +1721,21 @@ async function onMessageReceived(messageId) {
 
     // ── Pressure FIFO cap (§4.1) — auto-drop oldest when pool exceeds 5 ────────
     if (_currentState) {
-        const pressureCRs = committedTxns.filter(tx => tx.op === 'CR' && tx.e === 'pressure');
-        if (pressureCRs.length > 0) {
-            const pressureIds = Object.keys(_currentState.pressures || {});
-            if (pressureIds.length > MAX_PRESSURE_POINTS) {
-                const sorted = pressureIds
-                    .map(id => ({ id, created_at_tx: _currentState.pressures[id].created_at_tx ?? 0 }))
-                    .sort((a, b) => a.created_at_tx - b.created_at_tx);
-                const toDrop = sorted.slice(0, sorted.length - MAX_PRESSURE_POINTS);
-                const dropTxns = toDrop.map(p => ({
-                    op: 'D', e: 'pressure', id: p.id,
-                    r: 'system:pressure:fifo-overflow',
-                }));
-                if (dropTxns.length > 0) {
-                    try {
-                        const dropped = await append(dropTxns);
-                        _currentState = computeState(_currentState, dropped);
-                    } catch (_) { /* non-critical */ }
-                }
+        const pressureIds = Object.keys(_currentState.pressures || {});
+        if (pressureIds.length > MAX_PRESSURE_POINTS) {
+            const sorted = pressureIds
+                .map(id => ({ id, created_at_tx: _currentState.pressures[id].created_at_tx ?? 0 }))
+                .sort((a, b) => a.created_at_tx - b.created_at_tx);
+            const toDrop = sorted.slice(0, sorted.length - MAX_PRESSURE_POINTS);
+            const dropTxns = toDrop.map(p => ({
+                op: 'D', e: 'pressure', id: p.id,
+                r: 'system:pressure:fifo-overflow',
+            }));
+            if (dropTxns.length > 0) {
+                try {
+                    const dropped = await append(dropTxns);
+                    _currentState = computeState(_currentState, dropped);
+                } catch (_) { /* non-critical */ }
             }
         }
     }

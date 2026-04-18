@@ -206,10 +206,10 @@ ${answers.power_scale ? '> MAP_SET world field=constants key=power_scale value="
 > MAP_SET faction:name field=relations key=[other-faction-id] value="[stance]"
 
 5. COLLISIONS (at least 1 active or simmering; each must be a compact narrative thread, not just a label):
-> CREATE collision:slug name="[name]" forces="force1,force2" status=SIMMERING distance=8 details="[what is converging, who is caught in it, how it is already surfacing, what forced choice is looming]" cost="[what engagement, delay, or failure costs]" target_constraint="[constraint-id if this is pressing a tracked defense]"
+> CREATE collision:slug name="[name]" forces="force1,force2" distance_category=MEDIUM details="[what is converging, who is caught in it, how it is already surfacing, what forced choice is looming]" cost="[what engagement, delay, or failure costs]" target_constraint="[constraint-id if this is pressing a tracked defense]"
 
 7. PRESSURE POINTS (2-3 seams where the world is about to break; short seeds, not full collisions):
-> APPEND world field=pressure_points value="[seam that could later tighten into a collision]"
+> CR pressure:<slug> name="[seam that could later tighten into a collision]"
 
 8. Any scenario NPCs as KNOWN:
 > CREATE char:npc-slug name="[NPC Name]" tier=KNOWN

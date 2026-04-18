@@ -382,7 +382,7 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
     // Collisions detail — all modes except lite
     if (!isLite) {
         const liveCollisions = Object.values(state.collisions).filter(
-            cl => cl.status !== 'RESOLVED' && cl.status !== 'SEEDED'
+            cl => cl.status !== 'RESOLVED' && cl.status !== 'CRASHED'
         );
         if (liveCollisions.length) {
             lines.push('');
