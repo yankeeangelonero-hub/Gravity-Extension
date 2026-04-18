@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## What This Is
 
-Gravity Ledger is a SillyTavern extension (pure JS, no build step) that implements a narrative state machine via an append-only ledger. It tracks characters, constraints, collisions, chapters, factions, and world state through immutable transactions that the LLM outputs inside `---LEDGER---` blocks, which the extension parses, validates, and commits.
+Gravity Ledger is a SillyTavern extension (pure JS, no build step) that implements a narrative state machine via an append-only ledger. It tracks characters, constraints, collisions, factions, places, pressure points, and world state through immutable transactions that the LLM outputs inside `---LEDGER---` blocks, which the extension parses, validates, and commits.
 
 ## Development
 
@@ -64,33 +64,29 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_dormant`** — Dormant character nudge (every 15 regular turns)
 - **`_exemplars`** — Last 5 good prose paragraphs for style reference
 
-Turn modes: `regular` (player prose), `advance` (world moves), `integration` (setup, chapter close, timeskip).
+Turn modes: `regular` (player prose), `advance` (world moves), `integration` (setup, timeskip).
 
 ### Deduction Templates
 
 The preset owns the turn-specific deduction protocols inside its dedicated CoT entry. The extension only injects the active mode flag via `_nudge` so the preset can select the right protocol inside `<think>...</think>`, not in visible prose:
-- **`regular`** — Full 12-field deduction (intent, story, collisions, constraints, factions, cost overlap, divination, contest, scene, plan, updates, chapter)
+- **`regular`** — Full 11-field deduction (intent, story, collisions, constraints, factions, cost overlap, divination, contest, scene, plan, updates)
 - **`combat`** — Power assessment, advantages, enemy logic, wounds, distance
 - **`advance`** — Focus, what moves, divination, collision tracking
 - **`intimacy`** — Stance, constraint, partner wants, history, divination
 
-### Memory Tiering
-
-`memory-tier.js` rotates hot arrays (`story_summary`, `pc.timeline`, `pc.demonstrated_traits`) to cold storage in `chatMetadata['gravity_cold']` when caps are exceeded. Consolidated batch summaries are injected alongside hot entries.
-
 ## Key Conventions
 
 - **Operations**: `CR` (create), `S` (set), `TR` (transition/move), `A` (append), `R` (remove), `MS` (map_set/read), `MR` (map_del), `D` (destroy), `SNAP`, `ROLL`, `AMEND`
-- **Entity types**: `char`, `constraint`, `collision`, `chapter`, `faction`, `world`, `pc`, `divination`, `summary`
-- **State machines** (char tiers, constraint integrity, collision status, chapter status) are documented in `state-machine.js` and the v11 preset but not enforced by code — the LLM follows and self-audits via `OOC: eval`
-- **Collision status**: `SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED`
-- **Collision outcomes**: `DIRECT`, `EVOLVED`, `MERGED`, `IMPLODED`, `CRASHED`
+- **Entity types**: `char`, `constraint`, `collision`, `faction`, `place`, `pressure`, `world`, `pc`, `divination`
+- **State machines** (char tiers, constraint integrity, collision status) are documented in `state-machine.js` and enforced by `validateTransition()` at commit time in `consistency.js`
+- **Collision status**: `ACTIVE → RESOLVED` or `ACTIVE → CRASHED`
+- **Collision outcomes**: `DIRECT`, `EVOLVED`, `MERGED`, `IMPLODED`, `DISSOLVED`, `CRASHED`
 - **Story framing**: sentence-level prose and story identity belong in preset files, lorebook entries, and the scenario/card context rather than runtime state
 - **Active setup-authored world constants**: `world.constants.power_scale`, `world.constants.power_ceiling`, and optional `world.constants.power_notes` are the live setup-authored combat constants; older framing fields such as `story_kind`, `guidelines`, `motivation`, `objective`, `length`, and `knowledge_asymmetry` are deprecated
 - **Knowledge asymmetry**: model it through `reads`, `noticed_details`, summaries, and collisions rather than `world.knowledge_asymmetry`; there is no universal `blindspots` field
 - **Knowledge gaps**: `pc.knowledge_gaps` is referenced by `OOC: eval` guidance but is not a fully surfaced runtime feature yet
 - **Arrival decision gate**: When a collision hits distance 0 (category IMMEDIATE arrives on creation; others on engine tick-down), the extension injects a single-turn sanity-check block asking the LLM to commit ON-SCREEN, OFF-SCREEN (REFRAME or DISSOLVE), or IMPLODE — all resolutions complete that turn. Tracked via `_firedCollisionArrivals` Set in `index.js`.
-- **Pressure points**: short world seams stored in `world.pressure_points`; keep them short, remove them when spent/stale, and escalate them into collisions when they gain actors + cost + forced choice
+- **Pressure points**: first-class `pressure` entities (capped at 5, FIFO) — raw narrative seeds consumed by collision feeding. Create with `CR pressure:<id> name="..." source="..."`, destroy when consumed with `D pressure:<id>`. WEEKS/MONTHS timeskips auto-clear all pressure points.
 - **Format validation only**: `consistency.js` checks structure, not gameplay rules
 - **OOC commands** in `ooc-handler.js`: `power review`, `snapshot`, `rollback`, `eval`, `history`, `consolidate`, etc. — these inject contextual prompts, they don't modify state directly
 - **Storage**: All canonical state lives in `chatMetadata` (persisted per chat by SillyTavern). Optional mode playbooks may live in importable World Info files such as `Gravity World Info.json`, but those entries are prompt guidance only; the extension remains the source of truth for state.
@@ -109,4 +105,4 @@ The preset owns the turn-specific deduction protocols inside its dedicated CoT e
 - `gravity-system-prompt.md` is a legacy reference for the ledger command format. Current presets live in `gravity_v13_c.json` and `gravity_v14.json`, while mode-specific playbooks can be imported from `Gravity World Info.json`. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
 - `Documentation/project_memory.md` is the active durable memory file. Archived docs and older planning artifacts live in `Documentation/Old/`.
 - `Documentation/v14_prose_architecture_handoff.md` captures the modular prose rollout that moved prose authority into `gravity_v14.json` plus `Gravity World Info.json`.
-- Divination uses a single random table (Arcana) defined in `index.js`.
+- Divination uses two random tables (Arcana/Classic) defined in `index.js`. Yi Jing (I Ching) has been removed.

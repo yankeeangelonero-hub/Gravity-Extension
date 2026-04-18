@@ -79,28 +79,33 @@
 
     {"tx":65,"t":"[Day 2 — 06:36]","_ts":"2026-03-20T15:00:00Z","op":"CR","e":"char","id":"rufus-shinra","d":{"name":"Rufus Shinra","tier":"TRACKED","want":"Succession — rule through fear, not wealth","doing":"Watching father's response to bombing like surgeon watching vitals","stance_toward_pc":"Unaware of his existence. No information path."},"r":"Init Rufus"},
 
-    {"tx":66,"t":"[Day 1 — 21:00]","_ts":"2026-03-20T14:00:00Z","op":"CR","e":"collision","id":"asymmetry","d":{"name":"The Asymmetry","forces":"Autumn's ignorance,Avalanche's guilt","status":"ACTIVE","distance":4,"cost":"Every kindness deepens debt Autumn can't see. When he learns the truth, the care was built on a lie."},"r":"Central collision"},
-    {"tx":67,"t":"[Day 1 — 21:00]","_ts":"2026-03-20T14:00:00Z","op":"CR","e":"collision","id":"pattern-question","d":{"name":"The Pattern Question","forces":"Tifa's trust,Cloud/Jessie's suspicion","status":"SIMMERING","distance":6,"cost":"When Tifa realizes she's the last to understand what Autumn is, the trust she's built becomes evidence of her blindness."},"r":"Pattern question"},
-    {"tx":68,"t":"[Day 2 — 18:45]","_ts":"2026-03-20T16:00:00Z","op":"CR","e":"collision","id":"permanence","d":{"name":"Permanence","forces":"Autumn's presence,Tifa's defenses","status":"ACTIVE","distance":3,"cost":"Every wall Tifa builds, Autumn occupies. Room key = walls that belong to someone who shouldn't have walls here."},"r":"Permanence collision"},
-    {"tx":69,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"CR","e":"collision","id":"sector5-trip","d":{"name":"Sector 5 Trip","forces":"Autumn's exposure,Shinra's net","status":"SEEDED","distance":8,"cost":"First time outside bar's orbit. Checkpoints. C3 outside stronghold. New collision surface."},"r":"Sector 5 exposure"},
+    {"tx":66,"t":"[Day 1 — 21:00]","_ts":"2026-03-20T14:00:00Z","op":"CR","e":"collision","id":"asymmetry","d":{"name":"The Asymmetry","forces":"Autumn's ignorance,Avalanche's guilt","distance_category":"SHORT","involved_chars":["tifa-lockhart"]},"r":"Central collision"},
+    {"tx":67,"t":"[Day 1 — 21:00]","_ts":"2026-03-20T14:00:00Z","op":"CR","e":"collision","id":"pattern-question","d":{"name":"The Pattern Question","forces":"Tifa's trust,Cloud/Jessie's suspicion","distance_category":"SHORT","involved_chars":["tifa-lockhart","cloud-strife","jessie-rasberry"]},"r":"Pattern question"},
+    {"tx":68,"t":"[Day 2 — 18:45]","_ts":"2026-03-20T16:00:00Z","op":"CR","e":"collision","id":"permanence","d":{"name":"Permanence","forces":"Autumn's presence,Tifa's defenses","distance_category":"SHORT","involved_chars":["tifa-lockhart"]},"r":"Permanence collision"},
+    {"tx":69,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"CR","e":"collision","id":"sector5-trip","d":{"name":"Sector 5 Trip","forces":"Autumn's exposure,Shinra's net","distance_category":"SHORT","involved_chars":["tifa-lockhart"]},"r":"Sector 5 exposure"},
 
     {"tx":70,"t":"[Day 1 — 21:00]","_ts":"2026-03-20T14:00:00Z","op":"CR","e":"chapter","id":"ch1-wrong-place","d":{"number":1,"title":"Wrong Place","status":"CLOSED","arc":"The Civilian Witness — what does Tifa do with someone who saw too much?","central_tension":"Trust vs security"},"r":"Ch1 — complete"},
     {"tx":71,"t":"[Day 2 — 06:15]","_ts":"2026-03-20T15:00:00Z","op":"CR","e":"chapter","id":"ch2-hunt-begins","d":{"number":2,"title":"The Hunt Begins","status":"CLOSED","arc":"Stranger becomes infrastructure","central_tension":"Can the collateral have a résumé?"},"r":"Ch2 — complete"},
     {"tx":72,"t":"[Day 3 — 06:30]","_ts":"2026-03-20T17:00:00Z","op":"CR","e":"chapter","id":"ch3-infrastructure","d":{"number":3,"title":"The Infrastructure","status":"OPEN","arc":"The stranger is becoming infrastructure","central_tension":"Sector 5 trip, C3 outside stronghold, care goes public","target_collisions":"sector5-trip,asymmetry,pattern-question"},"r":"Ch3 — current"},
 
-    {"tx":73,"t":"[Day 1 — 21:00]","_ts":"2026-03-20T14:00:00Z","op":"A","e":"world","id":"","d":{"f":"pressure_points","v":"Shinra narrative escalation — checkpoints tightening, 'deliberate sabotage' framing"},"r":"Pressure"},
-    {"tx":74,"t":"[Day 2 — 18:45]","_ts":"2026-03-20T16:00:00Z","op":"A","e":"world","id":"","d":{"f":"pressure_points","v":"Avalanche tension — Autumn's presence now infrastructure, Barret's conviction under collateral weight"},"r":"Pressure"},
-    {"tx":75,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"A","e":"world","id":"","d":{"f":"pressure_points","v":"Sector 5 trip — first time outside bar's orbit, checkpoints, new collision surface, C3 outside stronghold"},"r":"Pressure"},
-    {"tx":76,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"A","e":"world","id":"","d":{"f":"pressure_points","v":"C3 approaching breach — four failures in one morning, shedding order says C3 falls first"},"r":"Pressure"},
+    {"tx":73,"t":"[Day 1 — 21:00]","_ts":"2026-03-20T14:00:00Z","op":"CR","e":"pressure","id":"shinra-escalation","d":{"name":"Shinra Narrative Escalation","source":"Shinra","related_to":["faction:shinra"]},"r":"Pressure"},
+    {"tx":74,"t":"[Day 2 — 18:45]","_ts":"2026-03-20T16:00:00Z","op":"CR","e":"pressure","id":"avalanche-tension","d":{"name":"Avalanche Tension","source":"Barret Wallace","related_to":["char:barret-wallace","faction:avalanche"]},"r":"Pressure"},
+    {"tx":75,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"CR","e":"pressure","id":"sector5-exposure","d":{"name":"Sector 5 Exposure","source":"Autumn Liang","related_to":["collision:sector5-trip"]},"r":"Pressure"},
+    {"tx":76,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"CR","e":"pressure","id":"c3-breach","d":{"name":"C3 Approaching Breach","source":"Tifa Lockhart","related_to":["char:tifa-lockhart","constraint:c3-redirect"]},"r":"Pressure"},
 
     {"tx":77,"t":"[Day 2 — 18:45]","_ts":"2026-03-20T16:00:00Z","op":"S","e":"divination","id":"","d":{"f":"active_system","v":"arcana"},"r":"Arcana system active"},
 
     {"tx":78,"t":"[Day 1 — 21:35]","_ts":"2026-03-20T14:00:00Z","op":"A","e":"summary","id":"","d":{"f":"text","v":"Ch1 'Wrong Place': Tifa pulls Autumn from Reactor 1 rubble. Both enter burning building to save trapped survivor. Autumn engineers stairwell collapse. They reach Seventh Heaven. Tifa cleans his wound first. Stew, couch, silence. Asymmetry established — she knows everything, he knows nothing."},"r":"Ch1 summary"},
     {"tx":79,"t":"[Day 2 — 18:45]","_ts":"2026-03-20T16:00:00Z","op":"A","e":"summary","id":"","d":{"f":"text","v":"Ch2 'The Hunt Begins': Avalanche returns to find Autumn on couch. Barret's gun-arm, Autumn's stew joke, standing between gun and Tifa. Stood down. Coffee. Ingredient list with white balm footnote. Fixed Jessie's relay (sandbagging collapsed). Fixed water filter. Asked for room. Key received. Temporary became permanent."},"r":"Ch2 summary"},
-    {"tx":80,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"A","e":"summary","id":"","d":{"f":"text","v":"Ch3 'The Infrastructure' (in progress): Walk to Marle's. 'Boyfriend' over-correction. Marle clocks the shape. White balm ingredients witnessed. 'Good bones, Tifa.' Arms uncross. Three sentences about Sector 5 contact leak. Schedule collapsed — first batch tonight. Sector 5 trip imminent."},"r":"Ch3 summary — ongoing"}
+    {"tx":80,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"A","e":"summary","id":"","d":{"f":"text","v":"Ch3 'The Infrastructure' (in progress): Walk to Marle's. 'Boyfriend' over-correction. Marle clocks the shape. White balm ingredients witnessed. 'Good bones, Tifa.' Arms uncross. Three sentences about Sector 5 contact leak. Schedule collapsed — first batch tonight. Sector 5 trip imminent."},"r":"Ch3 summary — ongoing"},
+
+    {"tx":81,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"S","e":"collision","id":"asymmetry","d":{"f":"distance","v":4},"r":"Restore current distance"},
+    {"tx":82,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"S","e":"collision","id":"pattern-question","d":{"f":"distance","v":6},"r":"Restore current distance"},
+    {"tx":83,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"S","e":"collision","id":"permanence","d":{"f":"distance","v":3},"r":"Restore current distance"},
+    {"tx":84,"t":"[Day 3 — 07:08]","_ts":"2026-03-20T17:00:00Z","op":"S","e":"collision","id":"sector5-trip","d":{"f":"distance","v":8},"r":"Restore current distance"}
   ],
   "snapshots": [],
-  "lastTxId": 81,
+  "lastTxId": 85,
   "createdAt": "2026-03-20T14:00:00Z",
   "updatedAt": "2026-03-20T17:00:00Z"
 }
