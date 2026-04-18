@@ -57,8 +57,7 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_nudge`** — Runtime flags for hidden reasoning mode plus post-thinking output order (regular/combat/advance/intimacy)
 - **`_setup`** — Setup wizard phase prompts (when active)
 - **`_ooc`** — OOC command injection (from buttons)
-- **`_arrival`** — Oracle-driven collision resolution (arrival, escalation, crash — all phases)
-- **`_pressure`** — Pressure point keep/remove/escalate audit
+- **`_arrival`** — Collision arrival sanity-check injection (ON-SCREEN / OFF-SCREEN / IMPLODE — §3.5)
 - **`_dist_warn`** — Distance-increase error corrections
 - **`_intimacy`** — Intimacy stance boundary enforcement
 - **`_faction`** — Faction heartbeat (every 10 regular turns)
@@ -90,7 +89,7 @@ The preset owns the turn-specific deduction protocols inside its dedicated CoT e
 - **Active setup-authored world constants**: `world.constants.power_scale`, `world.constants.power_ceiling`, and optional `world.constants.power_notes` are the live setup-authored combat constants; older framing fields such as `story_kind`, `guidelines`, `motivation`, `objective`, `length`, and `knowledge_asymmetry` are deprecated
 - **Knowledge asymmetry**: model it through `reads`, `noticed_details`, summaries, and collisions rather than `world.knowledge_asymmetry`; there is no universal `blindspots` field
 - **Knowledge gaps**: `pc.knowledge_gaps` is referenced by `OOC: eval` guidance but is not a fully surfaced runtime feature yet
-- **Oracle-driven resolution**: When a collision hits distance 0, the extension starts a resolution clock with divination draws at each phase: atmosphere (turns 1-2), direct intrusion with fresh draw (turns 3-4), crash with final draw (turn 5+). Tracked via `_resolutionTracker` Map in index.js.
+- **Arrival decision gate**: When a collision hits distance 0 (category IMMEDIATE arrives on creation; others on engine tick-down), the extension injects a single-turn sanity-check block asking the LLM to commit ON-SCREEN, OFF-SCREEN (REFRAME or DISSOLVE), or IMPLODE — all resolutions complete that turn. Tracked via `_firedCollisionArrivals` Set in `index.js`.
 - **Pressure points**: short world seams stored in `world.pressure_points`; keep them short, remove them when spent/stale, and escalate them into collisions when they gain actors + cost + forced choice
 - **Format validation only**: `consistency.js` checks structure, not gameplay rules
 - **OOC commands** in `ooc-handler.js`: `power review`, `snapshot`, `rollback`, `eval`, `history`, `consolidate`, etc. — these inject contextual prompts, they don't modify state directly
@@ -110,4 +109,4 @@ The preset owns the turn-specific deduction protocols inside its dedicated CoT e
 - `gravity-system-prompt.md` is a legacy reference for the ledger command format. Current presets live in `gravity_v13_c.json` and `gravity_v14.json`, while mode-specific playbooks can be imported from `Gravity World Info.json`. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
 - `Documentation/project_memory.md` is the active durable memory file. Archived docs and older planning artifacts live in `Documentation/Old/`.
 - `Documentation/v14_prose_architecture_handoff.md` captures the modular prose rollout that moved prose authority into `gravity_v14.json` plus `Gravity World Info.json`.
-- Divination uses random tables (Arcana/Classic/I-Ching) defined in `index.js`.
+- Divination uses a single random table (Arcana) defined in `index.js`.

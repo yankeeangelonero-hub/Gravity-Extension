@@ -60,7 +60,6 @@ function createEmptyState() {
         world: {
             world_state: '',
             collision_archive: [],
-            constants: {},
         },
         pc: {
             name: '',
@@ -68,7 +67,7 @@ function createEmptyState() {
             current_scene: '',
         },
         divination: {
-            active_system: '',  // 'classic', 'arcana', 'iching'
+            active_system: 'arcana',
             last_draw: null,    // { value, reading, timestamp }
             readings: [],       // history of all draws
         },
