@@ -11,7 +11,6 @@
  * @property {Object<string, Object>} constraints
  * @property {Object<string, Object>} collisions
  * @property {Object<string, Object>} combats
- * @property {Object<string, Object>} chapters
  * @property {Object<string, Object>} factions
  * @property {Object} world
  * @property {Object} pc
@@ -52,7 +51,6 @@ function createEmptyState() {
         constraints: {},
         collisions: {},
         combats: {},
-        chapters: {},
         factions: {},
         world: {
             world_state: '',
@@ -168,7 +166,6 @@ function getCollectionName(entityType) {
         constraint: 'constraints',
         collision: 'collisions',
         combat: 'combats',
-        chapter: 'chapters',
         faction: 'factions',
         world: 'world',
         pc: 'pc',
@@ -240,8 +237,8 @@ function applyTransaction(state, tx) {
     const collection = getCollectionName(tx.e);
     const isSingleton = ['world', 'pc', 'divination'].includes(tx.e);
 
-    // Silently drop legacy summary transactions on replay of old chats
-    if (tx.e === 'summary') {
+    // Silently drop legacy transactions on replay of old chats
+    if (tx.e === 'summary' || tx.e === 'chapter') {
         state.lastTxId = tx.tx;
         return state;
     }
@@ -473,7 +470,7 @@ function computeState(snapshot, transactions) {
 
 function diffStates(before, after) {
     const changes = [];
-    for (const col of ['characters', 'constraints', 'collisions', 'chapters', 'factions']) {
+    for (const col of ['characters', 'constraints', 'collisions', 'factions']) {
         const bc = before[col] || {};
         const ac = after[col] || {};
         for (const id of Object.keys(ac)) {

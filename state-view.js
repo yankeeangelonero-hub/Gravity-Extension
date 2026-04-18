@@ -254,15 +254,6 @@ function formatStateView(state, mode = 'full') {
         }
     }
 
-    // Chapters
-    const activeChapters = Object.values(state.chapters).filter(ch => ch.status !== 'CLOSED');
-    if (activeChapters.length) {
-        lines.push('');
-        lines.push('Chapters:');
-        for (const ch of activeChapters) {
-            lines.push(`  Ch${ch.number || '?'} "${ch.title || ch.focus || '?'}" [${ch.status}] → id: ${ch.id}`);
-        }
-    }
 
     // Singletons — PC fields are mode-aware
     lines.push('');
@@ -330,19 +321,6 @@ function formatStateView(state, mode = 'full') {
     lines.push('');
     lines.push('─── CURRENT STATE ───');
 
-    // Chapter — always shown
-    const openChapter = Object.values(state.chapters).find(ch => ch.status === 'OPEN');
-    if (openChapter) {
-        lines.push('');
-        if (openChapter.profile) {
-            lines.push(`CHAPTER [${openChapter.status}] → id: ${openChapter.id}`);
-            lines.push(`  ${openChapter.profile}`);
-        } else {
-            lines.push(`CHAPTER ${openChapter.number || '?'}: "${openChapter.title || openChapter.focus || '?'}" [${openChapter.status}]`);
-            if (openChapter.arc) lines.push(`  Arc: ${openChapter.arc}`);
-            if (openChapter.central_tension) lines.push(`  Tension: ${openChapter.central_tension}`);
-        }
-    }
 
     // Constants — combat and full only (internalized after setup, not needed on regular turns)
     if (showConstants) {
@@ -549,7 +527,7 @@ function formatReadmeCore() {
     return `=== GRAVITY STATE DELTA - QUICK REFERENCE ===
 
 Normal prose turns use a compact ---STATE--- block.
-Structural turns (setup, timeskip, chapter close, heavy cleanup) may still use full ---LEDGER--- syntax.
+Structural turns (setup, timeskip, heavy cleanup) may still use full ---LEDGER--- syntax.
 
 STANDARD SHAPE:
 ---STATE---
@@ -624,9 +602,8 @@ COMMON PATHS:
 STATE MACHINES:
   char tier: UNKNOWN -> KNOWN -> TRACKED -> PRINCIPAL
   constraint integrity: STABLE -> STRESSED -> CRITICAL -> BREACHED
-  collision status: SEEDED -> SIMMERING -> ACTIVE -> RESOLVING -> RESOLVED
+  collision status: ACTIVE -> RESOLVED (or CRASHED)
   combat status: ACTIVE -> RESOLVED
-  chapter status: PLANNED -> OPEN -> CLOSING -> CLOSED
 For these fields, write the NEW state only. The extension will compile the transition.
 
 RARE OPS INSIDE STATE BLOCK:
@@ -648,14 +625,14 @@ DISCIPLINE:
   Pressure points are seeds, not history. If a seam fired, resolved, or became a collision, REMOVE it.
   If a pressure point gains actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point the same turn.
   key_moments are permanent; do not remove them.
-  Cleanup is still capped on normal turns; save bulk pruning for eval or chapter close.
+  Cleanup is still capped on normal turns; save bulk pruning for eval or OOC: eval.
 
 === END QUICK REFERENCE ===`;
 }
 
 /**
  * Full readme — complete reference with all examples and field documentation.
- * Used on integration turns (chapter close, timeskip, setup) where heavy ledger work is needed.
+ * Used on integration turns (timeskip, setup) where heavy ledger work is needed.
  */
 function formatReadmeFull() {
     return `═══ GRAVITY LEDGER — COMMAND FORMAT ═══
@@ -676,7 +653,7 @@ Empty turn (nothing changed):
 SYNTAX: > [timestamp] OPERATION entity_type:entity_id key=value key="multi word" -- reason
   - One line per transaction. Each line is independent.
   - Timestamps: [Day N — HH:MM]
-  - Entity types: char, constraint, collision, combat, chapter, faction, world, pc, divination
+  - Entity types: char, constraint, collision, combat, faction, world, pc, divination
   - Singletons (no :id needed): world, pc, divination
   - IDs: kebab-case, stable, never change once assigned
   - Reason after -- is required, keep it brief like margin notes
@@ -689,7 +666,6 @@ CREATE — new entity
   > CREATE constraint:c1-steady name="The Steady One" owner_id=tifa integrity=STABLE prevents="Showing vulnerability or exhaustion" threshold="Sustained pressure from someone trusted" replacement="Regression — stillness without purpose" replacement_type=regression shedding_order=2 -- Core constraint
   > CREATE collision:trust-vs-duty name="Trust vs Duty" forces="trust,duty" status=SEEDED distance=10 details="Trust and duty are converging. Autumn's loyalty demands she tell Kenji the truth. Her mission demands she doesn't." cost="If it detonates: one of them walks away for good" target_constraint=c1-the-steady-one -- Central tension
   > CREATE combat:alley-fight status=ACTIVE exchange=1 primary_enemy="shinra-sweep" opened_from=ambush-trap -- Thin combat container; scene + collision carry the tactical narrative
-  > CREATE chapter:ch1 number=1 title="Arrival" status=OPEN arc="Meeting" central_tension="Friend or foe?" -- Init chapter
 
   Constraint fields: name, owner_id, integrity, prevents, threshold, replacement, replacement_type (sophistication/displacement/depth_shift/regression), shedding_order, current_pressure
   Update current_pressure with SET whenever pressure changes:
@@ -699,7 +675,6 @@ MOVE — state machine transition (no skipping levels)
   > MOVE char:tifa field=tier KNOWN->TRACKED -- Promoted after trust scene
   > MOVE constraint:c1-secret field=integrity STABLE->STRESSED -- Pressure from collision
   > MOVE collision:trust-vs-duty field=status SIMMERING->ACTIVE -- Costs now concrete
-  > MOVE chapter:ch1 field=status OPEN->CLOSING -- Chapter target reached
 
 SET — overwrite a field
   > SET collision:trust-vs-duty field=distance value=6 -- Closer after confrontation
@@ -887,7 +862,7 @@ HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):
   - Before APPEND: check if a similar entry already exists. Update or skip, don't duplicate.
 
 VOLUME PER TURN (HARD CAP: 20 lines — excess lines are DROPPED):
-  Quiet dialogue: 1–2 | Normal: 2–4 | Action: 4–6 | Heavy (setup, chapter close): 6–12
+  Quiet dialogue: 1–2 | Normal: 2–4 | Action: 4–6 | Heavy (setup, timeskip): 6–12
   NEVER dump bulk REMOVE operations. Prune 2–3 stale entries per turn.
 
 PRIORITY ORDER — when near the cap, emit in this order:

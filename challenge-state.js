@@ -231,7 +231,6 @@ function getEntityCollection(state, entityType) {
         char: 'characters',
         constraint: 'constraints',
         collision: 'collisions',
-        chapter: 'chapters',
         faction: 'factions',
     };
     const key = collectionMap[entityType] || entityType;

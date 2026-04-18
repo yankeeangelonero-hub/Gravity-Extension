@@ -1,12 +1,11 @@
 /**
  * ui-panel.js — Floating popup panel for Gravity Ledger.
  *
- * 5 top-level tabs:
+ * 4 top-level tabs:
  * 1. Characters — sub-tabs per character with full dossiers
  * 2. Factions & World — factions, world state, pressure points, constants
  * 3. Collisions — active/simmering with distance
- * 4. Arc & Chapters — chapter lifecycle, story summary
- * 5. Divination — active system, last draw, reading history
+ * 4. Divination — active system, last draw, reading history
  */
 
 import { getFieldHistory, getEntityHistory, getArrayItemHistory } from './state-compute.js';
@@ -28,7 +27,6 @@ let _onImport = null;
 let _onNew = null;
 let _onSetup = null;
 let _onTimeskip = null;
-let _onChapterClose = null;
 let _onRegister = null;
 let _onAdvance = null;
 let _onRevertTurn = null;
@@ -63,13 +61,12 @@ function syncCombatDifficultyControls() {
     }
 }
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onChapterClose, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onPowerReview, onDivinationChange, onIntimacy }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onPowerReview, onDivinationChange, onIntimacy }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
     _onSetup = onSetup;
     _onTimeskip = onTimeskip;
-    _onChapterClose = onChapterClose;
     _onRegister = onRegister;
     _onAdvance = onAdvance;
     _onRevertTurn = onRevertTurn;
@@ -229,7 +226,6 @@ function createPanel() {
         <div class="gl-cmd-bar" id="gl-cmd-bar">
             <button class="gl-cmd-btn" data-cmd="setup" title="Setup Wizard (or cancel)"><i class="fa-solid fa-wand-magic-sparkles"></i> Setup</button>
             <button class="gl-cmd-btn" data-cmd="timeskip" title="Timeskip"><i class="fa-solid fa-forward"></i> Skip</button>
-            <button class="gl-cmd-btn" data-cmd="chapter_close" title="Close chapter"><i class="fa-solid fa-flag-checkered"></i> Close Ch.</button>
             <button class="gl-cmd-btn" data-cmd="register" title="Register/promote NPC"><i class="fa-solid fa-user-plus"></i> Register</button>
             <button class="gl-cmd-btn" data-cmd="advance" title="Yield initiative — let the world move"><i class="fa-solid fa-play"></i> Advance</button>
             <button class="gl-cmd-btn" data-cmd="combat" title="Initiate combat — fight this"><i class="fa-solid fa-burst"></i> Combat</button>
@@ -278,7 +274,6 @@ function createPanel() {
         switch (cmd) {
             case 'setup': if (_onSetup) _onSetup(); break;
             case 'timeskip': if (_onTimeskip) _onTimeskip(); break;
-            case 'chapter_close': if (_onChapterClose) _onChapterClose(); break;
             case 'register': if (_onRegister) _onRegister(); break;
             case 'advance': if (_onAdvance) _onAdvance(); break;
             case 'combat': if (_onCombat) _onCombat(); break;
@@ -313,7 +308,6 @@ function renderAllSections() {
         { id: 'world', icon: 'fa-globe', title: 'Factions & World', html: renderWorld(_lastState) },
         { id: 'collisions', icon: 'fa-burst', title: 'Collisions', html: renderCollisions(_lastState) },
         { id: 'combat', icon: 'fa-crosshairs', title: 'Combat', html: renderCombat(_lastState) },
-        { id: 'arc', icon: 'fa-book-open', title: 'Arc & Chapters', html: renderArc(_lastState) },
         { id: 'divination', icon: 'fa-star', title: 'Divination', html: renderDivination(_lastState) },
         { id: 'exemplars', icon: 'fa-thumbs-up', title: 'Style Exemplars', html: renderExemplars() },
     ];
@@ -484,7 +478,7 @@ function updatePanel(state, turn, committedTxIds) {
 
 function computeChangedKeys(prev, curr, prefix) {
     if (!prev || !curr) return;
-    for (const collection of ['characters', 'constraints', 'collisions', 'combats', 'chapters', 'factions']) {
+    for (const collection of ['characters', 'constraints', 'collisions', 'combats', 'factions']) {
         const pc = prev[collection] || {};
         const cc = curr[collection] || {};
         for (const id of new Set([...Object.keys(pc), ...Object.keys(cc)])) {
@@ -526,7 +520,6 @@ function applyChangeHighlights() {
         if (sid === 'world') hasChanges = [..._changedKeys].some(k => k.startsWith('world.') || k.startsWith('factions.'));
         if (sid === 'collisions') hasChanges = [..._changedKeys].some(k => k.startsWith('collisions.'));
         if (sid === 'combat') hasChanges = [..._changedKeys].some(k => k.startsWith('combats.'));
-        if (sid === 'arc') hasChanges = [..._changedKeys].some(k => k.startsWith('chapters.'));
         if (sid === 'divination') hasChanges = [..._changedKeys].some(k => k.startsWith('divination.'));
         if (hasChanges) section.querySelector('.gl-section-header')?.classList.add('gl-changed');
     });
@@ -1158,46 +1151,7 @@ function renderDistanceBar(dist) {
     return `<div class="gl-dist-bar"><div class="gl-dist-fill" style="width:${pct}%;background:${color}"></div><span class="gl-dist-label">dist: ${dist}</span></div>`;
 }
 
-// ─── Tab 4: Arc & Chapters ──────────────────────────────────────────────────────
-
-function renderArc(state) {
-    const parts = [];
-    const chapters = Object.values(state.chapters);
-
-    // Active chapters
-    const active = chapters.filter(ch => ch.status !== 'CLOSED');
-    const closed = chapters.filter(ch => ch.status === 'CLOSED');
-
-    if (active.length) {
-        for (const ch of active) {
-            parts.push(`<div class="gl-collision-card">`);
-            if (ch.profile) {
-                // New: single profile paragraph
-                parts.push(`<div class="gl-collision-name">${badge(ch.status)} ${esc(ch.id)}</div>`);
-                parts.push(`<div class="gl-d-detail">${esc(ch.profile)}</div>`);
-            } else {
-                // Legacy: separate fields
-                parts.push(`<div class="gl-collision-name">Ch${ch.number || '?'}: ${esc(ch.title || ch.focus || '?')} ${badge(ch.status)}</div>`);
-                if (ch.arc) parts.push(`<div class="gl-d-detail"><b>Arc:</b> ${esc(ch.arc)}</div>`);
-                if (ch.central_tension) parts.push(`<div class="gl-d-detail"><b>Tension:</b> ${esc(ch.central_tension)}</div>`);
-                const targets = toArr(ch.target_collisions);
-                if (targets.length) parts.push(`<div class="gl-d-detail"><b>Target collisions:</b> ${targets.map(t => esc(t)).join(', ')}</div>`);
-            }
-            parts.push(`</div>`);
-        }
-    }
-
-    if (closed.length) {
-        parts.push(`<div class="gl-d-section"><b>Closed Chapters:</b></div>`);
-        for (const ch of closed) {
-            parts.push(`<div class="gl-d-row gl-resolved">Ch${ch.number || '?'}: ${esc(ch.title || '?')}</div>`);
-        }
-    }
-
-    return parts.length ? parts.join('') : '<div class="gl-empty">No chapter data</div>';
-}
-
-// ─── Tab 5: Divination ──────────────────────────────────────────────────────────
+// ─── Tab 4: Divination ──────────────────────────────────────────────────────────
 
 function renderDivination(state) {
     const div = state.divination || {};

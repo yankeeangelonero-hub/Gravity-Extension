@@ -114,7 +114,6 @@ const MODE_LOREBOOK_KEYS = Object.freeze({
     intimacyCore: 'gravity_mode_intimacy_core',
     intimacyOptional: 'gravity_mode_intimacy_optional_examples',
     timeskipCore: 'gravity_mode_timeskip_core',
-    chapterCloseCore: 'gravity_mode_chapter_close_core',
     // prose modulation keys (fired alongside mode gameplay keys)
     proseRegular: 'gravity_prose_regular',
     proseCombat: 'gravity_prose_combat',
@@ -129,7 +128,6 @@ function getCollectionForEntityType(state, entityType) {
         constraint: state.constraints,
         collision: state.collisions,
         combat: state.combats,
-        chapter: state.chapters,
         faction: state.factions,
         world: state.world,
         pc: state.pc,
@@ -850,7 +848,7 @@ function clearMatchedCorrections(committedTxns) {
  *   lite     — regular turns without combat/intimacy
  *   combat   — combat challenge active or combat deduction
  *   intimacy — intimacy deduction active
- *   full     — advance, integration, setup, chapter close
+ *   full     — advance, integration, setup
  */
 function getStateViewMode(isRegular, isAdvance, isIntegration, challengeRuntimeActive, reasonMode) {
     if (isIntegration) return 'full';
@@ -917,7 +915,6 @@ function getStateTarget(state, entityType, entityId) {
         constraint: state.constraints,
         collision: state.collisions,
         combat: state.combats,
-        chapter: state.chapters,
         faction: state.factions,
     };
     return collections[entityType]?.[entityId] || null;
@@ -1020,7 +1017,7 @@ function compileStateEntries(stateEntries, currentState) {
  * @param {'regular'|'advance'|'integration'} [mode='regular']
  *   regular     — player prose turn (slim state, core readme)
  *   advance     — world moves turn (full state, core readme, skip heartbeat/dormant)
- *   integration — chapter close/timeskip/setup (full state, full readme)
+ *   integration — timeskip/setup (full state, full readme)
  */
 function injectPrompt(mode) {
     // If no mode specified, reuse the current mode (prevents GENERATION_STARTED from downgrading)
@@ -1596,7 +1593,7 @@ async function onMessageReceived(messageId) {
         return;
     }
 
-    // Cleanup gate: REMOVE/DESTROY/MAP_DEL capped outside eval/chapter-close turns
+    // Cleanup gate: REMOVE/DESTROY/MAP_DEL capped outside eval turns
     // All other operations (SET, APPEND, MAP_SET, MOVE, CREATE, READ) are unlimited
     const CLEANUP_OPS = ['R', 'MR', 'D'];
     const CLEANUP_CAP = 3;
@@ -1614,7 +1611,7 @@ async function onMessageReceived(messageId) {
             return true;
         });
         if (cleanupDropped > 0) {
-            console.warn(`${LOG_PREFIX} Dropped ${cleanupDropped} cleanup operations (cap ${CLEANUP_CAP} outside eval/chapter-close).`);
+            console.warn(`${LOG_PREFIX} Dropped ${cleanupDropped} cleanup operations (cap ${CLEANUP_CAP} outside eval turns).`);
         }
     }
     _uncappedTurn = false;
@@ -1693,7 +1690,7 @@ async function onMessageReceived(messageId) {
     }
     if (cleanupDropped > 0) {
         _pendingReinforcement = (_pendingReinforcement || '') +
-            `\n[LEDGER: ${cleanupDropped} cleanup operations dropped (REMOVE/DESTROY capped at ${CLEANUP_CAP} outside eval/chapter-close). Save bulk cleanup for OOC: eval or chapter close.]`;
+            `\n[LEDGER: ${cleanupDropped} cleanup operations dropped (REMOVE/DESTROY capped at ${CLEANUP_CAP} outside eval turns). Save bulk cleanup for OOC: eval.]`;
     }
     if (allErrors.length > 0 && validTxns.length > 0) {
         _pendingReinforcement = (_pendingReinforcement || '') +
@@ -2133,7 +2130,7 @@ First, sanity-check whether active danger, pursuit, or unresolved pressure would
 
 Advance the world honestly across 3-6 beats: the PC's rhythm, at least one off-screen faction or tracked character, a collision or pressure point tightening, and the landing scene that demands response now.
 
-Use a full LEDGER block for the structural updates across characters, factions, collisions, world, pressure points, timeline, and summary. Record divination.last_draw in the update block. Do not close the chapter.`,
+Use a full LEDGER block for the structural updates across characters, factions, collisions, world, and pressure points. Record divination.last_draw in the update block.`,
         [MODE_LOREBOOK_KEYS.timeskipCore],
     );
 
@@ -2141,31 +2138,6 @@ Use a full LEDGER block for the structural updates across characters, factions, 
     insertChatMessage(`OOC: Timeskip - ${duration}`);
 }
 
-async function handleChapterCloseButton() {
-    _uncappedTurn = true;
-    const chapterDraw = drawDivination();
-
-    _pendingOOCInjection = buildModeInjection(
-        'GRAVITY CHAPTER CLOSE',
-        `Execute chapter close across multiple responses.
-
-Response 1:
-- Audit state drift, stale collisions, missing updates, and loaded guns that fired or rotted.
-- Append a durable chapter summary.
-- Reassess every active faction and refresh pressure points.
-- Ask the player where the next chapter should start, how much time passes, and what they want emphasized.
-
-Response 2 after the player's answer:
-${formatDrawInstruction(chapterDraw, 'The draw colors the tone and direction of the next chapter.')}
-- Sanity-check the requested start.
-- Timeskip to the opening.
-- Close the old chapter, open the new one, emit the structural LEDGER updates, and write the new opening scene.`,
-        [MODE_LOREBOOK_KEYS.chapterCloseCore],
-    );
-
-    injectPrompt('integration');
-    insertChatMessage('OOC: Close this chapter.');
-}
 
 async function handleRevertTurn(txIds) {
     if (!txIds || txIds.length === 0) {
@@ -2267,7 +2239,6 @@ async function handleImportData(data) {
         onImport: handleImportData,
         onSetup: handleSetupButton,
         onTimeskip: handleTimeskipButton,
-        onChapterClose: handleChapterCloseButton,
         onRegister: handleRegisterButton,
         onAdvance: handleAdvanceButton,
         onRevertTurn: handleRevertTurn,

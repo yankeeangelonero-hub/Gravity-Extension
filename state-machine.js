@@ -37,23 +37,15 @@ const CONSTRAINT_TRANSITIONS = {
 };
 
 // ─── Collision Lifecycle ───────────────────────────────────────────────────────
-// Tier determines starting distance and tick rate:
-//   flash  — starts ACTIVE (dist 0-2), skips SEEDED/SIMMERING, resolves in 1-3 turns
-//   arc    — standard lifecycle SEEDED→SIMMERING→ACTIVE→RESOLVING→RESOLVED (dist 4-6)
-//   saga   — chapter-spanning (dist 8-10), ticks every 2-3 advances, resists resolution
-//
-// Flash lifecycle: ACTIVE → RESOLVING → RESOLVED (no SEEDED or SIMMERING)
-// Arc/Saga lifecycle: SEEDED → SIMMERING → ACTIVE → RESOLVING → RESOLVED/CRASHED
+// Phase 2: simplified to ACTIVE → RESOLVED / CRASHED
+// distance_category (IMMEDIATE/SHORT/MEDIUM/LONG) replaces tier-based starting distances
 
-const COLLISION_STATES = ['SEEDED', 'SIMMERING', 'ACTIVE', 'RESOLVING', 'RESOLVED', 'CRASHED'];
+const COLLISION_STATES = ['ACTIVE', 'RESOLVED', 'CRASHED'];
 
 const COLLISION_TRANSITIONS = {
-    SEEDED:    { advance: 'SIMMERING' },
-    SIMMERING: { advance: 'ACTIVE' },
-    ACTIVE:    { advance: 'RESOLVING', crash: 'CRASHED' },
-    RESOLVING: { advance: 'RESOLVED', crash: 'CRASHED' },
-    RESOLVED:  {},  // terminal
-    CRASHED:   {},  // terminal — uncontrolled collision
+    ACTIVE:   { resolve: 'RESOLVED', crash: 'CRASHED' },
+    RESOLVED: {},  // terminal
+    CRASHED:  {},  // terminal — uncontrolled collision
 };
 
 // ─── Combat Lifecycle ──────────────────────────────────────────────────────────
@@ -64,18 +56,6 @@ const COMBAT_STATES = ['ACTIVE', 'RESOLVED'];
 const COMBAT_TRANSITIONS = {
     ACTIVE: { advance: 'RESOLVED' },
     RESOLVED: {},
-};
-
-// ─── Chapter Lifecycle ─────────────────────────────────────────────────────────
-// PLANNED → OPEN → CLOSING → CLOSED
-
-const CHAPTER_STATES = ['PLANNED', 'OPEN', 'CLOSING', 'CLOSED'];
-
-const CHAPTER_TRANSITIONS = {
-    PLANNED: { advance: 'OPEN' },
-    OPEN:    { advance: 'CLOSING' },
-    CLOSING: { advance: 'CLOSED' },
-    CLOSED:  {},  // terminal
 };
 
 // ─── Transition Validator ──────────────────────────────────────────────────────
@@ -89,7 +69,7 @@ const CHAPTER_TRANSITIONS = {
 
 /**
  * Validate a state transition.
- * @param {string} entityType - 'char', 'constraint', 'collision', 'chapter'
+ * @param {string} entityType - 'char', 'constraint', 'collision', 'combat'
  * @param {string} field - The field being transitioned (e.g. 'tier', 'integrity', 'status')
  * @param {string} from - Current state
  * @param {string} to - Target state
@@ -101,12 +81,11 @@ function validateTransition(entityType, field, from, to) {
         constraint: { field: 'integrity', transitions: CONSTRAINT_TRANSITIONS, states: CONSTRAINT_LEVELS },
         collision:  { field: 'status', transitions: COLLISION_TRANSITIONS, states: COLLISION_STATES },
         combat:     { field: 'status', transitions: COMBAT_TRANSITIONS, states: COMBAT_STATES },
-        chapter:    { field: 'status', transitions: CHAPTER_TRANSITIONS, states: CHAPTER_STATES },
     };
 
     const machine = machines[entityType];
     if (!machine) {
-        return { valid: true }; // No state machine for this entity type (world, pc)
+        return { valid: true }; // No state machine for this entity type (world, pc, place, etc.)
     }
 
     // Only validate the state-machine-governed field
@@ -160,7 +139,6 @@ function getValidNextStates(entityType, currentState) {
         constraint: CONSTRAINT_TRANSITIONS,
         collision:  COLLISION_TRANSITIONS,
         combat:     COMBAT_TRANSITIONS,
-        chapter:    CHAPTER_TRANSITIONS,
     };
 
     const transitions = machines[entityType];
@@ -189,7 +167,6 @@ function getStateMachineField(entityType) {
         constraint: 'integrity',
         collision: 'status',
         combat: 'status',
-        chapter: 'status',
     };
     return fields[entityType] || null;
 }
@@ -203,8 +180,6 @@ export {
     COLLISION_TRANSITIONS,
     COMBAT_STATES,
     COMBAT_TRANSITIONS,
-    CHAPTER_STATES,
-    CHAPTER_TRANSITIONS,
     validateTransition,
     getValidNextStates,
     isTerminal,

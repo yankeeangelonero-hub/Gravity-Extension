@@ -77,7 +77,6 @@ async function handleEval() {
     lines.push(`Characters: ${Object.keys(state.characters).length}`);
     lines.push(`Constraints: ${Object.keys(state.constraints).length}`);
     lines.push(`Collisions: ${Object.keys(state.collisions).length}`);
-    lines.push(`Chapters: ${Object.keys(state.chapters).length}`);
     lines.push(`Factions: ${Object.keys(state.factions || {}).length}`);
     lines.push(`Divination: ${state.divination?.active_system || 'not set'}`);
     lines.push('');
