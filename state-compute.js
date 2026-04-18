@@ -488,6 +488,14 @@ function computeState(snapshot, transactions) {
     normalizeCharacterKnowledgeAsymmetry(state);
     normalizeFactionIntel(state);
 
+    // Migrate legacy collision statuses to Phase 2 simplified machine
+    for (const col of Object.values(state.collisions || {})) {
+        const st = (col.status || '').toUpperCase();
+        if (['SEEDED', 'SIMMERING', 'RESOLVING'].includes(st)) {
+            col.status = 'ACTIVE';
+        }
+    }
+
     return state;
 }
 

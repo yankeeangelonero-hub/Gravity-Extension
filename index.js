@@ -16,7 +16,7 @@ import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from '
 import { processOOC } from './ooc-handler.js';
 import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
-import { getStateMachineField } from './state-machine.js';
+import { getStateMachineField, validateTransition } from './state-machine.js';
 import {
     buildChallengePrompt,
     clearChallengeRuntime,
@@ -72,6 +72,7 @@ let _advanceLocked = false;
 // Tracks the last turn on which buildAndInjectArrivals fired — prevents injectPrompt from
 // clearing the _arrival slot on the same turn an IMMEDIATE collision arrived.
 let _arrivalLastFiredTurn = -1;
+let _archiveCorrectionAttempts = new Map(); // collision id → attempt count for archive-presence corrections
 
 const ARCANA_TABLE = [
     'The Fool — A leap into the unknown. Something begins that nobody planned.',
@@ -1521,6 +1522,7 @@ async function initialize(force = false) {
     _firedCollisionArrivals = new Set();
     _foreshadowedCollisions = new Map();
     _arrivalLastFiredTurn = -1;
+    _archiveCorrectionAttempts = new Map();
 
     if (!chatId) {
         console.log(`${LOG_PREFIX} No active chat.`);
@@ -1676,6 +1678,21 @@ async function onMessageReceived(messageId) {
         }
         // ─────────────────────────────────────────────────────────────────
 
+        // ── Validate state machine transitions (TR ops only) ─────────────
+        if (tx.op === 'TR') {
+            const transitionResult = validateTransition(tx.e, tx.d?.f, tx.d?.from, tx.d?.to);
+            if (!transitionResult.valid) {
+                validationErrors.push({
+                    lineNum: i,
+                    error: transitionResult.error,
+                    fix: transitionResult.fix,
+                    raw: `[tr ${tx.e}:${tx.id}]`,
+                });
+                continue;
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────
+
         validTxns.push(tx);
     }
 
@@ -1726,6 +1743,45 @@ async function onMessageReceived(messageId) {
                 text: `Collision ${tx.id} was created without distance_category. Add distance_category=IMMEDIATE|SHORT|MEDIUM|LONG on CR — the engine resolves the numeric distance.`,
                 attempts: 0,
             });
+        }
+    }
+
+    // ── Archive presence check (§2.2.1, §6.1) ──────────────────────────────────
+    // After each commit, scan for terminal collision TRs without a matching archive append.
+    if (committedTxns.length > 0) {
+        const terminalIds = committedTxns
+            .filter(tx => tx.op === 'TR' && tx.e === 'collision'
+                && (tx.d?.to === 'RESOLVED' || tx.d?.to === 'CRASHED'))
+            .map(tx => tx.id);
+
+        const archiveAppended = committedTxns.some(tx =>
+            tx.op === 'A' && tx.e === 'world' && tx.d?.f === 'collision_archive'
+        );
+
+        for (const colId of terminalIds) {
+            if (archiveAppended) {
+                _archiveCorrectionAttempts.delete(colId);
+                continue;
+            }
+            const attempts = (_archiveCorrectionAttempts.get(colId) || 0) + 1;
+            if (attempts > MAX_CORRECTION_ATTEMPTS) {
+                // Auto-generate fallback archive entry
+                const col = _currentState.collisions?.[colId];
+                if (col) {
+                    const fallback = `[collision] ${col.name || colId} [resolution] ${col.outcome_type || col.status} — auto-generated (archive missing after ${MAX_CORRECTION_ATTEMPTS} attempts) [hook] none [aftermath] ${col.aftermath || 'unknown'}`;
+                    try {
+                        const autoTxns = await append([{ op: 'A', e: 'world', id: '_', d: { f: 'collision_archive', v: fallback }, r: 'system:archive:auto-fallback' }]);
+                        _currentState = computeState(_currentState, autoTxns);
+                    } catch (_) { /* non-critical */ }
+                }
+                _archiveCorrectionAttempts.delete(colId);
+            } else {
+                _archiveCorrectionAttempts.set(colId, attempts);
+                queueCorrections([{
+                    raw: `[collision:${colId} archive]`,
+                    error: `Missing archive entry for resolved collision ${colId}. Add: A world field=collision_archive value="[collision] ... [resolution] ... [hook] ... [aftermath] ..."`,
+                }]);
+            }
         }
     }
 
@@ -2330,6 +2386,7 @@ async function handleNewLedger() {
     _firedCollisionArrivals = new Set();
     _foreshadowedCollisions = new Map();
     _arrivalLastFiredTurn = -1;
+    _archiveCorrectionAttempts = new Map();
     await initialize(true);
 }
 
@@ -2352,6 +2409,7 @@ async function handleImportData(data) {
     _firedCollisionArrivals = new Set();
     _foreshadowedCollisions = new Map();
     _arrivalLastFiredTurn = -1;
+    _archiveCorrectionAttempts = new Map();
     await initialize(true);
 }
 

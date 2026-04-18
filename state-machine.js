@@ -37,15 +37,16 @@ const CONSTRAINT_TRANSITIONS = {
 };
 
 // ─── Collision Lifecycle ───────────────────────────────────────────────────────
-// Phase 2: simplified to ACTIVE → RESOLVED / CRASHED
-// distance_category (IMMEDIATE/SHORT/MEDIUM/LONG) replaces tier-based starting distances
+// Phase 2: Simplified — all collisions start ACTIVE.
+// ACTIVE → RESOLVED (on-screen, off-screen, evolved, dissolved, imploded)
+// ACTIVE → CRASHED (distance hit 0 and scene did not engage)
 
 const COLLISION_STATES = ['ACTIVE', 'RESOLVED', 'CRASHED'];
 
 const COLLISION_TRANSITIONS = {
     ACTIVE:   { resolve: 'RESOLVED', crash: 'CRASHED' },
     RESOLVED: {},  // terminal
-    CRASHED:  {},  // terminal — uncontrolled collision
+    CRASHED:  {},  // terminal — forces acted without characters
 };
 
 // ─── Combat Lifecycle ──────────────────────────────────────────────────────────

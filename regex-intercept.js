@@ -561,7 +561,7 @@ function buildCorrectionInjection(failedLines) {
     const lines = [`[STATE/LEDGER CORRECTIONS NEEDED — resubmit these lines fixed:`];
     for (const fl of failedLines) {
         lines.push(`  Original: ${fl.raw}`);
-        lines.push(`  Error: ${fl.error}`);
+        lines.push(`  Error: ${fl.error}${fl.fix ? ' — ' + fl.fix : ''}`);
         lines.push('');
     }
     lines.push(`Include corrected information in your next ---STATE--- or ---LEDGER--- block along with new updates.]`);
