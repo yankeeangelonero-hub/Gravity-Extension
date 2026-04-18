@@ -74,6 +74,9 @@ const RESOLUTION_CRASH_TURNS = 6;     // turn 5+: oracle decides, crash if unres
 // Phase 2: Timeskip multipliers (§3.2)
 const TICK = { HOURS: 1, DAYS: 3, WEEKS: 10, MONTHS: 20 };
 let _advanceLocked = false;
+// Tracks the last turn on which buildAndInjectArrivals fired — prevents injectPrompt from
+// clearing the _arrival slot on the same turn an IMMEDIATE collision arrived.
+let _arrivalLastFiredTurn = -1;
 
 const ARCANA_TABLE = [
     'The Fool — A leap into the unknown. Something begins that nobody planned.',
@@ -1016,6 +1019,108 @@ function compileStateEntries(stateEntries, currentState) {
     return { transactions, errors };
 }
 
+// ─── Collision Arrival Pipeline (§3.3, §3.5) ─────────────────────────────────
+
+function checkProximity(col, state) {
+    if (!col.location) return 'unknown';
+    const involvedChars = (col.involved_chars || [])
+        .map(id => state.characters[id])
+        .filter(Boolean);
+    if (involvedChars.length === 0) return 'unknown';
+    const atLocation = involvedChars.filter(c => c.location === col.location);
+    if (atLocation.length > 0) return 'on-screen-plausible';
+    return 'off-screen-likely';
+}
+
+function buildInvolvedCharsSummary(col, state) {
+    const ids = Array.isArray(col.involved_chars) ? col.involved_chars : [];
+    if (ids.length === 0) return 'no tracked characters';
+    return ids.map(id => {
+        const c = state.characters[id];
+        if (!c) return id;
+        const locName = c.location ? (state.places?.[c.location]?.name || c.location) : null;
+        return locName ? `${c.name || id} @ ${locName}` : (c.name || id);
+    }).join(', ');
+}
+
+// Stub: full sanity-check template implemented in PR-D (Task 7)
+function buildArrivalBlock(col, draw, involvedSummary, placeName, proximityLine) {
+    const immediateNote = col.distance_category === 'IMMEDIATE'
+        ? '\nThis collision arrives immediately — brief, sharp, decisive. Resolve in this scene.'
+        : '';
+    return `[GRAVITY — COLLISION ARRIVED: "${col.name || col.id}"]
+Draw: ${draw.label} — ${draw.reading}
+
+Forces: ${col.forces || '(unspecified)'}
+Involved: ${involvedSummary}
+Anchored at: ${placeName || 'unspecified'}
+${proximityLine}${immediateNote}
+
+SANITY CHECK — commit one of these NOW:
+
+  ON-SCREEN — The collision's forces are present in this scene. Make it the central beat.
+    Write it arriving. Then in the ledger:
+      TR collision:${col.id} field=status from=ACTIVE to=RESOLVED
+      S collision:${col.id} field=outcome_type value=DIRECT
+      S collision:${col.id} field=aftermath value="<what permanently changed>"
+      A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] on-screen — <how> [hook] <handles> [aftermath] <change>"
+
+  OFF-SCREEN — The forces resolved while characters were elsewhere. Choose:
+    A) REFRAME — it mutated. Create a successor.
+      TR collision:${col.id} field=status from=ACTIVE to=RESOLVED
+      S collision:${col.id} field=outcome_type value=EVOLVED
+      A collision:${col.id} field=successor_collision_ids value=<new-id>
+      CR collision:<new-id> name="..." distance_category=SHORT forces="..." ...
+      A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] off-screen — mutated into <new-id> [hook] <handles> [aftermath] <change>"
+    B) DISSOLVE — it ended quietly.
+      TR collision:${col.id} field=status from=ACTIVE to=RESOLVED
+      S collision:${col.id} field=outcome_type value=DISSOLVED
+      S collision:${col.id} field=aftermath value="<one sentence: what changed off-screen>"
+      A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] off-screen — dissolved [hook] <any residue> [aftermath] <change>"
+
+  IMPLODE — The narrative has moved completely past this.
+      TR collision:${col.id} field=status from=ACTIVE to=RESOLVED
+      S collision:${col.id} field=outcome_type value=IMPLODED
+      S collision:${col.id} field=aftermath value="Imploded — narrative moved on."
+      A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] imploded — <why> [hook] none [aftermath] n/a"
+
+CRASHED status — if distance hits 0 and the scene does not engage:
+      TR collision:${col.id} field=status from=ACTIVE to=CRASHED
+      S collision:${col.id} field=outcome_type value=CRASHED
+      S collision:${col.id} field=aftermath value="<consequence of being ignored>"
+      A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] crashed — ignored [hook] <consequence threads> [aftermath] <change>"
+
+No multi-turn delay. This collision is decided this turn.`;
+}
+
+function buildAndInjectArrivals(ids, state) {
+    const blocks = [];
+    for (const id of ids) {
+        if (_firedCollisionArrivals.has(id)) continue;
+        _firedCollisionArrivals.add(id);
+        const col = state.collisions[id];
+        if (!col) continue;
+        const draw = drawDivination();
+        const proximity = checkProximity(col, state);
+        const involvedSummary = buildInvolvedCharsSummary(col, state);
+        const placeName = col.location
+            ? (state.places?.[col.location]?.name || col.location)
+            : null;
+        const proximityLine = {
+            'on-screen-plausible': 'Involved characters are at this location.',
+            'off-screen-likely': 'Involved characters are currently elsewhere.',
+            'unknown': 'Character locations relative to this collision are unknown.',
+        }[proximity];
+        blocks.push(buildArrivalBlock(col, draw, involvedSummary, placeName, proximityLine));
+    }
+    if (blocks.length > 0) {
+        const ctx = SillyTavern.getContext();
+        ctx.setExtensionPrompt(`${MODULE_NAME}_arrival`, blocks.join('\n\n'), PROMPT_IN_CHAT, 0);
+        _arrivalLastFiredTurn = _turnCounter;
+        console.log(`${LOG_PREFIX} Collision arrival injection: ${blocks.length} block(s)`);
+    }
+}
+
 /**
  * Inject prompts based on turn mode.
  * @param {'regular'|'advance'|'integration'} [mode='regular']
@@ -1203,7 +1308,8 @@ function injectPrompt(mode) {
                 if (st === 'RESOLVED') _resolutionTracker.delete(trackedId);
             }
 
-            const newArrivals = [];
+            // New arrivals are now event-driven: IMMEDIATE via onMessageReceived,
+            // distance-0 via handleAdvanceButton after tick. Not detected here.
 
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
                 const status = (col.status || '').trim().toUpperCase();
@@ -1211,19 +1317,6 @@ function injectPrompt(mode) {
                 const dist = parseFloat(col.distance);
                 const colDetails = buildCollisionStoryCapsule(id, col);
                 collisionWarnings.push(...buildCollisionNarrativeWarnings(id, col, status));
-
-                // ── New arrival — distance ≤ 0 and not yet tracked ───────────────
-                if (!isNaN(dist) && dist <= 0 && !_firedCollisionArrivals.has(id)) {
-                    const arrivalDraw = drawDivination();
-                    _firedCollisionArrivals.add(id);
-                    _resolutionTracker.set(id, {
-                        phase: 'arrived',
-                        arrivalTurn: _turnCounter,
-                        arrivalDraw,
-                    });
-                    newArrivals.push({ id, col, colDetails, arrivalDraw });
-                    continue;
-                }
 
                 // ── Resolution escalation — already tracked, RESOLVING ───────────
                 if (status === 'RESOLVING' && _resolutionTracker.has(id)) {
@@ -1310,58 +1403,8 @@ Write the crash as a scene that interrupts whatever the player is doing. It is d
                 }
             }
 
-            // ── Build arrival blocks (deferred to allow convergence handling) ──────
-            if (newArrivals.length === 1) {
-                const { id, col, colDetails, arrivalDraw } = newArrivals[0];
-                collisionBlocks.push(`═══ COLLISION ARRIVAL: "${col.name || id}" ═══
-${colDetails}
-
-${arrivalDraw.label}: ${arrivalDraw.reading}${arrivalDraw.html ? `\nRender this HTML card reveal before interpreting:\n${arrivalDraw.html}` : ''}
-
-This collision has reached distance 0. It detonates NOW.
-
-You have FULL LICENSE to make this happen. Move NPCs into the scene. Spawn threats. Have someone arrive with information. Trigger events. Create new characters. Use environmental disasters. Whatever it takes to force this issue into the player's immediate reality.
-
-The draw shapes the CIRCUMSTANCE of how this collision arrives — not the outcome. Write the situation, not the resolution. The player must respond to it.
-
-MOVE status to RESOLVING. The resolution clock is now ticking.
-
-Four outcomes are possible:
-• RESOLVED (outcome_type: DIRECT) — the player engaged and shaped the result. Clean or costly, including active retreat.
-• RESOLVED (outcome_type: EVOLVED) — resolution reveals a deeper tension. Record aftermath, CREATE a successor collision, link with successor_collision_ids.
-• RESOLVED (outcome_type: IMPLODED) — the collision collapsed internally before the player engaged. Record what fell apart and why. Successor optional.
-• RESOLVED (outcome_type: CRASHED) — the player ignored it and gravity resolves it for them. Worst outcome. Write the worst reasonable outcome. Record aftermath.
-
-Every closure requires: collision:${id}.status: RESOLVED — collision:${id}.outcome_type: DIRECT/EVOLVED/IMPLODED/CRASHED — collision:${id}.aftermath: "..."
-
-The player has ${RESOLUTION_CRASH_TURNS} turns to engage before the oracle decides for them.`);
-
-            } else if (newArrivals.length > 1) {
-                // Multiple simultaneous arrivals — build individual blocks then add convergence
-                for (const { id, col, colDetails, arrivalDraw } of newArrivals) {
-                    collisionBlocks.push(`═══ COLLISION ARRIVAL: "${col.name || id}" ═══
-${colDetails}
-
-${arrivalDraw.label}: ${arrivalDraw.reading}${arrivalDraw.html ? `\nRender this HTML card reveal before interpreting:\n${arrivalDraw.html}` : ''}`);
-                }
-                const convergenceDraw = drawDivination();
-                const arrivalNames = newArrivals.map(a => `"${a.col.name || a.id}"`).join(' and ');
-                collisionBlocks.push(`═══ CONVERGENCE: ${newArrivals.length} COLLISIONS ARRIVE SIMULTANEOUSLY ═══
-${arrivalNames} have all hit distance 0 on the same turn.
-
-${convergenceDraw.label}: ${convergenceDraw.reading}${convergenceDraw.html ? `\nRender this HTML card reveal before interpreting:\n${convergenceDraw.html}` : ''}
-
-Choose the relationship between these arrivals before writing the scene. Choose one:
-• PARALLEL — they arrive at the same time but remain distinct tensions. One foregrounds first; the others are active in the same scene or immediate next beat. No forced merge.
-• CASCADE — one collision becomes the trigger or delivery vehicle for another. Both remain distinct, but their arrivals are causally linked. Name which drives which.
-• COMPOSITE — the simultaneous arrivals form a single larger event. Write one coherent converged scene. Each parent collision typically closes with outcome_type: MERGED. CREATE a composite successor collision and link parent_collision_ids / successor_collision_ids.
-
-Do not announce this choice as visible meta text. Let the scene itself make the structure clear: PARALLEL means one arrival foregrounds while the others stay live, CASCADE means one arrival delivers the next, and COMPOSITE means the arrivals land as one merged event. The convergence draw colors the shape of the combined event.
-
-If a parent collision closes inside the converged event, each parent still needs status: RESOLVED, outcome_type: MERGED, aftermath, and successor linkage.
-
-MOVE each arrived collision to RESOLVING. The resolution clock is now ticking for all of them.`);
-            }
+            // Arrival injection is now event-driven via buildAndInjectArrivals()
+            // called from onMessageReceived (IMMEDIATE) and handleAdvanceButton (distance-0).
 
             // ── Closure audit — resolved collisions missing required fields ────────
             const closureWarnings = [];
@@ -1381,7 +1424,8 @@ MOVE each arrived collision to RESOLVING. The resolution clock is now ticking fo
             if (collisionBlocks.length > 0) {
                 setExtensionPrompt(`${MODULE_NAME}_arrival`, collisionBlocks.join('\n\n'), PROMPT_IN_CHAT, 0);
                 console.log(`${LOG_PREFIX} Collision resolution injection: ${collisionBlocks.length} block(s)`);
-            } else {
+            } else if (_arrivalLastFiredTurn !== _turnCounter) {
+                // Only clear if buildAndInjectArrivals did not already set the slot this turn
                 setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
             }
 
@@ -1393,7 +1437,9 @@ MOVE each arrived collision to RESOLVING. The resolution clock is now ticking fo
                 setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
             }
         } else {
-            setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
+            if (_arrivalLastFiredTurn !== _turnCounter) {
+                setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
+            }
             setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
         }
 
@@ -1498,6 +1544,7 @@ async function initialize(force = false) {
     _pendingManualDivination = null;
     _firedCollisionArrivals = new Set();
     _resolutionTracker = new Map();
+    _arrivalLastFiredTurn = -1;
 
     if (!chatId) {
         console.log(`${LOG_PREFIX} No active chat.`);
@@ -1752,6 +1799,18 @@ async function onMessageReceived(messageId) {
         _pendingReinforcement = _pendingReinforcement
             ? `${_pendingReinforcement}\n${challengeCorrection}`
             : challengeCorrection;
+    }
+
+    // ── IMMEDIATE collision firing (§3.3) — fire on the turn they are created ──
+    if (_currentState) {
+        const immediateArrivals = committedTxns
+            .filter(tx => tx.op === 'CR' && tx.e === 'collision'
+                && tx.d?.distance_category === 'IMMEDIATE')
+            .map(tx => tx.id)
+            .filter(id => !_firedCollisionArrivals.has(id));
+        if (immediateArrivals.length > 0) {
+            buildAndInjectArrivals(immediateArrivals, _currentState);
+        }
     }
 
     injectPrompt();
@@ -2285,6 +2344,7 @@ async function handleNewLedger() {
     _pendingReinforcement = null;
     _resolutionTracker = new Map();
     _firedCollisionArrivals = new Set();
+    _arrivalLastFiredTurn = -1;
     await initialize(true);
 }
 
@@ -2306,6 +2366,7 @@ async function handleImportData(data) {
     _pendingReinforcement = null;
     _resolutionTracker = new Map();
     _firedCollisionArrivals = new Set();
+    _arrivalLastFiredTurn = -1;
     await initialize(true);
 }
 
