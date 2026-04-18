@@ -263,7 +263,7 @@ const combatProfile = Object.freeze({
         lines.push(`Challenge runtime is active for combat:${runtime.entity_id}.`);
         lines.push(`Challenge lock: ${runtime.locked ? 'engaged' : 'released'}`);
         lines.push(`Phase: ${runtime.phase}`);
-        lines.push(`Runtime exchange: ${runtime.exchange}`);
+        // Engine tracks exchange internally — do not expose to LLM (§combat runtime).
         lines.push(`Difficulty mode: ${runtime.difficulty_mode}`);
         lines.push(`Success thresholds: ${helpers.describeDcTable(helpers.dcTable)}`);
         lines.push(`Scene draw:\n${formatDrawBlock(runtime.scene_draw, {

@@ -788,7 +788,7 @@ function checkProximity(col, state) {
 
 function buildInvolvedCharsSummary(col, state) {
     const ids = Array.isArray(col.involved_chars) ? col.involved_chars : [];
-    if (ids.length === 0) return 'no tracked characters';
+    if (ids.length === 0) return 'unknown';
     return ids.map(id => {
         const c = state.characters[id];
         if (!c) return id;
@@ -844,7 +844,8 @@ CRASHED status — if distance hits 0 and the scene does not engage:
       S collision:${col.id} field=aftermath value="<consequence of being ignored>"
       A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] crashed — ignored [hook] <consequence threads> [aftermath] <change>"
 
-No multi-turn delay. This collision is decided this turn.`;
+No multi-turn delay. This collision is decided this turn.
+Commit the decision in the ledger this turn. No waiting.`;
 }
 
 function buildAndInjectArrivals(ids, state) {
@@ -869,11 +870,13 @@ function buildAndInjectArrivals(ids, state) {
     }
     if (blocks.length > 0) {
         if (blocks.length > 1) {
-            const names = ids
-                .filter(id => state.collisions[id])
+            // Build name list from collisions that actually produced a block — skipped arrivals
+            // (already fired, missing entity) must not appear in the "simultaneous" roster.
+            const firedNames = ids
+                .filter(id => state.collisions[id] && _firedCollisionArrivals.has(id))
                 .map(id => `"${state.collisions[id].name || id}"`)
-                .join(', ');
-            blocks.unshift(`[SIMULTANEOUS ARRIVALS — ${blocks.length} collisions have arrived this turn: ${names}. ONLY ONE may resolve ON-SCREEN. Apply rule of cool — pick the most dramatically compelling. Resolve the rest OFF-SCREEN (REFRAME or DISSOLVE) or IMPLODE. Every arrived collision must be committed this turn.]`);
+                .slice(0, blocks.length);
+            blocks.unshift(`[SIMULTANEOUS ARRIVALS — ${blocks.length} collisions have arrived this turn: ${firedNames.join(', ')}. ONLY ONE may resolve ON-SCREEN. Apply rule of cool — pick the most dramatically compelling. Resolve the rest OFF-SCREEN (REFRAME or DISSOLVE) or IMPLODE. Every arrived collision must be committed this turn.]`);
         }
         const ctx = SillyTavern.getContext();
         ctx.setExtensionPrompt(`${MODULE_NAME}_arrival`, blocks.join('\n\n'), PROMPT_IN_CHAT, 0);
@@ -989,7 +992,7 @@ function buildNudge_relationshipPulse(state, charId) {
     const isPrincipal = char.tier === 'PRINCIPAL';
     let prompt = `[GRAVITY NUDGE — relationship_pulse]\nHas this scene affected ${name}'s relationship with the PC?`;
     if (isPrincipal) {
-        prompt += `\nIf significant: A char:${charId} field=key_moments value="[Day X — HH:MM] ..."`;
+        prompt += `\nIf significant: A char:${charId} field=key_moments value="[moment] <what happened> [hook] <open thread> [weight] <1-5>"`;
     }
     prompt += `\nIf no meaningful shift, skip.`;
     return prompt;
@@ -1881,9 +1884,10 @@ async function handleAdvanceButton() {
 
     // Lock DOM button immediately; re-enable on next MESSAGE_RECEIVED
     const advBtn = document.getElementById('gl-input-advance');
+    let reenableAdvBtn;
     if (advBtn) {
         advBtn.disabled = true;
-        const reenableAdvBtn = () => {
+        reenableAdvBtn = () => {
             advBtn.disabled = false;
             _advanceLocked = false;
             eventSource.off(event_types.MESSAGE_RECEIVED, reenableAdvBtn);
@@ -1903,6 +1907,7 @@ async function handleAdvanceButton() {
         );
         if (unresolved) {
             toastr.error(`Unresolved arrival: "${unresolved.name || unresolved.id}" has arrived (distance 0). Resolve it before advancing.`);
+            if (reenableAdvBtn) eventSource.off(event_types.MESSAGE_RECEIVED, reenableAdvBtn);
             if (advBtn) { advBtn.disabled = false; }
             _advanceLocked = false;
             return;

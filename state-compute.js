@@ -270,10 +270,6 @@ function applyTransaction(state, tx) {
                     data.status = 'RESOLVED';
                     if (!data.outcome_type) data.outcome_type = 'CRASHED';
                 }
-                // Legacy field — Phase 2 uses distance_category instead.
-                if (tx.e === 'collision' && !data.tier) {
-                    data.tier = 'arc';
-                }
                 // Normalize place defaults
                 if (tx.e === 'place') {
                     if (!data.reach) data.reach = 'LOCAL';
@@ -506,14 +502,6 @@ function computeState(snapshot, transactions) {
 
     normalizeCharacterKnowledgeAsymmetry(state);
     normalizeFactionIntel(state);
-
-    // Migrate legacy collision statuses to Phase 2 simplified machine
-    for (const col of Object.values(state.collisions || {})) {
-        const st = (col.status || '').toUpperCase();
-        if (['SEEDED', 'SIMMERING', 'RESOLVING'].includes(st)) {
-            col.status = 'ACTIVE';
-        }
-    }
 
     return state;
 }

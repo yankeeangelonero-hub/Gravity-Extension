@@ -314,7 +314,7 @@ function renderAllSections() {
         { id: 'exemplars', icon: 'fa-thumbs-up', title: 'Style Exemplars', html: renderExemplars() },
     ];
 
-    container.innerHTML = sections.map(s => `
+    container.innerHTML = sections.filter(s => s.html).map(s => `
         <div class="gl-section" data-section="${s.id}">
             <div class="gl-section-header" data-toggle="${s.id}">
                 <i class="fa-solid ${s.icon}"></i>
@@ -982,7 +982,7 @@ function renderCollisions(state) {
     for (const col of active) {
         const forces = Array.isArray(col.forces) ? col.forces.map(f => typeof f === 'object' ? f.name || f : f).join(' vs ') : String(col.forces || '');
         const dist = col.distance != null ? Number(col.distance) : null;
-        const distBar = dist != null ? renderDistanceBar(dist) : '';
+        const distBar = dist != null ? renderDistanceBar(dist, col.distance_category) : '';
         const parents = toArr(col.parent_collision_ids);
 
         parts.push(`<div class="gl-collision-card">`);
@@ -1121,10 +1121,14 @@ function renderCombat(state) {
     return parts.join('');
 }
 
-function renderDistanceBar(dist) {
-    const pct = Math.max(0, Math.min(100, (dist / 10) * 100));
-    const color = dist <= 3 ? '#f66' : dist <= 6 ? '#da6' : '#6a6';
-    return `<div class="gl-dist-bar"><div class="gl-dist-fill" style="width:${pct}%;background:${color}"></div><span class="gl-dist-label">dist: ${dist}</span></div>`;
+function renderDistanceBar(dist, category) {
+    const MAX_BY_CATEGORY = { IMMEDIATE: 1, SHORT: 10, MEDIUM: 20, LONG: 50 };
+    const max = MAX_BY_CATEGORY[category] || 10;
+    const pct = Math.max(0, Math.min(100, (dist / max) * 100));
+    // Threshold colors are relative to max — red at ≤30%, yellow at ≤60%, green otherwise.
+    const color = dist <= max * 0.3 ? '#f66' : dist <= max * 0.6 ? '#da6' : '#6a6';
+    const catLabel = category ? ` [${category}]` : '';
+    return `<div class="gl-dist-bar"><div class="gl-dist-fill" style="width:${pct}%;background:${color}"></div><span class="gl-dist-label">dist: ${dist}${catLabel}</span></div>`;
 }
 
 // ─── Tab: Places ────────────────────────────────────────────────────────────────
@@ -1148,7 +1152,7 @@ function renderPlaces(state) {
 
 function renderPressures(state) {
     const pressures = Object.values(state.pressures || {});
-    if (!pressures.length) return '<div class="gl-empty">No pressure points</div>';
+    if (!pressures.length) return '';
 
     const parts = [];
     for (const p of pressures) {

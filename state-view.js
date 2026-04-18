@@ -253,8 +253,8 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         lines.push('');
         lines.push('Collisions:');
         for (const col of allCollisions) {
-            const tierLabel = col.tier && col.tier !== 'arc' ? ` (${col.tier})` : '';
-            let colLine = `  ${col.name || col.id} [${col.status}]${tierLabel} dist:${col.distance || '?'}`;
+            const catLabel = col.distance_category ? ` ${col.distance_category}` : '';
+            let colLine = `  ${col.name || col.id} [${col.status}]${catLabel} dist:${col.distance ?? '?'}`;
             colLine += ` → id: ${col.id}`;
             lines.push(colLine);
         }
@@ -388,8 +388,8 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
             lines.push('');
             lines.push('COLLISIONS');
             for (const col of liveCollisions) {
-                const tierLabel = col.tier && col.tier !== 'arc' ? ` (${col.tier})` : '';
-                lines.push(`  ⊕ ${col.name || col.id} [${col.status}]${tierLabel} dist:${col.distance || '?'} → id: ${col.id}`);
+                const catLabel = col.distance_category ? ` ${col.distance_category}` : '';
+                lines.push(`  ⊕ ${col.name || col.id} [${col.status}]${catLabel} dist:${col.distance ?? '?'} → id: ${col.id}`);
                 const narrativeLines = getCollisionNarrativeLines(col);
                 for (const narrativeLine of narrativeLines) {
                     lines.push(`    ${narrativeLine}`);

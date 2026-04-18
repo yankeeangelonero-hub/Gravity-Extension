@@ -13,7 +13,7 @@
 // ─── Valid Values ──────────────────────────────────────────────────────────────
 
 const VALID_OPS = ['CR', 'TR', 'S', 'A', 'R', 'MS', 'MR', 'D', 'SNAP', 'ROLL', 'AMEND'];
-const VALID_ENTITIES = ['char', 'constraint', 'collision', 'combat', 'faction', 'place', 'pressure', 'world', 'pc', 'divination', 'summary'];
+const VALID_ENTITIES = ['char', 'constraint', 'collision', 'combat', 'faction', 'place', 'pressure', 'world', 'pc', 'divination'];
 
 // Required fields per operation type
 const OP_REQUIRED_FIELDS = {
@@ -117,7 +117,7 @@ function validateFormat(tx, index) {
     }
 
     // Check required top-level fields for this op
-    const isSingleton = ['world', 'pc', 'divination', 'summary'].includes(tx.e);
+    const isSingleton = ['world', 'pc', 'divination'].includes(tx.e);
     const required = OP_REQUIRED_FIELDS[tx.op] || [];
     for (const field of required) {
         // Singletons (world, pc) don't need an id
@@ -142,7 +142,7 @@ function validateFormat(tx, index) {
     }
 
     // Singletons (world, pc) don't need an id for most ops
-    if (tx.e && !['world', 'pc', 'divination', 'summary'].includes(tx.e) && required.includes('id')) {
+    if (tx.e && !['world', 'pc', 'divination'].includes(tx.e) && required.includes('id')) {
         if (!tx.id || typeof tx.id !== 'string') {
             errors.push({
                 field: `${prefix}.id`,
