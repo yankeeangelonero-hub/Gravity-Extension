@@ -198,7 +198,7 @@ const combatProfile = Object.freeze({
     optionCount: [3, 4],
     optionPrefix: 'combat',
 
-    seedFields: Object.freeze({ kind: 'combat', status: 'ACTIVE', exchange: 1 }),
+    seedFields: Object.freeze({ kind: 'combat', status: 'ACTIVE' }),
     modelFields: ['participants', 'hostiles', 'primary_enemy', 'terrain', 'situation', 'threat'],
     resolutionFields: ['outcome', 'aftermath'],
 
@@ -282,7 +282,6 @@ const combatProfile = Object.freeze({
             lines.push(`COMBAT ENTITY (${entity.id || runtime.entity_id})`);
             lines.push('  This combat container already exists. Do not create it again; only set or update its fields.');
             if (entity.status) lines.push(`  Status: ${entity.status}`);
-            if (entity.exchange != null) lines.push(`  Ledger exchange: ${entity.exchange}`);
             if (entity.situation) lines.push(`  Situation: ${entity.situation}`);
             if (entity.terrain) lines.push(`  Terrain: ${entity.terrain}`);
             if (entity.threat) lines.push(`  Threat: ${entity.threat}`);
@@ -348,7 +347,7 @@ const combatProfile = Object.freeze({
                 if (runtime.phase === 'setup_buffered') {
                     lines.push('Setup is incomplete, but the player already committed to an action while setup had not advanced.');
                     lines.push(`combat:${runtime.entity_id} already exists. Do not create it again.`);
-                    lines.push(`Fill combat:${runtime.entity_id} fields: participants, hostiles, primary_enemy, terrain, situation, threat, and exchange.`);
+                    lines.push(`Fill combat:${runtime.entity_id} fields: participants, hostiles, primary_enemy, terrain, situation, threat.`);
                     lines.push('Then immediately resolve the buffered player action this same turn.');
                     if (runtime.pending_action.assessment_only) {
                         lines.push('Because the buffered action had no declared category, assess it honestly after setup and then output 3-4 clickable options instead of silently ignoring it.');
@@ -361,7 +360,7 @@ const combatProfile = Object.freeze({
                     }
                 } else {
                     lines.push(`The extension auto-seeded combat:${runtime.entity_id}. Do not create it again.`);
-                    lines.push('Establish participants, hostiles, primary_enemy, terrain, situation, threat, and exchange.');
+                    lines.push('Establish participants, hostiles, primary_enemy, terrain, situation, threat.');
                     lines.push('Assign justified power_base, power, power_basis, and abilities to important new enemies.');
                     lines.push('Use the scene draw to reveal encounter circumstance and leverage: who sees clearly, who is exposed, how the terrain is really working, and why the opening options fall where they do.');
                     lines.push('Do not resolve the first exchange yet. Stop on the opening situation and output 3-4 clickable options.');
@@ -428,7 +427,7 @@ const combatProfile = Object.freeze({
     },
 
     setupGuidance() {
-        return 'The extension already seeded the combat entity. Do not create it again. Fill entity fields: participants, hostiles, primary_enemy, terrain, situation, threat, exchange. Assign justified power_base, power, power_basis, and abilities to important new enemies.';
+        return 'The extension already seeded the combat entity. Do not create it again. Fill entity fields: participants, hostiles, primary_enemy, terrain, situation, threat. Assign justified power_base, power, power_basis, and abilities to important new enemies.';
     },
 
     cleanupGuidance() {

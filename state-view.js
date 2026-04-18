@@ -243,7 +243,6 @@ function formatStateView(state, mode = 'full') {
         lines.push('Combats:');
         for (const combat of activeCombats) {
             let combatLine = `  ${combat.name || combat.id} [${combat.status || 'ACTIVE'}]`;
-            if (combat.exchange != null) combatLine += ` exch:${combat.exchange}`;
             if (combat.primary_enemy) {
                 const pe = typeof combat.primary_enemy === 'object' ? (combat.primary_enemy.name || combat.primary_enemy.id || '?') : combat.primary_enemy;
                 combatLine += ` vs ${pe}`;
@@ -380,7 +379,7 @@ function formatStateView(state, mode = 'full') {
         lines.push('');
         lines.push('COMBATS');
         for (const combat of activeCombats) {
-            lines.push(`  ⚔ ${combat.name || combat.id} [${combat.status || 'ACTIVE'}] exch:${combat.exchange || '?'} → id: ${combat.id}`);
+            lines.push(`  ⚔ ${combat.name || combat.id} [${combat.status || 'ACTIVE'}] → id: ${combat.id}`);
             if (combat.primary_enemy) {
                 const pe = typeof combat.primary_enemy === 'object' ? (combat.primary_enemy.name || combat.primary_enemy.id || '?') : combat.primary_enemy;
                 lines.push(`    Primary enemy: ${pe}`);
@@ -607,7 +606,6 @@ COMMON PATHS:
   collision:id.parent_collision_ids+
   world.timeskip_scale              (advance turns only: HOURS|DAYS|WEEKS|MONTHS)
   combat:id.status
-  combat:id.exchange
   combat:id.primary_enemy
   combat:id.opened_from
   combat:id.outcome
@@ -640,7 +638,7 @@ DISCIPLINE:
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
   Use faction intel fields for remote awareness: comms_latency, last_verified_at, intel_posture, and intel_on. Each intel_on subject has the same four buckets as knowledge_asymmetry: knows, unknown, hiding, misreading.
   No provenance, no knowledge: distant factions and characters do not know live scene truth unless it plausibly reached them.
-  Combat is a thin container. Scene prose carries terrain and tactical narrative; the spawning collision carries cost and forces. Combat tracks only: who's fighting whom (primary_enemy), which round (exchange), and what ended where (outcome + aftermath on RESOLVED).
+  Combat is a thin container. Scene prose carries terrain and tactical narrative; the spawning collision carries cost and forces. Combat tracks only: who's fighting whom (primary_enemy), and what ended where (outcome + aftermath on RESOLVED).
   Every live collision needs a story capsule: what is converging, who or what is caught in it, what it costs, and the forced choice looming.
   Pressure points are seeds, not history. If a seam fired, resolved, or became a collision, REMOVE it.
   If a pressure point gains actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point the same turn.
@@ -687,7 +685,7 @@ CREATE — new entity
   > CREATE char:tifa name="Tifa Lockhart" tier=KNOWN -- First encounter
   > CREATE constraint:c1-steady name="The Steady One" owner_id=tifa integrity=STABLE prevents="Showing vulnerability or exhaustion" threshold="Sustained pressure from someone trusted" replacement="Regression — stillness without purpose" replacement_type=regression shedding_order=2 -- Core constraint
   > CREATE collision:trust-vs-duty name="Trust vs Duty" distance_category=MEDIUM forces="Trust and duty converging — loyalty demands truth, mission demands silence." involved_chars=[tifa,kenji] location=7th-heaven -- Central tension
-  > CREATE combat:alley-fight status=ACTIVE exchange=1 primary_enemy="shinra-sweep" opened_from=ambush-trap -- Thin combat container; scene + collision carry the tactical narrative
+  > CREATE combat:alley-fight status=ACTIVE primary_enemy="shinra-sweep" opened_from=ambush-trap -- Thin combat container; scene + collision carry the tactical narrative
   > CREATE place:warehouse-district name="Warehouse District" state=contested reach=DISTRICT description="Industrial sprawl south of the river. Quiet during daylight." -- New anchor
 
   Place fields: name, state (safe/contested/hostile/destroyed/unknown or freeform), reach (LOCAL/DISTRICT/CITY/REGIONAL/REMOTE), description.
@@ -704,7 +702,6 @@ MOVE — state machine transition (no skipping levels)
 
 SET — overwrite a field
   > SET world field=world_state value="Martial law declared" -- Major world change
-  > SET combat:alley-fight field=exchange value=2 -- New exchange begins
   > SET combat:alley-fight field=outcome value="Team broke left, neutralized sweep, runner made the doorway" -- On RESOLVED
   > SET combat:alley-fight field=aftermath value="One sweep operative wounded; runner bleeding; cover compromised" -- What remains
 
