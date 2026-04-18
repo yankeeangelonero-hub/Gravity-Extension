@@ -59,10 +59,12 @@ let _lastCompletedMode = 'regular'; // snapshot before reset — used by exempla
 let _pendingDeductionType = null; // one-shot override for combat, advance, intimacy
 let _pendingManualDivination = null; // one-shot player-supplied divination roll
 
-// ─── Collision Arrival Tracking ───────────────────────────────────────────────
+// ─── Collision Arrival / Foreshadow Tracking ─────────────────────────────────
 // One-shot dedup: once a collision fires the sanity-check gate it doesn't fire again.
-// Reset on chat change, snapshot rollback, and chapter change.
+// Foreshadow map: id → Set<'APPROACHING'|'IMMINENT'|'CONVERGING'> — each level fires once.
+// Both reset on chat change, snapshot rollback, and import.
 let _firedCollisionArrivals = new Set();
+let _foreshadowedCollisions = new Map();
 
 // Phase 2: Timeskip multipliers (§3.2)
 const TICK = { HOURS: 1, DAYS: 3, WEEKS: 10, MONTHS: 20 };
@@ -1121,6 +1123,57 @@ function buildAndInjectArrivals(ids, state) {
     }
 }
 
+// ─── Foreshadowing ────────────────────────────────────────────────────────────
+
+function buildForeshadowBlock(col, level) {
+    const placeName = col.location ? (_currentState.places?.[col.location]?.name || col.location) : 'unspecified';
+    const involved = buildInvolvedCharsSummary(col, _currentState);
+    const current = Math.round(parseFloat(col.distance));
+    const guidance = {
+        APPROACHING: 'A distant rumble. An offhand remark. Plant the seed.',
+        IMMINENT: "Someone moves differently. A name surfaces. The collision's forces are near.",
+        CONVERGING: "The forces are visibly in motion. Every other beat should carry their weight.",
+    }[level];
+    return `[FORESHADOW — ${level}]
+"${col.name || col.id}" is drawing closer (${current} ticks remaining).
+Anchored at: ${placeName} | Involved: ${involved}
+${guidance}
+Weave its approach into the scene without making it the focus.`;
+}
+
+function buildForeshadowingInjection(state) {
+    const lines = [];
+    for (const [id, col] of Object.entries(state.collisions || {})) {
+        if (col.distance_category === 'IMMEDIATE') continue;
+        if ((col.status || '').toUpperCase() !== 'ACTIVE') continue;
+
+        const start = CATEGORY_DISTANCES[col.distance_category] ?? 10;
+        const current = parseFloat(col.distance);
+        if (isNaN(current) || current <= 0) continue;
+
+        const pct = current / start;
+        const fired = _foreshadowedCollisions.get(id) || new Set();
+
+        let level = null;
+        if (pct <= 0.20 && !fired.has('CONVERGING')) level = 'CONVERGING';
+        else if (pct <= 0.50 && !fired.has('IMMINENT')) level = 'IMMINENT';
+        else if (pct <= 0.80 && !fired.has('APPROACHING')) level = 'APPROACHING';
+
+        if (!level) continue;
+        fired.add(level);
+        // Subsumption — firing a higher-urgency level implies all lower levels were skipped
+        if (level === 'CONVERGING') {
+            fired.add('IMMINENT');
+            fired.add('APPROACHING');
+        } else if (level === 'IMMINENT') {
+            fired.add('APPROACHING');
+        }
+        _foreshadowedCollisions.set(id, fired);
+        lines.push(buildForeshadowBlock(col, level));
+    }
+    return lines.length > 0 ? lines.join('\n\n') : null;
+}
+
 /**
  * Inject prompts based on turn mode.
  * @param {'regular'|'advance'|'integration'} [mode='regular']
@@ -1396,6 +1449,18 @@ Gravity tracks what prose can't: asymmetries, pressures, distances, reads-over-t
         }
 
         setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
+
+        // ── Foreshadowing — pre-arrival threshold cues (§3.4) ─────────────────
+        if ((isRegular || isAdvance) && _currentState) {
+            const foreshadow = buildForeshadowingInjection(_currentState);
+            if (foreshadow) {
+                setExtensionPrompt(`${MODULE_NAME}_foreshadow`, foreshadow, PROMPT_IN_CHAT, 0);
+            } else {
+                setExtensionPrompt(`${MODULE_NAME}_foreshadow`, '', PROMPT_NONE, 0);
+            }
+        } else {
+            setExtensionPrompt(`${MODULE_NAME}_foreshadow`, '', PROMPT_NONE, 0);
+        }
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
     }
