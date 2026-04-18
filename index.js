@@ -585,9 +585,6 @@ const CLASSIC_TABLE = `| Roll | Conditions |
 | 20 | The board changes shape. A second collision crashes into the first. Nobody predicted this. |
 2 and 20 are special. Both reshape the board. Dice never override logic.`;
 
-const ICHING_TRIGRAMS = `Lower trigram = inner situation. Upper trigram = outer/visible situation.
-乾 (Heaven) = active force, initiative. 坤 (Earth) = yielding, nurture. 震 (Thunder) = shock, action. 坎 (Water) = danger, the abyss. 艮 (Mountain) = stillness, obstruction. 巽 (Wind) = gentle penetration. 離 (Fire) = clarity, illumination. 兌 (Lake) = joy, openness.
-The hexagram carries rhythm. Stillness slows the beat. Movement compresses — things arrive before anyone processes them.`;
 
 const ARCANA_ROMAN = ['0', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX', 'XXI'];
 
@@ -659,8 +656,10 @@ function scorePressurePointAgainstDraw(point, draw) {
  */
 function getActiveDivinationSystem() {
     const { chatMetadata } = SillyTavern.getContext();
-    return chatMetadata?.['gravity_divination_system']
-        || (_currentState?.divination?.active_system || 'arcana').toLowerCase();
+    const stored = chatMetadata?.['gravity_divination_system'];
+    // Back-compat: old chats with iching selected fall through to arcana
+    if (stored === 'iching' || stored === 'i_ching' || stored === 'i ching') return 'arcana';
+    return stored || (_currentState?.divination?.active_system || 'arcana').toLowerCase();
 }
 
 /**
@@ -726,23 +725,6 @@ function parseManualDivinationOverride(text) {
         };
     }
 
-    const iChingPatterns = [
-        /\b(?:1d64|d64)\b\s*(?:=|:|->|=>)\s*(\d{1,2})\b/i,
-        /\b(?:1d64|d64)\b\s*\(\s*(\d{1,2})\s*\)/i,
-        /\brolled?\s*(\d{1,2})\s*(?:on|from)\s*(?:1d64|d64)\b/i,
-    ];
-    for (const pattern of iChingPatterns) {
-        const match = raw.match(pattern);
-        if (!match) continue;
-        const num = Number(match[1]);
-        if (!Number.isInteger(num) || num < 1 || num > 64) continue;
-        return {
-            system: 'iching',
-            num,
-            sourceText: `1d64 = ${num}`,
-        };
-    }
-
     return null;
 }
 
@@ -750,17 +732,6 @@ function consumeManualDivinationOverride() {
     const manual = _pendingManualDivination;
     _pendingManualDivination = null;
     return manual;
-}
-
-function buildIChingDraw(num, source = 'extension', sourceText = '') {
-    const prefix = source === 'manual' && sourceText ? `MANUAL ROLL: ${sourceText}\n` : '';
-    return {
-        system: 'iching',
-        label: 'THE I CHING DREW',
-        num,
-        reading: `${prefix}Hexagram ${num} â€” interpret per the æ˜“çµŒ King Wen sequence (1=ä¹¾, 2=å¤, 3=å±¯... 64=æœªæ¸ˆ). You know the æ˜“çµŒ. From the number derive: hexagram symbol, Chinese name, English translation, core situational reading. ${ICHING_TRIGRAMS}\n${getNarrativeForcingText(source)}`,
-        html: `<div style="background:linear-gradient(180deg,#0a0a0a 0%,#1a1008 100%);border:1px solid #8b7355;border-radius:4px;padding:20px;margin:16px auto;max-width:280px;text-align:center;"><div style="color:#8b7355;font-size:0.7em;letter-spacing:4px;text-transform:uppercase;">æ˜“çµŒ Â· The Book of Changes</div><div style="color:#f0e6d3;font-size:1.4em;margin:12px 0 4px 0;">[HEXAGRAM NAME]</div><div style="color:#8b7355;font-size:0.9em;font-style:italic;">[English] Â· ${num}</div><div style="width:40px;height:1px;background:#8b7355;margin:12px auto;"></div><div style="color:#a89070;font-size:0.85em;line-height:1.5;">[One-line situational reading]</div></div>`,
-    };
 }
 
 function buildClassicDraw(total, source = 'extension', sourceText = '', d1 = null, d2 = null) {
@@ -797,9 +768,6 @@ function buildArcanaDraw(num, source = 'extension', sourceText = '') {
  */
 function drawDivination() {
     const manual = consumeManualDivinationOverride();
-    if (manual?.system === 'iching') {
-        return buildIChingDraw(manual.num, 'manual', manual.sourceText);
-    }
     if (manual?.system === 'classic') {
         return buildClassicDraw(manual.num, 'manual', manual.sourceText);
     }
@@ -809,18 +777,6 @@ function drawDivination() {
 
     const system = getActiveDivinationSystem();
 
-    if (system === 'iching' || system === 'i_ching' || system === 'i ching') {
-        const num = Math.floor(Math.random() * 64) + 1;
-        return {
-            system: 'iching',
-            label: 'THE I CHING DREW',
-            num,
-            reading: `Hexagram ${num} — interpret per the 易経 King Wen sequence (1=乾, 2=坤, 3=屯... 64=未済). You know the 易経. From the number derive: hexagram symbol, Chinese name, English translation, core situational reading. ${ICHING_TRIGRAMS}\n${NARRATIVE_FORCING}`,
-            html: `<div style="background:linear-gradient(180deg,#0a0a0a 0%,#1a1008 100%);border:1px solid #8b7355;border-radius:4px;padding:20px;margin:16px auto;max-width:280px;text-align:center;"><div style="color:#8b7355;font-size:0.7em;letter-spacing:4px;text-transform:uppercase;">易経 · The Book of Changes</div><div style="color:#f0e6d3;font-size:1.4em;margin:12px 0 4px 0;">[HEXAGRAM NAME]</div><div style="color:#8b7355;font-size:0.9em;font-style:italic;">[English] · ${num}</div><div style="width:40px;height:1px;background:#8b7355;margin:12px auto;"></div><div style="color:#a89070;font-size:0.85em;line-height:1.5;">[One-line situational reading]</div></div>`,
-        };
-    }
-
-    if (system === 'classic' || system === '2d10') {
         const d1 = Math.floor(Math.random() * 10) + 1;
         const d2 = Math.floor(Math.random() * 10) + 1;
         const total = d1 + d2;

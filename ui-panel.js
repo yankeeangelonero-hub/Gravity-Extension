@@ -1209,7 +1209,6 @@ function renderDivination(state) {
     parts.push(`<div class="gl-d-row"><b>System:</b>
         <select class="gl-div-select" id="gl-divination-select">
             <option value="arcana"${activeSystem === 'arcana' ? ' selected' : ''}>Major Arcana (d22)</option>
-            <option value="iching"${activeSystem === 'iching' || activeSystem === 'i ching' ? ' selected' : ''}>易経 I Ching (d64)</option>
             <option value="classic"${activeSystem === 'classic' || activeSystem === '2d10' ? ' selected' : ''}>Classic Entropy (2d10)</option>
         </select>
     </div>`);
