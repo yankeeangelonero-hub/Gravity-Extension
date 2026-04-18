@@ -308,6 +308,7 @@ function renderAllSections() {
         { id: 'world', icon: 'fa-globe', title: 'Factions & World', html: renderWorld(_lastState) },
         { id: 'collisions', icon: 'fa-burst', title: 'Collisions', html: renderCollisions(_lastState) },
         { id: 'combat', icon: 'fa-crosshairs', title: 'Combat', html: renderCombat(_lastState) },
+        { id: 'places', icon: 'fa-map-location-dot', title: 'Places', html: renderPlaces(_lastState) },
         { id: 'divination', icon: 'fa-star', title: 'Divination', html: renderDivination(_lastState) },
         { id: 'exemplars', icon: 'fa-thumbs-up', title: 'Style Exemplars', html: renderExemplars() },
     ];
@@ -478,7 +479,7 @@ function updatePanel(state, turn, committedTxIds) {
 
 function computeChangedKeys(prev, curr, prefix) {
     if (!prev || !curr) return;
-    for (const collection of ['characters', 'constraints', 'collisions', 'combats', 'factions']) {
+    for (const collection of ['characters', 'constraints', 'collisions', 'combats', 'factions', 'places']) {
         const pc = prev[collection] || {};
         const cc = curr[collection] || {};
         for (const id of new Set([...Object.keys(pc), ...Object.keys(cc)])) {
@@ -520,6 +521,7 @@ function applyChangeHighlights() {
         if (sid === 'world') hasChanges = [..._changedKeys].some(k => k.startsWith('world.') || k.startsWith('factions.'));
         if (sid === 'collisions') hasChanges = [..._changedKeys].some(k => k.startsWith('collisions.'));
         if (sid === 'combat') hasChanges = [..._changedKeys].some(k => k.startsWith('combats.'));
+        if (sid === 'places') hasChanges = [..._changedKeys].some(k => k.startsWith('places.'));
         if (sid === 'divination') hasChanges = [..._changedKeys].some(k => k.startsWith('divination.'));
         if (hasChanges) section.querySelector('.gl-section-header')?.classList.add('gl-changed');
     });
@@ -1151,7 +1153,24 @@ function renderDistanceBar(dist) {
     return `<div class="gl-dist-bar"><div class="gl-dist-fill" style="width:${pct}%;background:${color}"></div><span class="gl-dist-label">dist: ${dist}</span></div>`;
 }
 
-// ─── Tab 4: Divination ──────────────────────────────────────────────────────────
+// ─── Tab: Places ────────────────────────────────────────────────────────────────
+
+function renderPlaces(state) {
+    const places = Object.values(state.places || {});
+    if (!places.length) return '<div class="gl-empty">No places recorded</div>';
+
+    const parts = [];
+    for (const p of places) {
+        parts.push(`<div class="gl-collision-card">`);
+        parts.push(`<div class="gl-collision-name">${esc(p.name || p.id)} ${badge(p.state || 'unknown')}</div>`);
+        parts.push(`<div class="gl-d-detail"><b>Reach:</b> ${esc(p.reach || 'LOCAL')} <b>id:</b> ${esc(p.id)}</div>`);
+        if (p.description) parts.push(`<div class="gl-d-detail">${esc(p.description)}</div>`);
+        parts.push(`</div>`);
+    }
+    return parts.join('');
+}
+
+// ─── Tab: Divination ────────────────────────────────────────────────────────────
 
 function renderDivination(state) {
     const div = state.divination || {};

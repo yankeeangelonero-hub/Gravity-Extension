@@ -52,6 +52,7 @@ function createEmptyState() {
         collisions: {},
         combats: {},
         factions: {},
+        places: {},
         world: {
             world_state: '',
             pressure_points: [],
@@ -161,12 +162,15 @@ function normalizeFactionIntel(state) {
 }
 
 function getCollectionName(entityType) {
+    // NOTE: spec uses state.chars/state.places but codebase keeps state.characters/state.places.
+    // 'chars' → 'characters' is intentional; see decision D1.
     const map = {
         char: 'characters',
         constraint: 'constraints',
         collision: 'collisions',
         combat: 'combats',
         faction: 'factions',
+        place: 'places',
         world: 'world',
         pc: 'pc',
         divination: 'divination',
@@ -258,6 +262,11 @@ function applyTransaction(state, tx) {
                 // Default tier to 'arc' for backward compatibility
                 if (tx.e === 'collision' && !data.tier) {
                     data.tier = 'arc';
+                }
+                // Normalize place defaults
+                if (tx.e === 'place') {
+                    if (!data.reach) data.reach = 'LOCAL';
+                    if (!data.state) data.state = 'unknown';
                 }
                 state[collection][tx.id] = data;
             }
@@ -470,7 +479,7 @@ function computeState(snapshot, transactions) {
 
 function diffStates(before, after) {
     const changes = [];
-    for (const col of ['characters', 'constraints', 'collisions', 'factions']) {
+    for (const col of ['characters', 'constraints', 'collisions', 'factions', 'places']) {
         const bc = before[col] || {};
         const ac = after[col] || {};
         for (const id of Object.keys(ac)) {
@@ -495,6 +504,30 @@ function diffStates(before, after) {
     return changes;
 }
 
+// ─── Travel Plausibility ──────────────────────────────────────────────────────
+
+const TRAVEL_REACH_ORDER = ['LOCAL', 'DISTRICT', 'CITY', 'REGIONAL', 'REMOTE'];
+const ON_FOOT_MAX = 'DISTRICT'; // highest reach reachable on a non-advance turn
+
+function validateTravel(charId, fromPlaceId, toPlaceId, state, turnMode) {
+    if (turnMode === 'advance') return { valid: true };
+    const fromPlace = state.places?.[fromPlaceId];
+    const toPlace = state.places?.[toPlaceId];
+    if (!fromPlace || !toPlace) return { valid: true };
+    if (fromPlaceId === toPlaceId) return { valid: true };
+    const fromIdx = TRAVEL_REACH_ORDER.indexOf(fromPlace.reach || 'LOCAL');
+    const toIdx = TRAVEL_REACH_ORDER.indexOf(toPlace.reach || 'LOCAL');
+    const maxIdx = TRAVEL_REACH_ORDER.indexOf(ON_FOOT_MAX);
+    if (toIdx > maxIdx || fromIdx > maxIdx) {
+        return {
+            valid: false,
+            error: `Travel from "${fromPlace.name}" (${fromPlace.reach}) to "${toPlace.name}" (${toPlace.reach}) is implausible in a 15-minute scene window.`,
+            fix: `Use an ADVANCE turn to timeskip travel, or add a narrative justification (vehicle, special transport) before the location change.`,
+        };
+    }
+    return { valid: true };
+}
+
 function getPhonebook(state) {
     const result = { principal: null, tracked: [], known: [] };
     for (const char of Object.values(state.characters)) {
@@ -514,6 +547,7 @@ export {
     diffStates,
     getPhonebook,
     getCollectionName,
+    validateTravel,
     getFieldHistory,
     getArrayFieldHistory,
     getArrayItemHistory,

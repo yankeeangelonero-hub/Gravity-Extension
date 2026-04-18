@@ -10,7 +10,7 @@
 import { init as initLedger, reset as resetLedger, append, getAllTransactions, getTransactionsForEntity, exportData, importData } from './ledger-store.js';
 import { initSnapshots, computeCurrentState, createSnapshot } from './snapshot-mgr.js';
 import { validateBatch, formatErrors } from './consistency.js';
-import { computeState, applyTransaction, createEmptyState, getArrayItemHistory } from './state-compute.js';
+import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel } from './state-compute.js';
 import { formatStateView, formatReadme } from './state-view.js';
 import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
@@ -1621,16 +1621,35 @@ async function onMessageReceived(messageId) {
     const validationErrors = [];
     let committedTxns = [];
     for (let i = 0; i < extractedTransactions.length; i++) {
-        const result = validateBatch([extractedTransactions[i]]);
-        if (result.valid) {
-            validTxns.push(extractedTransactions[i]);
-        } else {
+        const tx = extractedTransactions[i];
+        const result = validateBatch([tx]);
+        if (!result.valid) {
             validationErrors.push({
                 lineNum: i,
                 error: result.errors.map(e => e.message).join('; '),
                 raw: `[validated tx ${i}]`,
             });
+            continue;
         }
+
+        // ── Travel plausibility (§2.4) ────────────────────────────────────
+        if (tx.op === 'S' && tx.e === 'char' && tx.d?.f === 'location') {
+            const charBefore = _currentState.characters?.[tx.id];
+            const fromPlaceId = charBefore?.location;
+            const travel = validateTravel(tx.id, fromPlaceId, tx.d.v, _currentState, _currentInjectMode);
+            if (!travel.valid) {
+                validationErrors.push({
+                    lineNum: i,
+                    error: travel.error,
+                    fix: travel.fix,
+                    raw: `[char:${tx.id} location]`,
+                });
+                continue;
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────
+
+        validTxns.push(tx);
     }
 
     // Combine all errors (extraction parse errors + validation errors)

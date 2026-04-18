@@ -317,6 +317,17 @@ function formatStateView(state, mode = 'full') {
         }
     }
 
+    // Places — all entries; created by LLM as narrative discovers them
+    const placeEntities = Object.values(state.places || {});
+    if (placeEntities.length) {
+        lines.push('');
+        lines.push('Places:');
+        for (const p of placeEntities) {
+            lines.push(`  ${p.name || p.id} [${p.state || 'unknown'}] (${p.reach || 'LOCAL'}) → id: ${p.id}`);
+            if (p.description) lines.push(`    ${p.description}`);
+        }
+    }
+
     // ── Current State Detail ──────────────────────────────────────────────
     lines.push('');
     lines.push('─── CURRENT STATE ───');
@@ -576,6 +587,10 @@ COMMON PATHS:
   faction:id.intel_on.<subject>.unknown.<key>
   faction:id.intel_on.<subject>.hiding.<key>
   faction:id.intel_on.<subject>.misreading.<key>
+  place:id.name
+  place:id.state
+  place:id.reach
+  place:id.description
   collision:id.name
   collision:id.forces
   collision:id.details
@@ -608,6 +623,7 @@ For these fields, write the NEW state only. The extension will compile the trans
 
 RARE OPS INSIDE STATE BLOCK:
   create char:dak name="Dak" tier=KNOWN location="The Stray Dog"
+  create place:warehouse-district name="Warehouse District" state=contested reach=DISTRICT description="Industrial sprawl south of the river."
   destroy char:minor-npc
 If a turn gets structurally complicated, switch to a full ---LEDGER--- block instead.
 
@@ -653,7 +669,7 @@ Empty turn (nothing changed):
 SYNTAX: > [timestamp] OPERATION entity_type:entity_id key=value key="multi word" -- reason
   - One line per transaction. Each line is independent.
   - Timestamps: [Day N — HH:MM]
-  - Entity types: char, constraint, collision, combat, faction, world, pc, divination
+  - Entity types: char, constraint, collision, combat, faction, place, world, pc, divination
   - Singletons (no :id needed): world, pc, divination
   - IDs: kebab-case, stable, never change once assigned
   - Reason after -- is required, keep it brief like margin notes
@@ -666,6 +682,10 @@ CREATE — new entity
   > CREATE constraint:c1-steady name="The Steady One" owner_id=tifa integrity=STABLE prevents="Showing vulnerability or exhaustion" threshold="Sustained pressure from someone trusted" replacement="Regression — stillness without purpose" replacement_type=regression shedding_order=2 -- Core constraint
   > CREATE collision:trust-vs-duty name="Trust vs Duty" forces="trust,duty" status=SEEDED distance=10 details="Trust and duty are converging. Autumn's loyalty demands she tell Kenji the truth. Her mission demands she doesn't." cost="If it detonates: one of them walks away for good" target_constraint=c1-the-steady-one -- Central tension
   > CREATE combat:alley-fight status=ACTIVE exchange=1 primary_enemy="shinra-sweep" opened_from=ambush-trap -- Thin combat container; scene + collision carry the tactical narrative
+  > CREATE place:warehouse-district name="Warehouse District" state=contested reach=DISTRICT description="Industrial sprawl south of the river. Quiet during daylight." -- New anchor
+
+  Place fields: name, state (safe/contested/hostile/destroyed/unknown or freeform), reach (LOCAL/DISTRICT/CITY/REGIONAL/REMOTE), description.
+  reach defaults to LOCAL. Set accurately — engine uses it for travel plausibility checks (non-advance turns cap at DISTRICT).
 
   Constraint fields: name, owner_id, integrity, prevents, threshold, replacement, replacement_type (sophistication/displacement/depth_shift/regression), shedding_order, current_pressure
   Update current_pressure with SET whenever pressure changes:
