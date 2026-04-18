@@ -5,6 +5,9 @@
  * Every mutable field tracks its transitions with timestamps.
  */
 
+// NOTE: spec §2 uses state.chars as shorthand; codebase keeps state.characters (D1 decision).
+const CATEGORY_DISTANCES = { IMMEDIATE: 1, SHORT: 10, MEDIUM: 20, LONG: 50 };
+
 /**
  * @typedef {Object} ComputedState
  * @property {Object<string, Object>} characters
@@ -259,7 +262,7 @@ function applyTransaction(state, tx) {
                     data.status = 'RESOLVED';
                     if (!data.outcome_type) data.outcome_type = 'CRASHED';
                 }
-                // Default tier to 'arc' for backward compatibility
+                // Legacy field — Phase 2 uses distance_category instead.
                 if (tx.e === 'collision' && !data.tier) {
                     data.tier = 'arc';
                 }
@@ -267,6 +270,17 @@ function applyTransaction(state, tx) {
                 if (tx.e === 'place') {
                     if (!data.reach) data.reach = 'LOCAL';
                     if (!data.state) data.state = 'unknown';
+                }
+                // Phase 2: distance_category → canonical starting distance
+                if (tx.e === 'collision') {
+                    if (data.distance_category) {
+                        data.distance = CATEGORY_DISTANCES[data.distance_category] ?? 10;
+                    } else {
+                        // Old tx without category — default to SHORT
+                        data.distance_category = 'SHORT';
+                        if (data.distance == null) data.distance = 10;
+                    }
+                    if (!data.status) data.status = 'ACTIVE';
                 }
                 state[collection][tx.id] = data;
             }
@@ -541,6 +555,7 @@ function getPhonebook(state) {
 }
 
 export {
+    CATEGORY_DISTANCES,
     createEmptyState,
     applyTransaction,
     computeState,

@@ -10,7 +10,7 @@
 import { init as initLedger, reset as resetLedger, append, getAllTransactions, getTransactionsForEntity, exportData, importData } from './ledger-store.js';
 import { initSnapshots, computeCurrentState, createSnapshot } from './snapshot-mgr.js';
 import { validateBatch, formatErrors } from './consistency.js';
-import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel } from './state-compute.js';
+import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel, CATEGORY_DISTANCES } from './state-compute.js';
 import { formatStateView, formatReadme } from './state-view.js';
 import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
@@ -1683,6 +1683,22 @@ async function onMessageReceived(messageId) {
             console.log(`${LOG_PREFIX} Committed ${committed.length} TX, ${allErrors.length} errors. Turn ${_turnCounter}.`);
         } catch (err) {
             console.error(`${LOG_PREFIX} Commit failed:`, err);
+        }
+    }
+
+    // ── Distance ownership audit — warn if LLM sets engine-owned distance fields ──
+    for (const tx of committedTxns) {
+        if (tx.op === 'S' && tx.e === 'collision' && tx.d?.f === 'distance') {
+            _pendingCorrections.push({
+                text: `Collision distances are engine-owned. Do not SET collision:${tx.id}.distance directly — set distance_category on creation and let the engine tick it.`,
+                attempts: 0,
+            });
+        }
+        if (tx.op === 'CR' && tx.e === 'collision' && !tx.d?.distance_category) {
+            _pendingCorrections.push({
+                text: `Collision ${tx.id} was created without distance_category. Add distance_category=IMMEDIATE|SHORT|MEDIUM|LONG on CR — the engine resolves the numeric distance.`,
+                attempts: 0,
+            });
         }
     }
 

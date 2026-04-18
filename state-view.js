@@ -553,7 +553,7 @@ char:elena.last_seen_at: "[Day 2 - 19:10]"
 faction:zaft.intel_on.archangel.knows.status: "ship escaped damaged"
 faction:zaft.intel_on.archangel.unknown.pilot: "Strike pilot identity unknown"
 faction:zaft.intel_on.archangel.misreading.pilot-identity: "Assumes pilot still unconfirmed"
-collision:trust-vs-duty.distance: 4
+collision:trust-vs-duty.distance_category: SHORT
 constraint:c1.integrity: STRESSED
 char:elena.reads.pc: "Cautious ally"
 world.pressure_points+: "A new seam in the world"
@@ -596,12 +596,16 @@ COMMON PATHS:
   collision:id.details
   collision:id.cost
   collision:id.target_constraint
-  collision:id.distance
+  collision:id.distance_category   (set on creation: IMMEDIATE|SHORT|MEDIUM|LONG)
+  collision:id.distance             (engine-owned — read only; do not SET)
+  collision:id.location
+  collision:id.involved_chars
   collision:id.status
   collision:id.outcome_type
   collision:id.aftermath
   collision:id.successor_collision_ids+
   collision:id.parent_collision_ids+
+  world.timeskip_scale              (advance turns only: HOURS|DAYS|WEEKS|MONTHS)
   combat:id.status
   combat:id.exchange
   combat:id.primary_enemy
@@ -617,7 +621,7 @@ COMMON PATHS:
 STATE MACHINES:
   char tier: UNKNOWN -> KNOWN -> TRACKED -> PRINCIPAL
   constraint integrity: STABLE -> STRESSED -> CRITICAL -> BREACHED
-  collision status: ACTIVE -> RESOLVED (or CRASHED)
+  collision status: ACTIVE -> RESOLVED (or ACTIVE -> CRASHED if ignored)
   combat status: ACTIVE -> RESOLVED
 For these fields, write the NEW state only. The extension will compile the transition.
 
@@ -642,6 +646,8 @@ DISCIPLINE:
   If a pressure point gains actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point the same turn.
   key_moments are permanent; do not remove them.
   Cleanup is still capped on normal turns; save bulk pruning for eval or OOC: eval.
+  On advance turns, emit: world.timeskip_scale: HOURS|DAYS|WEEKS|MONTHS (default HOURS). WEEKS and MONTHS clear all pressure points.
+  Scene time on non-advance turns: ≤15 min in-world. Non-IMMEDIATE collisions cannot arrive in real-time — use ADVANCE to tick clocks.
 
 === END QUICK REFERENCE ===`;
 }
