@@ -1602,6 +1602,19 @@ async function onMessageReceived(messageId) {
         }
     }
 
+    // ── Collision pool cap warning (§4.2) ───────────────────────────────────────
+    if (_currentState) {
+        const activeNonImmediate = Object.values(_currentState.collisions || {})
+            .filter(c => (c.status || '').toUpperCase() === 'ACTIVE'
+                && c.distance_category !== 'IMMEDIATE');
+        if (activeNonImmediate.length > MAX_COLLISIONS) {
+            _pendingCorrections.push({
+                text: `Collision pool has ${activeNonImmediate.length} active non-IMMEDIATE collisions (cap ${MAX_COLLISIONS}). Consolidate: merge two with the MERGE flow, or IMPLODE the least relevant one. IMMEDIATE collisions are exempt.`,
+                attempts: 0,
+            });
+        }
+    }
+
     injectPrompt();
     updatePanel(_currentState, _turnCounter, committedTxns.map(tx => tx.tx));
 }
