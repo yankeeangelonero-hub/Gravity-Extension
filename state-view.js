@@ -824,7 +824,7 @@ COLLISIONS ARE STORY ENGINES, NOT LABELS:
   3. where it is landing (location)
   4. how close it is (distance_category → distance)
   5. what status it sits in (ACTIVE → RESOLVED or CRASHED)
-  Cost, stakes, and tactical detail live in scene prose and the collision's `forces` string —
+  Cost, stakes, and tactical detail live in scene prose and the collision's \`forces\` string —
   not as separate structured fields.
 
 COLLISION CLOSURE (required on every RESOLVED transition):
