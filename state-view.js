@@ -896,16 +896,16 @@ COLLISION CLOSURE (required on every RESOLVED transition):
   For EVOLVED or MERGED: add successor_collision_ids and link parent_collision_ids on the new collision.
 
   IMPLODED example — the secret-holder breaks before the confrontation:
-  > MOVE collision:loyalty-trap field=status RESOLVING->RESOLVED
+  > MOVE collision:loyalty-trap field=status ACTIVE->RESOLVED
   > SET collision:loyalty-trap field=outcome_type value=IMPLODED
   > SET collision:loyalty-trap field=aftermath value="Mira confessed before Autumn could corner her — not from guilt, from fear. The confrontation Autumn had been building toward never happened. What remains is not resolution but rubble: a confession that arrived too fast to trust, and a debt she didn't earn."
 
   EVOLVED example — resolution surfaces a new tension:
-  > MOVE collision:shadow-activity field=status RESOLVING->RESOLVED
+  > MOVE collision:shadow-activity field=status ACTIVE->RESOLVED
   > SET collision:shadow-activity field=outcome_type value=EVOLVED
   > SET collision:shadow-activity field=aftermath value="The watcher was neutralized, but not before transmitting. Someone now knows Arcueid is in the district."
   > SET collision:shadow-activity field=successor_collision_ids+ value=handler-convergence
-  > CREATE collision:handler-convergence name="Handler Convergence" status=SIMMERING distance=7 forces="handler network, Arcueid's exposure" cost="If they move first: extraction becomes impossible" details="The watcher's transmission went through. The handler network now has a confirmed sighting. This is not over — it has moved upstream." parent_collision_ids=shadow-activity
+  > CREATE collision:handler-convergence name="Handler Convergence" status=ACTIVE distance=7 forces="handler network, Arcueid's exposure" cost="If they move first: extraction becomes impossible" details="The watcher's transmission went through. The handler network now has a confirmed sighting. This is not over — it has moved upstream." parent_collision_ids=shadow-activity
 
 HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):
   - Pressure points: REMOVE when activated (converted into collision fuel) or no longer relevant. These are seeds, not history.
