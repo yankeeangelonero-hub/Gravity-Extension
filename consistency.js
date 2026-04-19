@@ -226,17 +226,17 @@ function findMissingArchiveEntries(committedTxns, state) {
     const terminals = committedTxns
         .filter(tx => tx.op === 'TR' && tx.e === 'collision'
             && (tx.d?.to === 'RESOLVED' || tx.d?.to === 'CRASHED'))
-        .map(tx => ({ id: tx.id, to: tx.d.to }));
+        .map(tx => ({ id: tx.id }));
 
     const missing = [];
-    for (const { id: colId, to } of terminals) {
+    for (const { id: colId } of terminals) {
         const col = state.collisions?.[colId];
         const nameToken = col?.name ? String(col.name) : '';
         const matched = archive.some(entry => {
             const s = String(entry || '');
             return s.includes(colId) || (nameToken && s.includes(nameToken));
         });
-        if (!matched) missing.push({ id: colId, name: nameToken, to });
+        if (!matched) missing.push({ id: colId, name: nameToken });
     }
     return missing;
 }

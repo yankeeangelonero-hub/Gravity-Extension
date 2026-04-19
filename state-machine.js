@@ -8,8 +8,7 @@
  *
  * 1. Authoritative state tables for each entity type
  * 2. `validateTransition()` — the enforcement function called by consistency.js
- * 3. Utility helpers (getValidNextStates, isTerminal) used by OOC eval and the
- *    prompt layer for documentation
+ * 3. Utility helpers (getValidNextStates, isTerminal) for future OOC eval work
  */
 
 // ─── Character Tier ────────────────────────────────────────────────────────────
@@ -161,17 +160,27 @@ function isTerminal(entityType, state) {
 
 /**
  * Get the state machine field name for an entity type.
+ * Two call modes:
+ *   1-arg — return the machine field (or null) for this entity type.
+ *   2-arg — return the machine field ONLY if `field` matches it; otherwise null.
+ * The 2-arg form is convenient for callers that want "is this TX targeting the
+ * state-machine field?" — answer is truthy iff this entity has a machine AND
+ * the caller's field matches.
+ *
  * @param {string} entityType
+ * @param {string} [field] - if provided, gate return on `field === machineField`
  * @returns {string|null}
  */
-function getStateMachineField(entityType) {
+function getStateMachineField(entityType, field) {
     const fields = {
         char: 'tier',
         constraint: 'integrity',
         collision: 'status',
         combat: 'status',
     };
-    return fields[entityType] || null;
+    const machineField = fields[entityType] || null;
+    if (field === undefined) return machineField;
+    return machineField === field ? machineField : null;
 }
 
 export {
@@ -184,7 +193,5 @@ export {
     COMBAT_STATES,
     COMBAT_TRANSITIONS,
     validateTransition,
-    getValidNextStates,
-    isTerminal,
     getStateMachineField,
 };

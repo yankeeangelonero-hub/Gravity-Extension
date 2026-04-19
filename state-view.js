@@ -624,12 +624,13 @@ DISCIPLINE:
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
   Use faction knowledge_asymmetry for remote awareness — flat-key shape: knows_<subject>, unknown_<subject>, hiding_<subject>, misreading_<subject> (cap 20 across all four). Update after plausible intel events; do not globally synchronize.
   No provenance, no knowledge: distant factions and characters do not know live scene truth unless it plausibly reached them.
+  NESCIENCE discipline (Theory of Mind — each character/faction knows only what they realistically observed, heard, deduced from evidence they have access to, or were told via a plausible channel). Avoid "Sherlock Holmes" leaps — explore obliviousness as much as insight. News and rumors travel on channels with latency and distortion; absence from a scene means absence of knowledge until a plausible report arrives. Communication-media rule: only the originator or recipient of a message knows its contents. Before updating knowledge_asymmetry, check past turns — do not contradict established knowledge states without explicit revelation.
   Combat is a thin container. Scene prose carries terrain and tactical narrative; the spawning collision carries cost and forces. Combat tracks only: who's fighting whom (primary_enemy), and what ended where (outcome + aftermath on RESOLVED).
   Every live collision needs a story capsule: what is converging, who or what is caught in it, what it costs, and the forced choice looming.
   Pressure points (pressure:<id>) are seeds — small tensions not yet a collision. Cap is 5; oldest auto-drops on overflow. Destroy when consumed: D pressure:<id>.
   If 3+ related pressure points accumulate, combine them into a collision (CR collision) and destroy the consumed pressures.
   WEEKS or MONTHS timeskips automatically clear all pressure points — the engine handles this.
-  key_moments are permanent; do not remove them.
+  key_moments are permanent under 100 entries per character. When a character's key_moments list hits 100, drop the oldest or least load-bearing entry with a full-array SET (not a partial REMOVE) before adding a new one. This is infrequent given the high cap.
   Cleanup is still capped on normal turns; save bulk pruning for eval or OOC: eval.
   On advance turns, emit: world.timeskip_scale: HOURS|DAYS|WEEKS|MONTHS (default HOURS). WEEKS and MONTHS clear all pressure points.
   Scene time on non-advance turns: ≤15 min in-world. Non-IMMEDIATE collisions cannot arrive in real-time — use ADVANCE to tick clocks.
@@ -697,7 +698,8 @@ APPEND — add to an array field
   > APPEND world field=collision_archive value="[collision] Ada betrayal [resolution] on-screen — PC caught her at the handoff [hook] the flash drive she dropped; eye contact [aftermath] trust cracked" -- Resolved collision
 
 REMOVE — remove from an array field
-  > REMOVE char:tifa field=key_moments value="[Day 1 — 22:00] Confronted Cloud at the well." -- Prune after consolidation
+  > REMOVE faction:shinra field=members value="char:tseng" -- Member departed
+  (key_moments are only trimmed via full-array SET at the 100-cap boundary; no partial REMOVE.)
 
 MAP_SET — set a key in a map field
   > MAP_SET char:elena field=knowledge_asymmetry key=hiding_pc value="Reads PC as cautious but will not say so" -- Flat-key KA
@@ -828,12 +830,15 @@ COLLISIONS ARE STORY ENGINES, NOT LABELS:
 COLLISION CLOSURE (required on every RESOLVED transition):
   Every collision that reaches RESOLVED must record three fields:
   > SET collision:id field=outcome_type value=DIRECT     -- Player engaged and shaped the result
-  > SET collision:id field=outcome_type value=EVOLVED    -- Resolution revealed a deeper tension
-  > SET collision:id field=outcome_type value=MERGED     -- Multiple parent collisions fused into a composite successor event
+  > SET collision:id field=outcome_type value=EVOLVED    -- Resolution revealed a deeper tension; a successor collision spawned
+  > SET collision:id field=outcome_type value=MERGED     -- This collision was absorbed into another active collision
+  > SET collision:id field=outcome_type value=DISSOLVED  -- Off-screen end with no successor; forces dispersed quietly
   > SET collision:id field=outcome_type value=IMPLODED   -- Collision collapsed internally (betrayal, self-destruction, internal failure before it reached the player)
   > SET collision:id field=outcome_type value=CRASHED    -- Player ignored it; gravity resolved it; worst outcome
   > SET collision:id field=aftermath value="What changed. What was lost. What it left behind."
-  For EVOLVED or MERGED: add successor_collision_ids and link parent_collision_ids on the new collision.
+  For EVOLVED: add successor_collision_ids on this collision; add parent_collision_ids on the new successor.
+  For MERGED: add parent_collision_ids on the surviving (still-ACTIVE) collision pointing back to this one. No successor_collision_ids on the merged collision — it was absorbed, not spawned.
+  For DISSOLVED / IMPLODED / CRASHED: no successor/parent linkage.
 
   IMPLODED example — the secret-holder breaks before the confrontation:
   > MOVE collision:loyalty-trap field=status ACTIVE->RESOLVED
@@ -876,6 +881,5 @@ OOC COMMANDS (player types in chat):
 export {
     formatStateView,
     formatReadme,
-    formatCollisionArchive,
     computeArchiveVersion,
 };

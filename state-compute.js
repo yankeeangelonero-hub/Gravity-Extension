@@ -601,12 +601,9 @@ export {
     createEmptyState,
     applyTransaction,
     computeState,
-    diffStates,
-    getPhonebook,
     getCollectionName,
     validateTravel,
     getFieldHistory,
-    getArrayFieldHistory,
     getArrayItemHistory,
     getEntityHistory,
 };

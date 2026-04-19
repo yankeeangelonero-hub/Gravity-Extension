@@ -778,7 +778,7 @@ function buildInvolvedCharsSummary(col, state) {
     }).join(', ');
 }
 
-// Stub: full sanity-check template implemented in PR-D (Task 7)
+// Build the single-turn arrival sanity-check block injected via the _arrival slot (§3.5).
 function buildArrivalBlock(col, draw, involvedSummary, placeName, proximityLine) {
     const immediateNote = col.distance_category === 'IMMEDIATE'
         ? '\nThis collision arrives immediately — brief, sharp, decisive. Resolve in this scene.'
@@ -1225,10 +1225,10 @@ function injectPrompt(mode) {
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
                 const status = (col.status || '').trim().toUpperCase();
                 if (status !== 'RESOLVED') continue;
-                if (!col.outcome_type) closureWarnings.push(`"${col.name || id}" is RESOLVED but missing outcome_type (DIRECT / EVOLVED / MERGED / IMPLODED / CRASHED)`);
+                if (!col.outcome_type) closureWarnings.push(`"${col.name || id}" is RESOLVED but missing outcome_type (DIRECT / EVOLVED / MERGED / DISSOLVED / IMPLODED / CRASHED)`);
                 if (!col.aftermath) closureWarnings.push(`"${col.name || id}" is RESOLVED but missing aftermath — what changed, what was lost, what it left behind`);
-                if ((col.outcome_type === 'EVOLVED' || col.outcome_type === 'MERGED') && !col.successor_collision_ids) {
-                    closureWarnings.push(`"${col.name || id}" has outcome_type: ${col.outcome_type} but no successor_collision_ids — link or explain why no successor seam remains`);
+                if (col.outcome_type === 'EVOLVED' && !col.successor_collision_ids) {
+                    closureWarnings.push(`"${col.name || id}" has outcome_type: EVOLVED but no successor_collision_ids — link the new collision this evolved into.`);
                 }
             }
             if (closureWarnings.length > 0) {
@@ -1564,7 +1564,7 @@ async function onMessageReceived(messageId) {
         }
     }
 
-    // ── Distance ownership audit — warn if LLM sets engine-owned distance fields ──
+    // ── Engine-owned field audit — warn if LLM sets engine-managed fields ──
     for (const tx of committedTxns) {
         if (tx.op === 'S' && tx.e === 'collision' && tx.d?.f === 'distance') {
             _pendingCorrections.push({
@@ -1578,43 +1578,63 @@ async function onMessageReceived(messageId) {
                 attempts: 0,
             });
         }
+        if (tx.op === 'CR' && tx.e === 'pressure' && tx.d?.created_at_tx !== undefined) {
+            _pendingCorrections.push({
+                text: `Pressure ${tx.id} was created with created_at_tx in the payload. Do not set this field — the engine stamps it from tx.tx. Remove it from future pressure CRs.`,
+                attempts: 0,
+            });
+        }
+    }
+
+    // ── Agenda-on-promotion audit (§2.1) ──────────────────────────────────────
+    // When a char is promoted to TRACKED or PRINCIPAL in this turn, require an
+    // agenda. Fires once per promoted character; relies on the rotating
+    // agenda_check nudge to catch drift after that.
+    for (const tx of committedTxns) {
+        if (tx.op !== 'TR' || tx.e !== 'char' || tx.d?.f !== 'tier') continue;
+        const toTier = String(tx.d?.to || '').toUpperCase();
+        if (toTier !== 'TRACKED' && toTier !== 'PRINCIPAL') continue;
+        const char = _currentState?.characters?.[tx.id];
+        if (!char || (typeof char.agenda === 'string' && char.agenda.trim())) continue;
+        _pendingCorrections.push({
+            text: `char:${tx.id} was promoted to ${toTier} but has no agenda. Set: S char:${tx.id} field=agenda value="..." — what this character is working toward.`,
+            attempts: 0,
+        });
     }
 
     // ── Archive presence check (§2.2.1) ────────────────────────────────────────
-    // Pure detection lives in consistency.js::findMissingArchiveEntries.
-    // This block owns the stateful side effects (correction queue, attempt
-    // counter, auto-fallback append on drop).
-    if (committedTxns.length > 0) {
-        const allTerminalIds = committedTxns
-            .filter(tx => tx.op === 'TR' && tx.e === 'collision'
-                && (tx.d?.to === 'RESOLVED' || tx.d?.to === 'CRASHED'))
-            .map(tx => tx.id);
-        const missingList = findMissingArchiveEntries(committedTxns, _currentState);
-        const missingIds = new Set(missingList.map(m => m.id));
+    // Scan ALL RESOLVED/CRASHED collisions each turn (not just TRs from this
+    // turn). The counter increments every turn the archive remains missing so
+    // the auto-fallback path (§2.2.1) actually fires after MAX_CORRECTION_ATTEMPTS.
+    if (_currentState) {
+        const archive = Array.isArray(_currentState.world?.collision_archive) ? _currentState.world.collision_archive : [];
+        const archiveText = archive.map(e => String(e || '')).join('\n');
 
-        // Clear the counter for terminals that now have a matching archive entry
-        // (e.g. late archive arrived on turn N+1).
-        for (const id of allTerminalIds) {
-            if (!missingIds.has(id)) _archiveCorrectionAttempts.delete(id);
-        }
+        for (const [colId, col] of Object.entries(_currentState.collisions || {})) {
+            const status = (col?.status || '').toUpperCase();
+            if (status !== 'RESOLVED' && status !== 'CRASHED') continue;
 
-        for (const { id: colId, name: nameToken } of missingList) {
-            const col = _currentState.collisions?.[colId];
+            const nameToken = col?.name ? String(col.name) : '';
+            const matched = archiveText.includes(colId) || (nameToken && archiveText.includes(nameToken));
+
+            if (matched) {
+                _archiveCorrectionAttempts.delete(colId);
+                continue;
+            }
+
             const attempts = (_archiveCorrectionAttempts.get(colId) || 0) + 1;
             if (attempts > MAX_CORRECTION_ATTEMPTS) {
-                if (col) {
-                    const fallback = `[collision] ${col.name || colId} [resolution] ${col.outcome_type || col.status} — auto-generated (archive missing after ${MAX_CORRECTION_ATTEMPTS} attempts) [hook] none [aftermath] ${col.aftermath || 'unknown'}`;
-                    try {
-                        const autoTxns = await append([{ op: 'A', e: 'world', id: '_', d: { f: 'collision_archive', v: fallback }, r: 'system:archive:auto-fallback' }]);
-                        _currentState = computeState(_currentState, autoTxns);
-                    } catch (_) { /* non-critical */ }
-                }
+                const fallback = `[collision] ${col.name || colId} [resolution] ${col.outcome_type || col.status} — auto-generated (archive missing after ${MAX_CORRECTION_ATTEMPTS} attempts) [hook] none [aftermath] ${col.aftermath || 'unknown'}`;
+                try {
+                    const autoTxns = await append([{ op: 'A', e: 'world', id: '_', d: { f: 'collision_archive', v: fallback }, r: 'system:archive:auto-fallback' }]);
+                    _currentState = computeState(_currentState, autoTxns);
+                } catch (_) { /* non-critical */ }
                 _archiveCorrectionAttempts.delete(colId);
             } else {
                 _archiveCorrectionAttempts.set(colId, attempts);
                 queueCorrections([{
                     raw: `[collision:${colId} archive]`,
-                    error: `Missing archive entry for resolved collision ${colId}. Add: A world field=collision_archive value="[collision] ${col?.name || nameToken || colId} ... [resolution] ... [hook] ... [aftermath] ..."`,
+                    error: `Missing archive entry for resolved collision ${colId}. Add: A world field=collision_archive value="[collision] ${col.name || colId} ... [resolution] ... [hook] ... [aftermath] ..."`,
                 }]);
             }
         }
@@ -1896,16 +1916,23 @@ async function handleAdvanceButton() {
     if (_advanceLocked) return;
     _advanceLocked = true;
 
-    // Lock DOM button immediately; re-enable on next MESSAGE_RECEIVED
+    // Lock DOM button immediately; re-enable on next MESSAGE_RECEIVED OR after
+    // a 2-minute timeout (covers silent LLM failures, stream stalls, etc.).
     const advBtn = document.getElementById('gl-input-advance');
     let reenableAdvBtn;
     if (advBtn) {
         advBtn.disabled = true;
+        let timeoutId = null;
         reenableAdvBtn = () => {
+            if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
             advBtn.disabled = false;
             _advanceLocked = false;
             eventSource.off(event_types.MESSAGE_RECEIVED, reenableAdvBtn);
         };
+        timeoutId = setTimeout(() => {
+            console.warn(`${LOG_PREFIX} Advance button timeout — re-enabling after 2min of no MESSAGE_RECEIVED.`);
+            reenableAdvBtn();
+        }, 120000);
         eventSource.on(event_types.MESSAGE_RECEIVED, reenableAdvBtn);
     }
 
