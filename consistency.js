@@ -1,14 +1,21 @@
 /**
- * consistency.js — Format and structure validation only.
+ * consistency.js — Format and structure validation + state-machine transition guard.
  *
  * The extension validates that ledger transactions are well-formed:
  * correct JSON structure, valid operation codes, required fields present,
  * valid entity type codes, proper data shapes.
  *
- * Gameplay rules (PRINCIPAL count, constraint limits, collision forces,
- * state machine transitions) are NOT enforced here. Those are the LLM's
- * responsibility, audited during OOC: eval.
+ * Phase 2 also wires state-machine transition enforcement here (§6.1): every
+ * `TR` operation is checked against `state-machine.js::validateTransition()`
+ * at commit time, and invalid transitions are rejected while the rest of the
+ * batch still commits.
+ *
+ * Gameplay rules beyond state-machine transitions (PRINCIPAL count, constraint
+ * limits, collision forces) remain the LLM's responsibility, audited during
+ * OOC: eval.
  */
+
+import { validateTransition } from './state-machine.js';
 
 // ─── Valid Values ──────────────────────────────────────────────────────────────
 
@@ -201,9 +208,81 @@ function formatErrors(errors) {
     return lines.join('\n');
 }
 
+/**
+ * Identify terminal collision TRs (RESOLVED/CRASHED) in a committed batch that
+ * lack a matching `world.collision_archive` entry.
+ * §2.2.1 — "engine checks for a world.collision_archive append when processing
+ * a terminal collision TR". Pure detection; caller owns the correction-queue
+ * side effects.
+ *
+ * @param {Array} committedTxns — transactions just appended
+ * @param {Object} state — post-commit computed state
+ * @returns {Array<{ id: string, name: string, to: string }>} missing entries
+ */
+function findMissingArchiveEntries(committedTxns, state) {
+    if (!Array.isArray(committedTxns) || committedTxns.length === 0) return [];
+    const archive = Array.isArray(state?.world?.collision_archive) ? state.world.collision_archive : [];
+
+    const terminals = committedTxns
+        .filter(tx => tx.op === 'TR' && tx.e === 'collision'
+            && (tx.d?.to === 'RESOLVED' || tx.d?.to === 'CRASHED'))
+        .map(tx => ({ id: tx.id, to: tx.d.to }));
+
+    const missing = [];
+    for (const { id: colId, to } of terminals) {
+        const col = state.collisions?.[colId];
+        const nameToken = col?.name ? String(col.name) : '';
+        const matched = archive.some(entry => {
+            const s = String(entry || '');
+            return s.includes(colId) || (nameToken && s.includes(nameToken));
+        });
+        if (!matched) missing.push({ id: colId, name: nameToken, to });
+    }
+    return missing;
+}
+
+/**
+ * Validate state-machine transitions for a batch of transactions (§6.1).
+ * Only `TR` ops are checked; all others pass through untouched.
+ * Invalid TRs are pulled out of the `valid` stream and returned as structured
+ * errors for the caller's correction queue. Other TXs in the batch still
+ * commit (per-tx filtering, not batch abort).
+ *
+ * @param {Array} transactions
+ * @returns {{ valid: Array, errors: Array<{ lineNum: number, error: string, fix: string, raw: string, tx: any }> }}
+ */
+function validateTransitions(transactions) {
+    const valid = [];
+    const errors = [];
+    if (!Array.isArray(transactions)) return { valid: [], errors: [] };
+
+    for (let i = 0; i < transactions.length; i++) {
+        const tx = transactions[i];
+        if (tx?.op !== 'TR') {
+            valid.push(tx);
+            continue;
+        }
+        const result = validateTransition(tx.e, tx.d?.f, tx.d?.from, tx.d?.to);
+        if (result.valid) {
+            valid.push(tx);
+        } else {
+            errors.push({
+                lineNum: i,
+                error: result.error,
+                fix: result.fix,
+                raw: `[tr ${tx.e}:${tx.id}]`,
+                tx,
+            });
+        }
+    }
+    return { valid, errors };
+}
+
 export {
     validateBatch,
     validateFormat,
+    validateTransitions,
+    findMissingArchiveEntries,
     formatErrors,
     VALID_OPS,
     VALID_ENTITIES,

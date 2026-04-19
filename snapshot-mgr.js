@@ -16,6 +16,7 @@ import {
 } from './ledger-store.js';
 
 let _snapshotCounter = 0;
+const _rollbackListeners = new Set();
 
 /**
  * Initialize snapshot manager.
@@ -25,6 +26,19 @@ function init() {
     _snapshotCounter = snapshots.length > 0
         ? Math.max(...snapshots.map(s => s.id || 0)) + 1
         : 0;
+}
+
+/**
+ * Register a callback to fire whenever rollback() runs. Use this to clear any
+ * in-memory runtime state that references pre-rollback collision/archive data.
+ * Matches PHASE2-SPEC §8 step 8b.
+ * @param {Function} fn
+ * @returns {Function} unsubscribe
+ */
+function onRollback(fn) {
+    if (typeof fn !== 'function') return () => {};
+    _rollbackListeners.add(fn);
+    return () => _rollbackListeners.delete(fn);
 }
 
 /**
@@ -97,6 +111,13 @@ async function rollback(targetSnapshotId) {
         r: `Rolled back to snapshot ${targetSnapshotId}: ${snapshot.label}`,
     }]);
 
+    // Fire runtime-state listeners (PHASE2-SPEC §8 step 8b)
+    for (const fn of _rollbackListeners) {
+        try { fn(targetSnapshotId, snapshot); } catch (err) {
+            console.warn('[GravityLedger:Snapshot] rollback listener threw:', err);
+        }
+    }
+
     return snapshot.state;
 }
 
@@ -155,4 +176,5 @@ export {
     getSnapshot,
     rollback,
     computeCurrentState,
+    onRollback,
 };

@@ -8,15 +8,15 @@
  */
 
 import { init as initLedger, reset as resetLedger, append, getAllTransactions, getTransactionsForEntity, exportData, importData } from './ledger-store.js';
-import { initSnapshots, computeCurrentState, createSnapshot } from './snapshot-mgr.js';
-import { validateBatch, formatErrors } from './consistency.js';
+import { initSnapshots, computeCurrentState, createSnapshot, onRollback } from './snapshot-mgr.js';
+import { validateBatch, formatErrors, validateTransitions, findMissingArchiveEntries } from './consistency.js';
 import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel, CATEGORY_DISTANCES } from './state-compute.js';
 import { formatStateView, formatReadme, computeArchiveVersion } from './state-view.js';
 import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
 import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
-import { getStateMachineField, validateTransition } from './state-machine.js';
+import { getStateMachineField } from './state-machine.js';
 import {
     buildChallengePrompt,
     clearChallengeRuntime,
@@ -516,6 +516,7 @@ function drawDivination() {
 
     const system = getActiveDivinationSystem();
 
+    if (system === 'classic') {
         const d1 = Math.floor(Math.random() * 10) + 1;
         const d2 = Math.floor(Math.random() * 10) + 1;
         const total = d1 + d2;
@@ -1476,7 +1477,7 @@ async function onMessageReceived(messageId) {
     _uncappedTurn = false;
 
     // Validate each transaction individually
-    const validTxns = [];
+    let validTxns = [];
     const validationErrors = [];
     let committedTxns = [];
     for (let i = 0; i < extractedTransactions.length; i++) {
@@ -1491,9 +1492,19 @@ async function onMessageReceived(messageId) {
             continue;
         }
 
-        // ── Travel plausibility (§2.4) ────────────────────────────────────
+        // ── Travel plausibility + tier gate (§2.1, §2.4) ───────────────────
         if (tx.op === 'S' && tx.e === 'char' && tx.d?.f === 'location') {
             const charBefore = _currentState.characters?.[tx.id];
+            const tier = String(charBefore?.tier || 'UNKNOWN').toUpperCase();
+            if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') {
+                validationErrors.push({
+                    lineNum: i,
+                    error: `char:${tx.id} is tier ${tier}; location is only tracked for TRACKED/PRINCIPAL chars (§2.1). Promote first or omit location.`,
+                    fix: `Remove the location SET, or TR this character to TRACKED first.`,
+                    raw: `[char:${tx.id} location]`,
+                });
+                continue;
+            }
             const fromPlaceId = charBefore?.location;
             const travel = validateTravel(tx.id, fromPlaceId, tx.d.v, _currentState, _currentInjectMode);
             if (!travel.valid) {
@@ -1506,25 +1517,18 @@ async function onMessageReceived(messageId) {
                 continue;
             }
         }
-        // ─────────────────────────────────────────────────────────────────
 
-        // ── Validate state machine transitions (TR ops only) ─────────────
-        if (tx.op === 'TR') {
-            const transitionResult = validateTransition(tx.e, tx.d?.f, tx.d?.from, tx.d?.to);
-            if (!transitionResult.valid) {
-                validationErrors.push({
-                    lineNum: i,
-                    error: transitionResult.error,
-                    fix: transitionResult.fix,
-                    raw: `[tr ${tx.e}:${tx.id}]`,
-                });
-                continue;
-            }
-        }
-        // ─────────────────────────────────────────────────────────────────
+        // State-machine TR validation runs as a post-loop batch call below
+        // (consistency.js::validateTransitions, §6.1). Retained stub only to
+        // document intent at the per-tx site.
 
         validTxns.push(tx);
     }
+
+    // ── State-machine TR validation (§6.1, wired in consistency.js) ────────────
+    const trResult = validateTransitions(validTxns);
+    validTxns = trResult.valid;
+    for (const e of trResult.errors) validationErrors.push(e);
 
     // Combine all errors (extraction parse errors + validation errors)
     const allErrors = [...extractionErrors, ...validationErrors];
@@ -1576,31 +1580,26 @@ async function onMessageReceived(messageId) {
         }
     }
 
-    // ── Archive presence check (§2.2.1, §6.1) ──────────────────────────────────
-    // After each commit, scan for terminal collision TRs without a matching archive entry
-    // that references the collision by id or name. Checks full world.collision_archive,
-    // not just same-turn commits, so late archives (turn N+1) satisfy earlier terminals.
+    // ── Archive presence check (§2.2.1) ────────────────────────────────────────
+    // Pure detection lives in consistency.js::findMissingArchiveEntries.
+    // This block owns the stateful side effects (correction queue, attempt
+    // counter, auto-fallback append on drop).
     if (committedTxns.length > 0) {
-        const terminalTxns = committedTxns
+        const allTerminalIds = committedTxns
             .filter(tx => tx.op === 'TR' && tx.e === 'collision'
                 && (tx.d?.to === 'RESOLVED' || tx.d?.to === 'CRASHED'))
-            .map(tx => ({ id: tx.id, to: tx.d.to }));
+            .map(tx => tx.id);
+        const missingList = findMissingArchiveEntries(committedTxns, _currentState);
+        const missingIds = new Set(missingList.map(m => m.id));
 
-        const archive = Array.isArray(_currentState?.world?.collision_archive)
-            ? _currentState.world.collision_archive
-            : [];
+        // Clear the counter for terminals that now have a matching archive entry
+        // (e.g. late archive arrived on turn N+1).
+        for (const id of allTerminalIds) {
+            if (!missingIds.has(id)) _archiveCorrectionAttempts.delete(id);
+        }
 
-        for (const { id: colId } of terminalTxns) {
+        for (const { id: colId, name: nameToken } of missingList) {
             const col = _currentState.collisions?.[colId];
-            const nameToken = col?.name ? String(col.name) : '';
-            const matched = archive.some(entry => {
-                const s = String(entry || '');
-                return s.includes(colId) || (nameToken && s.includes(nameToken));
-            });
-            if (matched) {
-                _archiveCorrectionAttempts.delete(colId);
-                continue;
-            }
             const attempts = (_archiveCorrectionAttempts.get(colId) || 0) + 1;
             if (attempts > MAX_CORRECTION_ATTEMPTS) {
                 if (col) {
@@ -1615,7 +1614,7 @@ async function onMessageReceived(messageId) {
                 _archiveCorrectionAttempts.set(colId, attempts);
                 queueCorrections([{
                     raw: `[collision:${colId} archive]`,
-                    error: `Missing archive entry for resolved collision ${colId}. Add: A world field=collision_archive value="[collision] ${col?.name || colId} ... [resolution] ... [hook] ... [aftermath] ..."`,
+                    error: `Missing archive entry for resolved collision ${colId}. Add: A world field=collision_archive value="[collision] ${col?.name || nameToken || colId} ... [resolution] ... [hook] ... [aftermath] ..."`,
                 }]);
             }
         }
@@ -1679,6 +1678,13 @@ async function onMessageReceived(messageId) {
         if (immediateArrivals.length > 0) {
             buildAndInjectArrivals(immediateArrivals, _currentState);
         }
+    }
+
+    // ── Advance tick pipeline (§3.7 steps 5–10) ────────────────────────────────
+    // Runs AFTER LLM transactions have committed so world.timeskip_scale reflects
+    // the current turn's declaration, not the previous one.
+    if (_lastCompletedMode === 'advance') {
+        await applyAdvanceTick();
     }
 
     // ── Pressure FIFO cap (§4.1) — auto-drop oldest when pool exceeds 5 ────────
@@ -1789,15 +1795,8 @@ Then write prose, render the choices, and end with a compact STATE block.`,
         _uncappedTurn = /ooc:\s*(eval|cleanup)\b/i.test(message.mes);
         _pendingReinforcement = result.injection;
         _currentState = computeCurrentState();
-        // Rollback resets arrival/foreshadow/archive runtime state — rolled-back collisions
-        // may re-arrive, and the archive may be shorter post-rollback so we must re-inject.
-        if (/ooc:\s*rollback\b/i.test(message.mes)) {
-            _firedCollisionArrivals = new Set();
-            _foreshadowedCollisions = new Map();
-            _arrivalLastFiredTurn = -1;
-            _archiveCorrectionAttempts = new Map();
-            _archiveInjectedVersion = null;
-        }
+        // Rollback runtime-state cleanup is handled by the onRollback listener
+        // registered at module init (PHASE2-SPEC §8 step 8b).
         injectPrompt();
         updatePanel(_currentState, _turnCounter);
     }
@@ -1830,6 +1829,67 @@ async function handleSetupButton() {
     _pendingOOCInjection = buildSetupPrompt(answers);
     injectPrompt('integration');
     insertChatMessage('OOC: Begin game setup.');
+}
+
+// ─── Advance Tick Pipeline (§3.7 steps 5–10) ──────────────────────────────────
+// Runs from onMessageReceived AFTER the LLM's advance-turn transactions have
+// committed. Reads the just-committed world.timeskip_scale, ticks collisions,
+// clears pressure on WEEKS/MONTHS, detects new arrivals, fires collision_health.
+async function applyAdvanceTick() {
+    if (!_currentState) return;
+
+    const scale = (_currentState.world?.timeskip_scale || 'HOURS').toString().toUpperCase();
+    const tickDelta = TICK[scale] ?? 1;
+
+    const tickTxns = [];
+    for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+        const dist = parseFloat(col.distance);
+        const status = (col.status || '').trim().toUpperCase();
+        if (status !== 'ACTIVE') continue;
+        if (col.distance_category === 'IMMEDIATE') continue;
+        if (isNaN(dist) || dist <= 0) continue;
+        const newDist = Math.max(0, dist - tickDelta);
+        if (newDist !== dist) {
+            tickTxns.push({ op: 'S', e: 'collision', id, d: { f: 'distance', v: newDist }, r: 'system:advance:tick' });
+        }
+    }
+
+    // WEEKS / MONTHS clears pressure points — stale small tensions lapse
+    if (scale === 'WEEKS' || scale === 'MONTHS') {
+        for (const id of Object.keys(_currentState.pressures || {})) {
+            tickTxns.push({ op: 'D', e: 'pressure', id, r: `system:advance:${scale.toLowerCase()}-clear-pressure` });
+        }
+    }
+
+    if (tickTxns.length > 0) {
+        await append(tickTxns);
+        _currentState = computeCurrentState();
+    }
+
+    // Reset timeskip_scale after consuming
+    if (_currentState.world?.timeskip_scale) {
+        await append([{ op: 'S', e: 'world', id: '_', d: { f: 'timeskip_scale', v: null }, r: 'system:advance:reset-timeskip' }]);
+        _currentState = computeCurrentState();
+    }
+
+    // Arrival detection — fire sanity-check for distances that hit 0 after tick
+    const newArrivalIds = [];
+    for (const [id, col] of Object.entries(_currentState.collisions || {})) {
+        const status = (col.status || '').toUpperCase();
+        const dist = parseFloat(col.distance);
+        if (status === 'ACTIVE' && !isNaN(dist) && dist <= 0 && !_firedCollisionArrivals.has(id)) {
+            newArrivalIds.push(id);
+        }
+    }
+    if (newArrivalIds.length > 0) {
+        buildAndInjectArrivals(newArrivalIds, _currentState);
+    }
+
+    // collision_health fires on every advance turn regardless of nudge counter (§4.4)
+    const healthNudge = buildNudge_collisionHealth(_currentState);
+    if (healthNudge) _pendingNudgeText = healthNudge;
+
+    updatePanel(_currentState, _turnCounter);
 }
 
 async function handleAdvanceButton() {
@@ -1874,62 +1934,9 @@ async function handleAdvanceButton() {
         }
     }
 
-    // ── Engine-side distance compression (timeskip-scale-aware, §3.2) ────────
-    if (_currentState) {
-        const scale = (_currentState.world?.timeskip_scale || 'HOURS').toString().toUpperCase();
-        const tickDelta = TICK[scale] ?? 1;
-
-        const tickTxns = [];
-        for (const [id, col] of Object.entries(_currentState.collisions || {})) {
-            const dist = parseFloat(col.distance);
-            const status = (col.status || '').trim().toUpperCase();
-            if (status !== 'ACTIVE') continue;
-            if (col.distance_category === 'IMMEDIATE') continue;
-            if (isNaN(dist) || dist <= 0) continue;
-            const newDist = Math.max(0, dist - tickDelta);
-            if (newDist !== dist) {
-                tickTxns.push({ op: 'S', e: 'collision', id, d: { f: 'distance', v: newDist }, r: 'system:advance:tick' });
-            }
-        }
-
-        // WEEKS / MONTHS clears pressure points — stale small tensions lapse
-        if (scale === 'WEEKS' || scale === 'MONTHS') {
-            for (const id of Object.keys(_currentState.pressures || {})) {
-                tickTxns.push({ op: 'D', e: 'pressure', id, r: `system:advance:${scale.toLowerCase()}-clear-pressure` });
-            }
-        }
-
-        if (tickTxns.length > 0) {
-            await append(tickTxns);
-            _currentState = computeCurrentState();
-        }
-
-        // Reset timeskip_scale after consuming
-        if (_currentState.world?.timeskip_scale) {
-            await append([{ op: 'S', e: 'world', id: '_', d: { f: 'timeskip_scale', v: null }, r: 'system:advance:reset-timeskip' }]);
-            _currentState = computeCurrentState();
-        }
-
-        updatePanel(_currentState, _turnCounter);
-    }
-
-    // ── Arrival detection: fire sanity-check gate for newly arrived collisions ──
-    const newArrivalIds = [];
-    if (_currentState) {
-        for (const [id, col] of Object.entries(_currentState.collisions || {})) {
-            const status = (col.status || '').toUpperCase();
-            const dist = parseFloat(col.distance);
-            if (status === 'ACTIVE' && !isNaN(dist) && dist <= 0 && !_firedCollisionArrivals.has(id)) {
-                newArrivalIds.push(id);
-            }
-        }
-    }
-    if (newArrivalIds.length > 0) {
-        buildAndInjectArrivals(newArrivalIds, _currentState);
-    }
-    // ── Advance collision_health check (§4.4) — fires regardless of nudge counter ──
-    const healthNudge = buildNudge_collisionHealth(_currentState);
-    if (healthNudge) _pendingNudgeText = healthNudge;
+    // Tick consumption + arrival detection + collision_health nudge now run in
+    // onMessageReceived() after the LLM commits its `S world timeskip_scale` TX.
+    // This matches PHASE2-SPEC §3.7 steps 2→6 — commit first, then tick.
 
     injectPrompt('advance');
     const pcName = _currentState?.pc?.name || '{{user}}';
@@ -2167,6 +2174,17 @@ async function handleImportData(data) {
     const { eventSource, event_types } = context;
 
     createPanel();
+
+    // Clear arrival / foreshadow / archive runtime state on every rollback path
+    // (OOC text, future programmatic calls, snapshot UI). PHASE2-SPEC §8 step 8b.
+    onRollback(() => {
+        _firedCollisionArrivals = new Set();
+        _foreshadowedCollisions = new Map();
+        _arrivalLastFiredTurn = -1;
+        _archiveCorrectionAttempts = new Map();
+        _archiveInjectedVersion = null;
+    });
+
     setCallbacks({
         onNew: handleNewLedger,
         onExport: handleExportData,

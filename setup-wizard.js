@@ -200,7 +200,7 @@ Build 3-4 constraints:
 
 3. WORLD SETUP:
 ${answers.power_scale ? '> SET world field=power_scale value="[power ladder summary]" -- What each combat rating means in this story\n' : ''}${answers.power_ceiling ? '> SET world field=power_ceiling value=[highest_rating] -- Highest credible direct-combat level in this setting\n' : ''}${answers.power_notes ? '> SET world field=power_notes value="[caveats about range, magic, armor, or combat realism]" -- World combat caveats\n' : ''}> SET world field=world_state value="[macro reality]" -- World state
-> SET world field=timeskip_scale value="HOURS" -- Default tick scale for the first Advance; set to MINUTES/HOURS/DAYS/WEEKS/MONTHS on any turn that yields initiative
+> SET world field=timeskip_scale value="HOURS" -- Default tick scale for the first Advance; set to HOURS/DAYS/WEEKS/MONTHS on any turn that yields initiative
 
 4. FACTIONS (at least 2 with opposing agendas):
 > CREATE faction:name name="[Name]" state="[active/weakened/ascendant/dormant]"

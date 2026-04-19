@@ -101,6 +101,48 @@ function computeArchiveVersion(state) {
     return `${archiveEntries.length}:${thin}`;
 }
 
+/**
+ * Dispatch challenge entity formatting by type (§7.3 rule 3).
+ * Reads `kind` first, falling back to `challenge_type` for spec-matching code paths.
+ * Today only `combat` is implemented; future challenge types add their own branch
+ * without touching this function's callers.
+ * @param {Object} challenge
+ * @param {Object} opts — { compact: boolean } compact=true for registry listing
+ * @returns {string[]} lines to push into the state view
+ */
+function formatChallenge(challenge, { compact = false } = {}) {
+    const type = challenge?.kind || challenge?.challenge_type || 'combat';
+    const lines = [];
+    if (type === 'combat') {
+        if (compact) {
+            let combatLine = `  ${challenge.name || challenge.id} [${challenge.status || 'ACTIVE'}]`;
+            if (challenge.primary_enemy) {
+                const pe = typeof challenge.primary_enemy === 'object'
+                    ? (challenge.primary_enemy.name || challenge.primary_enemy.id || '?')
+                    : challenge.primary_enemy;
+                combatLine += ` vs ${pe}`;
+            }
+            if (challenge.opened_from) combatLine += ` (from collision:${challenge.opened_from})`;
+            combatLine += ` → id: ${challenge.id}`;
+            lines.push(combatLine);
+        } else {
+            lines.push(`  ⚔ ${challenge.name || challenge.id} [${challenge.status || 'ACTIVE'}] → id: ${challenge.id}`);
+            if (challenge.primary_enemy) {
+                const pe = typeof challenge.primary_enemy === 'object'
+                    ? (challenge.primary_enemy.name || challenge.primary_enemy.id || '?')
+                    : challenge.primary_enemy;
+                lines.push(`    Primary enemy: ${pe}`);
+            }
+            if (challenge.opened_from) lines.push(`    Opened from: collision:${challenge.opened_from}`);
+            if (challenge.outcome) lines.push(`    Outcome: ${challenge.outcome}`);
+            if (challenge.aftermath) lines.push(`    Aftermath: ${challenge.aftermath}`);
+        }
+        return lines;
+    }
+    // Future challenge types slot in here.
+    return lines;
+}
+
 function formatStateView(state, mode = 'full', includeArchive = true) {
     const lines = [];
     // ── Mode flags ────────────────────────────────────────────────────────
@@ -177,17 +219,16 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
             }
         }
 
-        // Key moments — tier-aware capping
-        const moments = Array.isArray(char.key_moments) ? char.key_moments : [];
-        let momentCap;
-        if (isFull) momentCap = Infinity;
-        else if (isCombat || isIntimacy) momentCap = isPrincipal ? 5 : 3;
-        else momentCap = isPrincipal ? 3 : 1; // lite
-        const displayMoments = momentCap === Infinity ? moments : moments.slice(-momentCap);
-        if (displayMoments.length) {
-            const capNote = moments.length > displayMoments.length ? `, showing last ${displayMoments.length}` : '';
-            lines.push(`    Key moments (${moments.length}${capNote}):`);
-            for (const m of displayMoments) lines.push(`      - ${m}`);
+        // Key moments — PRINCIPAL only, last 10 per turn (§2.1).
+        // TRACKED/KNOWN/UNKNOWN chars omit this section per spec.
+        if (isPrincipal) {
+            const moments = Array.isArray(char.key_moments) ? char.key_moments : [];
+            const displayMoments = moments.slice(-10);
+            if (displayMoments.length) {
+                const capNote = moments.length > displayMoments.length ? `, showing last ${displayMoments.length}` : '';
+                lines.push(`    Key moments (${moments.length}${capNote}):`);
+                for (const m of displayMoments) lines.push(`      - ${m}`);
+            }
         }
     }
     if (Object.keys(state.characters).length === 0) lines.push('  (none)');
@@ -236,20 +277,13 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         }
     }
 
-    // Combats — always show registry if active
+    // Combats — always show registry if active (routed through formatChallenge, §7.3 rule 3)
     const activeCombats = Object.values(state.combats || {}).filter(combat => String(combat.status || '').toUpperCase() !== 'RESOLVED');
     if (activeCombats.length) {
         lines.push('');
         lines.push('Combats:');
         for (const combat of activeCombats) {
-            let combatLine = `  ${combat.name || combat.id} [${combat.status || 'ACTIVE'}]`;
-            if (combat.primary_enemy) {
-                const pe = typeof combat.primary_enemy === 'object' ? (combat.primary_enemy.name || combat.primary_enemy.id || '?') : combat.primary_enemy;
-                combatLine += ` vs ${pe}`;
-            }
-            if (combat.opened_from) combatLine += ` (from collision:${combat.opened_from})`;
-            combatLine += ` → id: ${combat.id}`;
-            lines.push(combatLine);
+            lines.push(...formatChallenge(combat, { compact: true }));
         }
     }
 
@@ -361,19 +395,12 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         }
     }
 
-    // Combats detail — combat and full modes
+    // Combats detail — combat and full modes (routed through formatChallenge)
     if (showPower && activeCombats.length) {
         lines.push('');
         lines.push('COMBATS');
         for (const combat of activeCombats) {
-            lines.push(`  ⚔ ${combat.name || combat.id} [${combat.status || 'ACTIVE'}] → id: ${combat.id}`);
-            if (combat.primary_enemy) {
-                const pe = typeof combat.primary_enemy === 'object' ? (combat.primary_enemy.name || combat.primary_enemy.id || '?') : combat.primary_enemy;
-                lines.push(`    Primary enemy: ${pe}`);
-            }
-            if (combat.opened_from) lines.push(`    Opened from: collision:${combat.opened_from}`);
-            if (combat.outcome) lines.push(`    Outcome: ${combat.outcome}`);
-            if (combat.aftermath) lines.push(`    Aftermath: ${combat.aftermath}`);
+            lines.push(...formatChallenge(combat, { compact: false }));
         }
     }
 

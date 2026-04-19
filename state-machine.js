@@ -1,13 +1,15 @@
 /**
- * state-machine.js — State machine definitions and reference data.
+ * state-machine.js — State machine definitions and transition enforcement.
  *
  * Defines the valid states and transitions for each entity lifecycle.
- * These are NOT enforced by the extension — gameplay rules are the LLM's
- * responsibility, audited during OOC: eval. This module serves as:
+ * Phase 2 wires `validateTransition()` into the commit pipeline via
+ * `consistency.js::validateTransitions()` — invalid TRs are rejected at
+ * commit time (§6.1). This module serves as:
  *
- * 1. Reference documentation for the state machines
- * 2. Utility functions the LLM-facing eval can use to describe valid transitions
- * 3. A library the prompt layer references when explaining rules to the LLM
+ * 1. Authoritative state tables for each entity type
+ * 2. `validateTransition()` — the enforcement function called by consistency.js
+ * 3. Utility helpers (getValidNextStates, isTerminal) used by OOC eval and the
+ *    prompt layer for documentation
  */
 
 // ─── Character Tier ────────────────────────────────────────────────────────────

@@ -78,6 +78,9 @@ function createEmptyState() {
 }
 
 function normalizeCharacterKnowledgeAsymmetry(state) {
+    // Nested containers exist for back-compat with legacy writes; they do not
+    // count toward the §2.1 "20 entries across all four categories combined" cap.
+    const STRUCTURAL_KEYS = new Set(['knows', 'unknown', 'hiding', 'misreading']);
     for (const char of Object.values(state.characters || {})) {
         const tier = String(char?.tier || '').toUpperCase();
         if (!['KNOWN', 'TRACKED', 'PRINCIPAL'].includes(tier)) continue;
@@ -94,6 +97,17 @@ function normalizeCharacterKnowledgeAsymmetry(state) {
         }
         if (char.last_seen_at === undefined || char.last_seen_at === null) {
             char.last_seen_at = '';
+        }
+
+        // Cap flat KA at 20 entries across all four categories combined (§2.1).
+        // Structural containers (knows/unknown/hiding/misreading) and `legacy`
+        // do not count. Oldest keys win insertion order; drop excess from the tail.
+        const kaObj = char.knowledge_asymmetry;
+        if (kaObj && typeof kaObj === 'object' && !Array.isArray(kaObj)) {
+            const flatKeys = Object.keys(kaObj).filter(k => k !== 'legacy' && !STRUCTURAL_KEYS.has(k));
+            if (flatKeys.length > 20) {
+                for (const k of flatKeys.slice(20)) delete kaObj[k];
+            }
         }
     }
 }
