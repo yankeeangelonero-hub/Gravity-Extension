@@ -3,8 +3,8 @@
  *
  * 4 top-level tabs:
  * 1. Characters — sub-tabs per character with full dossiers
- * 2. Factions & World — factions, world state, pressure points, constants
- * 3. Collisions — active/simmering with distance
+ * 2. Factions & World — factions, world state, timeskip scale, collision archive
+ * 3. Collisions — ACTIVE with distance, plus RESOLVED/CRASHED archive
  * 4. Divination — active system, last draw, reading history
  */
 
@@ -224,7 +224,7 @@ function createPanel() {
             <button class="gl-popup-close" id="gl-close-btn" title="Close">&times;</button>
         </div>
         <div class="gl-cmd-bar" id="gl-cmd-bar">
-            <button class="gl-cmd-btn" data-cmd="setup" title="Setup Wizard (or cancel)"><i class="fa-solid fa-wand-magic-sparkles"></i> Setup</button>
+            <button class="gl-cmd-btn" data-cmd="setup" title="New game setup (or cancel in-progress)"><i class="fa-solid fa-wand-magic-sparkles"></i> Setup</button>
             <button class="gl-cmd-btn" data-cmd="timeskip" title="Timeskip"><i class="fa-solid fa-forward"></i> Skip</button>
             <button class="gl-cmd-btn" data-cmd="register" title="Register/promote NPC"><i class="fa-solid fa-user-plus"></i> Register</button>
             <button class="gl-cmd-btn" data-cmd="advance" title="Yield initiative — let the world move"><i class="fa-solid fa-play"></i> Advance</button>

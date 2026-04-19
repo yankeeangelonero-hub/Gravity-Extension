@@ -61,7 +61,7 @@ async function showSetupPopup() {
             <div class="gl-setup-popup">
                 <div class="gl-setup-header">
                     <h3>New Game Setup</h3>
-                    <p style="color:#999;font-size:12px;margin:4px 0 0">Set the opening arc and combat power doctrine. Leave anything blank for the LLM to derive from the character card, scenario, and genre.</p>
+                    <p style="color:#999;font-size:12px;margin:4px 0 0">Set the opening story direction and combat power doctrine. Leave anything blank for the LLM to derive from the character card, scenario, and genre.</p>
                 </div>
                 <div class="gl-setup-form">
                     <div class="gl-setup-section">
@@ -182,12 +182,13 @@ ${answers.pc_power_base ? `> SET pc field=power_base value=${answers.pc_power_ba
 Read the persona description above. Extract demonstrated_traits (2-4 APPEND lines) from what it says about {{user}}.
 
 2. PRINCIPAL CHARACTER ({{char}} — the character card NPC, NOT the PC):
-> CREATE char:name name="[Full Name from character card]" tier=PRINCIPAL want="[core want from card/scenario]" doing="[action]"
-> SET char:name field=intimacy_stance value="[initial stance]"
-> MAP_SET char:name field=knowledge_asymmetry key=knows.[topic] value="[fact they hold]"
-> MAP_SET char:name field=knowledge_asymmetry key=unknown.[topic] value="[gap they have]"
-> MAP_SET char:name field=knowledge_asymmetry key=hiding.[topic] value="[what they conceal]"
-> MAP_SET char:name field=knowledge_asymmetry key=misreading.[topic] value="[false belief they hold]"
+> CREATE char:name name="[Full Name from character card]" tier=PRINCIPAL
+> SET char:name field=agenda value="[narrative compass — what this character is working toward; the direction that will generate collision seeds]"
+> SET char:name field=location value=place:[starting-place-id]
+> MAP_SET char:name field=knowledge_asymmetry key=knows_[short_topic_slug] value="[fact this character knows — intel they could act on]"
+> MAP_SET char:name field=knowledge_asymmetry key=unknown_[short_topic_slug] value="[important blind spot this character has]"
+> MAP_SET char:name field=knowledge_asymmetry key=hiding_[short_topic_slug] value="[secret this character actively conceals]"
+> MAP_SET char:name field=knowledge_asymmetry key=misreading_[short_topic_slug] value="[false belief this character holds as true]"
 If this character is combat-capable or likely to become a direct physical threat, also assign:
 > SET char:name field=power_base value=[earned_rating]
 > SET char:name field=power value=[current_effective_rating]
@@ -199,21 +200,31 @@ Build 3-4 constraints:
 > CREATE constraint:c3-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=depth_shift shedding_order=3
 
 3. WORLD SETUP:
-${answers.power_scale ? '> MAP_SET world field=constants key=power_scale value="[power ladder summary]" -- What each combat rating means in this story\n' : ''}${answers.power_ceiling ? '> MAP_SET world field=constants key=power_ceiling value=[highest_rating] -- Highest credible direct-combat level in this setting\n' : ''}${answers.power_notes ? '> MAP_SET world field=constants key=power_notes value="[caveats about range, magic, armor, or combat realism]" -- World combat caveats\n' : ''}> SET world field=world_state value="[macro reality]" -- World state
+${answers.power_scale ? '> SET world field=power_scale value="[power ladder summary]" -- What each combat rating means in this story\n' : ''}${answers.power_ceiling ? '> SET world field=power_ceiling value=[highest_rating] -- Highest credible direct-combat level in this setting\n' : ''}${answers.power_notes ? '> SET world field=power_notes value="[caveats about range, magic, armor, or combat realism]" -- World combat caveats\n' : ''}> SET world field=world_state value="[macro reality]" -- World state
+> SET world field=timeskip_scale value="HOURS" -- Default tick scale for the first Advance; set to MINUTES/HOURS/DAYS/WEEKS/MONTHS on any turn that yields initiative
 
-4. FACTIONS (at least 2 with opposing objectives):
-> CREATE faction:name name="[Name]" objective="[goal]" resources="[resources]" stance_toward_pc="[stance]" power="[rising/stable/declining]" momentum="[current action]" leverage="[power source]" vulnerability="[weakness]"
-> MAP_SET faction:name field=relations key=[other-faction-id] value="[stance]"
+4. FACTIONS (at least 2 with opposing agendas):
+> CREATE faction:name name="[Name]" state="[active/weakened/ascendant/dormant]"
+> SET faction:name field=agenda value="[the overarching direction — a narrative compass, not a task list]"
+> APPEND faction:name field=members value=char:[char-id]
+> APPEND faction:name field=territory value=place:[place-id]
+> MAP_SET faction:name field=knowledge_asymmetry key=knows_[topic] value="[intel they hold and could act on]"
+> MAP_SET faction:name field=knowledge_asymmetry key=unknown_[topic] value="[critical gap they haven't detected]"
+> MAP_SET faction:name field=knowledge_asymmetry key=hiding_[topic] value="[information the faction is concealing]"
+> MAP_SET faction:name field=knowledge_asymmetry key=misreading_[topic] value="[false assumption they operate on]"
 
-5. COLLISIONS (at least 1 active or simmering; each must be a compact narrative thread, not just a label):
-> CREATE collision:slug name="[name]" forces="force1,force2" distance_category=MEDIUM details="[what is converging, who is caught in it, how it is already surfacing, what forced choice is looming]" cost="[what engagement, delay, or failure costs]" target_constraint="[constraint-id if this is pressing a tracked defense]"
+5. COLLISIONS (at least 1 ACTIVE; each must be a compact narrative thread with live pressure, not just a label):
+> CREATE collision:slug name="[short descriptive label]" status=ACTIVE distance_category=MEDIUM forces="force1 vs force2 — what narrative pressures are driving this collision" involved_chars="pc,char:principal-id" location=place:[place-id]
 
-7. PRESSURE POINTS (2-3 seams where the world is about to break; short seeds, not full collisions):
-> CR pressure:<slug> name="[seam that could later tighten into a collision]"
+6. PLACES (at least 1 for the opening scene; more if the PC, PRINCIPAL, or factions are anchored elsewhere):
+> CREATE place:[slug] name="[Display name]" reach=LOCAL state="[safe/contested/hostile/unknown]" description="[one or two sentences — what this place is and what makes it notable]"
+
+7. PRESSURE POINTS (2-3 seams where the world is about to break; raw narrative seeds, capped at 5 FIFO):
+> CREATE pressure:[slug] name="[seam that could later tighten into a collision]" source="[PC|char:id|faction:id|place:id]" related_to="[collision-id, if it echoes an existing thread]"
 
 8. Any scenario NPCs as KNOWN:
 > CREATE char:npc-slug name="[NPC Name]" tier=KNOWN
-KNOWN characters inherit knowledge from their faction's intel_on map. Do NOT set individual knowledge_asymmetry — only TRACKED/PRINCIPAL characters get it.
+KNOWN characters inherit context from their faction's knowledge_asymmetry map (§2.3). Do NOT set individual knowledge_asymmetry on KNOWN/UNKNOWN chars — only TRACKED/PRINCIPAL get their own.
 If any recurring or important NPC is combat-capable, assign:
 > SET char:npc-slug field=power_base value=[earned_rating]
 > SET char:npc-slug field=power value=[current_effective_rating]
