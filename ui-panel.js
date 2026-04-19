@@ -307,9 +307,9 @@ function renderAllSections() {
         { id: 'characters', icon: 'fa-users', title: 'Cast', html: renderCharacters(_lastState) },
         { id: 'world', icon: 'fa-globe', title: 'Factions & World', html: renderWorld(_lastState) },
         { id: 'collisions', icon: 'fa-burst', title: 'Collisions', html: renderCollisions(_lastState) },
+        { id: 'pressures', icon: 'fa-fire-flame-simple', title: 'Pressures', html: renderPressures(_lastState) },
         { id: 'combat', icon: 'fa-crosshairs', title: 'Combat', html: renderCombat(_lastState) },
         { id: 'places', icon: 'fa-map-location-dot', title: 'Places', html: renderPlaces(_lastState) },
-        { id: 'pressures', icon: 'fa-fire-flame-simple', title: 'Pressures', html: renderPressures(_lastState) },
         { id: 'divination', icon: 'fa-star', title: 'Divination', html: renderDivination(_lastState) },
         { id: 'exemplars', icon: 'fa-thumbs-up', title: 'Style Exemplars', html: renderExemplars() },
     ];
@@ -523,23 +523,44 @@ function applyChangeHighlights() {
         if (sid === 'collisions') hasChanges = [..._changedKeys].some(k => k.startsWith('collisions.'));
         if (sid === 'combat') hasChanges = [..._changedKeys].some(k => k.startsWith('combats.'));
         if (sid === 'places') hasChanges = [..._changedKeys].some(k => k.startsWith('places.'));
+        if (sid === 'pressures') hasChanges = [..._changedKeys].some(k => k.startsWith('pressures.'));
         if (sid === 'divination') hasChanges = [..._changedKeys].some(k => k.startsWith('divination.'));
         if (hasChanges) section.querySelector('.gl-section-header')?.classList.add('gl-changed');
     });
     // Highlight constraint cards that changed
     document.querySelectorAll('.gl-constraint-card').forEach(card => {
-        // Try to find constraint id from the card content
-        const title = card.querySelector('.gl-constraint-title')?.textContent || '';
+        const id = card.dataset.id;
+        if (!id) return;
         for (const key of _changedKeys) {
-            if (key.startsWith('constraints.') && title) {
+            if (key === `constraints.${id}` || key.startsWith(`constraints.${id}.`)) {
                 card.classList.add('gl-changed');
                 break;
             }
         }
     });
-    // Highlight collision cards that changed
+    // Highlight collision/place/pressure cards whose own id changed this turn
     document.querySelectorAll('.gl-collision-card').forEach(card => {
-        card.classList.add('gl-changed');
+        const kind = card.dataset.kind;
+        const id = card.dataset.id;
+        if (!kind || !id) return;
+        const prefix = kind === 'collision' ? 'collisions.' : kind === 'place' ? 'places.' : 'pressures.';
+        for (const key of _changedKeys) {
+            if (key === `${prefix}${id}` || key.startsWith(`${prefix}${id}.`)) {
+                card.classList.add('gl-changed');
+                break;
+            }
+        }
+    });
+    // Pressures now render as <li>, not .gl-collision-card
+    document.querySelectorAll('.gl-pressure-item').forEach(el => {
+        const id = el.dataset.id;
+        if (!id) return;
+        for (const key of _changedKeys) {
+            if (key === `pressures.${id}` || key.startsWith(`pressures.${id}.`)) {
+                el.classList.add('gl-changed');
+                break;
+            }
+        }
     });
 }
 
@@ -619,9 +640,7 @@ function renderPCDossier(state) {
             parts.push(`<div class="gl-d-detail">${esc(ability)}</div>`);
         }
     }
-    if (pc.current_scene) parts.push(`<div class="gl-d-row"><b>Scene:</b> ${esc(pc.current_scene)}</div>`);
     if (pc.location) parts.push(`<div class="gl-d-row"><b>Location:</b> ${esc(pc.location)}</div>`);
-    if (pc.equipment) parts.push(`<div class="gl-d-row"><b>Equipment:</b> ${esc(pc.equipment)}</div>`);
     const pcWounds = toObj(pc.wounds);
     if (Object.keys(pcWounds).length) {
         parts.push(`<div class="gl-d-section"><b>Wounds:</b></div>`);
@@ -644,7 +663,7 @@ function renderPCDossier(state) {
     for (const c of pcSorted) {
         const history = getFieldHistory(state, 'constraint', c.id, 'integrity');
         const integrityDesc = c.integrity === 'STABLE' ? 'holding' : c.integrity === 'STRESSED' ? 'destabilized' : c.integrity === 'CRITICAL' ? 'approaching breach' : c.integrity === 'BREACHED' ? 'breached' : '';
-        parts.push(`<div class="gl-constraint-card">`);
+        parts.push(`<div class="gl-constraint-card" data-id="${esc(c.id)}">`);
         parts.push(`<div class="gl-constraint-title"><b>${esc(c.name)}</b> ${badge(c.integrity)}${integrityDesc ? ` <span class="gl-integrity-desc">— ${esc(integrityDesc)}</span>` : ''}</div>`);
         if (c.profile) {
             parts.push(`<div class="gl-d-detail">${esc(c.profile)}</div>`);
@@ -726,9 +745,7 @@ function renderCharDossier(char, state) {
         parts.push(`<div class="gl-d-row"><b>Abilities:</b> ${charAbilities.map(ability => esc(ability)).join(', ')}</div>`);
     }
     if (char.location) parts.push(`<div class="gl-d-row"><b>Location:</b> ${esc(char.location)}</div>`);
-    if (char.condition) parts.push(`<div class="gl-d-row"><b>Condition:</b> ${esc(char.condition)}</div>`);
-    if (char.want) parts.push(`<div class="gl-d-row"><b>WANT:</b> ${esc(char.want)}</div>`);
-    // doing now includes cost (merged field)
+    if (char.agenda) parts.push(`<div class="gl-d-row gl-agenda"><b>Agenda:</b> ${esc(char.agenda)}</div>`);
     if (char.knowledge_asymmetry) {
         const ka = char.knowledge_asymmetry;
         if (typeof ka === 'object' && !Array.isArray(ka)) {
@@ -778,7 +795,7 @@ function renderCharDossier(char, state) {
             const history = getFieldHistory(state, 'constraint', c.id, 'integrity');
             const integrityDesc = c.integrity === 'STABLE' ? 'holding' : c.integrity === 'STRESSED' ? 'destabilized' : c.integrity === 'CRITICAL' ? 'approaching breach' : c.integrity === 'BREACHED' ? 'breached' : '';
 
-            parts.push(`<div class="gl-constraint-card">`);
+            parts.push(`<div class="gl-constraint-card" data-id="${esc(c.id)}">`);
             parts.push(`<div class="gl-constraint-title"><b>${esc(c.name)}</b> ${badge(c.integrity)}${integrityDesc ? ` <span class="gl-integrity-desc">— ${esc(integrityDesc)}</span>` : ''}</div>`);
 
             if (c.profile) {
@@ -822,6 +839,15 @@ function renderCharDossier(char, state) {
                 parts.push(`<div class="gl-history-list" style="display:none">${hist.map(historyLine).join('<br>')}</div>`);
             }
             parts.push(`</div>`);
+        }
+    }
+
+    // Structured relationships map (spec §2.1)
+    const relationships = toObj(char.relationships);
+    if (Object.keys(relationships).length) {
+        parts.push(`<div class="gl-d-section"><b>Relationships:</b></div>`);
+        for (const [target, descriptor] of Object.entries(relationships)) {
+            parts.push(`<div class="gl-d-row"><b>${esc(target)}:</b> ${esc(String(descriptor))}</div>`);
         }
     }
 
@@ -869,21 +895,6 @@ function renderWorld(state) {
     const parts = [];
     const liveCollisions = Object.values(state.collisions || {}).filter(c => c.status !== 'RESOLVED');
 
-    // Constants
-    const c = toObj(state.world.constants);
-    if (Object.keys(c).length) {
-        const hiddenConstants = new Set(['role', 'guidelines', 'voice', 'tone', 'tone_rules', 'motivation', 'objective']);
-        const constantRows = [];
-        for (const [k, v] of Object.entries(c)) {
-            if (k === ['story', 'kind'].join('_') || hiddenConstants.has(k)) continue;
-            constantRows.push(`<div class="gl-d-row"><b>${esc(k)}:</b> ${esc(v)}</div>`);
-        }
-        if (constantRows.length) {
-            parts.push(`<div class="gl-d-section"><b>Constants:</b></div>`);
-            parts.push(...constantRows);
-        }
-    }
-
     // World state
     if (state.world.world_state) {
         parts.push(`<div class="gl-d-section"><b>World State:</b></div>`);
@@ -895,41 +906,44 @@ function renderWorld(state) {
         }
     }
 
-    // Factions
+    // Timeskip scale (spec §2.2)
+    if (state.world.timeskip_scale) {
+        parts.push(`<div class="gl-d-row"><b>Timeskip scale:</b> ${esc(state.world.timeskip_scale)}</div>`);
+    }
+
+    // Collision archive (spec §2.2.1) — surfaced so dormant threads stay visible
+    const archive = toArr(state.world.collision_archive);
+    if (archive.length) {
+        parts.push(`<div class="gl-d-section"><b>Collision Archive (${archive.length}):</b></div>`);
+        const archItems = archive.map(entry => {
+            if (typeof entry === 'string') return `<div class="gl-d-row">${esc(entry)}</div>`;
+            const name = entry.name || entry.id || '?';
+            const reason = entry.reason || entry.cause || '';
+            const tx = entry.archived_at_tx ?? entry.tx ?? '';
+            const txTag = tx !== '' ? ` <span class="gl-history-time">[tx ${esc(tx)}]</span>` : '';
+            return `<div class="gl-d-row"><b>${esc(name)}</b>${reason ? ` — ${esc(reason)}` : ''}${txTag}</div>`;
+        });
+        parts.push(collapsibleList(archItems, 3, 'older archived collisions'));
+    }
+
+    // Factions (spec §2.3)
     const factions = Object.values(state.factions);
     if (factions.length) {
         parts.push(`<div class="gl-d-section"><b>Factions:</b></div>`);
         for (const f of factions) {
             parts.push(`<div class="gl-d-constraint">`);
-            parts.push(`<b>${esc(f.name || f.id)}</b>`);
-            if (f.profile) {
-                // New: single profile paragraph
-                parts.push(`<div class="gl-d-detail">${esc(f.profile)}</div>`);
-            } else {
-                // Legacy: separate fields
-                if (f.objective) parts.push(`<div class="gl-d-detail">Objective: ${esc(f.objective)}</div>`);
-                if (f.resources) parts.push(`<div class="gl-d-detail">Resources: ${esc(f.resources)}</div>`);
-                const fStance = latestRead(f.reads && f.reads.pc) || f.stance_toward_pc;
-                if (fStance) parts.push(`<div class="gl-d-detail">Stance toward PC: ${esc(fStance)}</div>`);
-                if (f.power) parts.push(`<div class="gl-d-detail">Power: <b>${esc(f.power)}</b></div>`);
-                const fMomentum = f.last_move && f.momentum && !f.momentum.includes(f.last_move)
-                    ? `${f.momentum}; last: ${f.last_move}` : (f.momentum || f.last_move || '');
-                if (fMomentum) parts.push(`<div class="gl-d-detail">Momentum: ${esc(fMomentum)}</div>`);
-                if (f.leverage) parts.push(`<div class="gl-d-detail">Leverage: ${esc(f.leverage)}</div>`);
-                if (f.vulnerability) parts.push(`<div class="gl-d-detail">Vulnerability: ${esc(f.vulnerability)}</div>`);
-            }
-            if (f.relations && typeof f.relations === 'object') {
-                const relEntries = Object.entries(f.relations);
-                if (relEntries.length) {
-                    parts.push(`<div class="gl-d-detail"><b>Relations:</b></div>`);
-                    for (const [targetId, relation] of relEntries) {
-                        parts.push(`<div class="gl-d-detail" style="padding-left:1em">↔ ${esc(targetId)}: ${esc(String(relation))}</div>`);
-                    }
-                }
-            }
-            if (f.intel_on && typeof f.intel_on === 'object' && Object.keys(f.intel_on).length) {
-                parts.push(`<div class="gl-d-detail"><b>Intel on:</b></div>`);
-                for (const [subject, si] of Object.entries(f.intel_on)) {
+            parts.push(`<b>${esc(f.name || f.id)}</b>${f.state ? ` ${badge(f.state)}` : ''}`);
+            if (f.agenda) parts.push(`<div class="gl-d-detail gl-agenda"><b>Agenda:</b> ${esc(f.agenda)}</div>`);
+            const members = toArr(f.members);
+            if (members.length) parts.push(`<div class="gl-d-detail"><b>Members:</b> ${members.map(m => esc(m)).join(', ')}</div>`);
+            if (f.territory) parts.push(`<div class="gl-d-detail"><b>Territory:</b> ${esc(f.territory)}</div>`);
+            // knowledge_asymmetry — spec §2.3; intel_on is the legacy name and we fall back to it.
+            const ka = (f.knowledge_asymmetry && typeof f.knowledge_asymmetry === 'object') ? f.knowledge_asymmetry
+                     : (f.intel_on && typeof f.intel_on === 'object') ? f.intel_on
+                     : null;
+            if (ka && Object.keys(ka).length) {
+                parts.push(`<div class="gl-d-detail"><b>Knowledge:</b></div>`);
+                for (const [subject, si] of Object.entries(ka)) {
                     if (typeof si !== 'object' || Array.isArray(si)) {
                         parts.push(`<div class="gl-d-detail" style="padding-left:1em"><b>${esc(subject)}:</b> ${esc(String(si))}</div>`);
                         continue;
@@ -985,15 +999,13 @@ function renderCollisions(state) {
         const distBar = dist != null ? renderDistanceBar(dist, col.distance_category) : '';
         const parents = toArr(col.parent_collision_ids);
 
-        parts.push(`<div class="gl-collision-card">`);
+        parts.push(`<div class="gl-collision-card" data-kind="collision" data-id="${esc(col.id)}">`);
         parts.push(`<div class="gl-collision-name">${esc(col.name || col.id)} ${badge(col.status)}</div>`);
-        if (col.details) {
-            parts.push(`<div class="gl-d-detail"><b>Thread:</b> ${esc(col.details)}</div>`);
-        }
         if (forces) parts.push(`<div class="gl-d-detail"><b>Forces:</b> ${esc(forces)}</div>`);
+        const involved = toArr(col.involved_chars);
+        if (involved.length) parts.push(`<div class="gl-d-detail"><b>Involved:</b> ${involved.map(c => esc(c)).join(', ')}</div>`);
+        if (col.location) parts.push(`<div class="gl-d-detail"><b>Location:</b> ${esc(col.location)}</div>`);
         if (distBar) parts.push(distBar);
-        if (col.cost) parts.push(`<div class="gl-d-detail"><b>Cost:</b> ${esc(col.cost)}</div>`);
-        if (col.target_constraint) parts.push(`<div class="gl-d-detail"><b>Target:</b> ${esc(col.target_constraint)}</div>`);
         if (parents.length) parts.push(`<div class="gl-d-detail"><b>From:</b> ${parents.map(p => esc(p)).join(', ')}</div>`);
 
         const distHist = getFieldHistory(state, 'collision', col.id, 'distance');
@@ -1013,11 +1025,12 @@ function renderCollisions(state) {
             const forces = Array.isArray(col.forces) ? col.forces.map(f => typeof f === 'object' ? f.name || f : f).join(' vs ') : String(col.forces || '');
             const parents = toArr(col.parent_collision_ids);
             const successors = toArr(col.successor_collision_ids);
-            parts.push(`<div class="gl-collision-card gl-resolved">`);
+            parts.push(`<div class="gl-collision-card gl-resolved" data-kind="collision" data-id="${esc(col.id)}">`);
             parts.push(`<div class="gl-collision-name">${esc(col.name || col.id)}${outcomeLabel}</div>`);
-            if (col.details) parts.push(`<div class="gl-d-detail"><b>Thread:</b> ${esc(col.details)}</div>`);
             if (forces) parts.push(`<div class="gl-d-detail"><b>Forces:</b> ${esc(forces)}</div>`);
-            if (col.cost) parts.push(`<div class="gl-d-detail"><b>Cost:</b> ${esc(col.cost)}</div>`);
+            const involved = toArr(col.involved_chars);
+            if (involved.length) parts.push(`<div class="gl-d-detail"><b>Involved:</b> ${involved.map(c => esc(c)).join(', ')}</div>`);
+            if (col.location) parts.push(`<div class="gl-d-detail"><b>Location:</b> ${esc(col.location)}</div>`);
             if (col.aftermath) parts.push(`<div class="gl-d-detail"><b>Aftermath:</b> ${esc(col.aftermath)}</div>`);
             if (parents.length) parts.push(`<div class="gl-d-detail"><b>From:</b> ${parents.map(p => esc(p)).join(', ')}</div>`);
             if (successors.length) parts.push(`<div class="gl-d-detail"><b>Spawned:</b> ${successors.map(s => esc(s)).join(', ')}</div>`);
@@ -1124,6 +1137,11 @@ function renderCombat(state) {
 function renderDistanceBar(dist, category) {
     const MAX_BY_CATEGORY = { IMMEDIATE: 1, SHORT: 10, MEDIUM: 20, LONG: 50 };
     const max = MAX_BY_CATEGORY[category] || 10;
+    // IMMEDIATE is always "about to arrive" — paint the bar full-red regardless of dist.
+    if (category === 'IMMEDIATE') {
+        const catLabel = ` [${category}]`;
+        return `<div class="gl-dist-bar"><div class="gl-dist-fill" style="width:100%;background:#f66"></div><span class="gl-dist-label">dist: ${dist}${catLabel}</span></div>`;
+    }
     const pct = Math.max(0, Math.min(100, (dist / max) * 100));
     // Threshold colors are relative to max — red at ≤30%, yellow at ≤60%, green otherwise.
     const color = dist <= max * 0.3 ? '#f66' : dist <= max * 0.6 ? '#da6' : '#6a6';
@@ -1139,7 +1157,7 @@ function renderPlaces(state) {
 
     const parts = [];
     for (const p of places) {
-        parts.push(`<div class="gl-collision-card">`);
+        parts.push(`<div class="gl-collision-card" data-kind="place" data-id="${esc(p.id)}">`);
         parts.push(`<div class="gl-collision-name">${esc(p.name || p.id)} ${badge(p.state || 'unknown')}</div>`);
         parts.push(`<div class="gl-d-detail"><b>Reach:</b> ${esc(p.reach || 'LOCAL')} <b>id:</b> ${esc(p.id)}</div>`);
         if (p.description) parts.push(`<div class="gl-d-detail">${esc(p.description)}</div>`);
@@ -1152,19 +1170,17 @@ function renderPlaces(state) {
 
 function renderPressures(state) {
     const pressures = Object.values(state.pressures || {});
-    if (!pressures.length) return '';
+    if (!pressures.length) return ''; // spec §9/step 11: omit when empty
 
-    const parts = [];
+    const parts = [`<ul class="gl-pressure-list">`];
     for (const p of pressures) {
         const related = Array.isArray(p.related_to) && p.related_to.length
-            ? p.related_to.join(', ')
+            ? ` <span class="gl-history-time">→ ${esc(p.related_to.join(', '))}</span>`
             : '';
-        parts.push(`<div class="gl-collision-card">`);
-        parts.push(`<div class="gl-collision-name">${esc(p.name || p.id)}</div>`);
-        parts.push(`<div class="gl-d-detail"><b>Source:</b> ${esc(p.source || '?')} <b>tx:</b> ${p.created_at_tx ?? '?'} <b>id:</b> ${esc(p.id)}</div>`);
-        if (related) parts.push(`<div class="gl-d-detail"><b>Related:</b> ${esc(related)}</div>`);
-        parts.push(`</div>`);
+        const source = p.source ? ` <span class="gl-history-time">(${esc(p.source)})</span>` : '';
+        parts.push(`<li class="gl-pressure-item" data-kind="pressure" data-id="${esc(p.id)}"><b>${esc(p.name || p.id)}</b>${source}${related}</li>`);
     }
+    parts.push(`</ul>`);
     return parts.join('');
 }
 
