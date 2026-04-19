@@ -688,23 +688,17 @@ function renderPCDossier(state) {
         parts.push(collapsibleList(traitItems, 5, 'older traits'));
     }
 
-    // How others see PC — merged from character reads[pc] + legacy pc.reputation
+    // How others see PC — sourced from each character's knowledge_asymmetry / relationships entry that names the PC
     const pcReads = [];
     for (const char of Object.values(state.characters)) {
         if (char.tier === 'UNKNOWN') continue;
-        const readOfPc = latestRead(char.reads?.pc) || latestRead(char.reads?.[pc.name]) || char.stance_toward_pc;
-        if (readOfPc) pcReads.push({ who: char.name || char.id, read: readOfPc, id: char.id });
-    }
-    const legacyRep = toObj(pc.reputation);
-    for (const [who, r] of Object.entries(legacyRep)) {
-        if (!pcReads.some(p => p.who.toLowerCase().includes(who.toLowerCase()))) {
-            pcReads.push({ who, read: r, id: who });
-        }
+        const rel = char.relationships?.pc || char.relationships?.[pc.name];
+        if (rel) pcReads.push({ who: char.name || char.id, read: String(rel), id: char.id });
     }
     if (pcReads.length) {
         parts.push(`<div class="gl-d-section"><b>How Others See PC:</b></div>`);
         for (const { who, read, id } of pcReads) {
-            const hist = getFieldHistory(state, 'char', id, 'reads.pc') || getFieldHistory(state, 'pc', '_', `reputation.${who}`);
+            const hist = getFieldHistory(state, 'char', id, 'relationships.pc');
             parts.push(`<div class="gl-read-block">`);
             parts.push(`<div class="gl-read-target">${esc(who)}:</div>`);
             parts.push(`<div class="gl-read-text">${esc(read)}</div>`);
@@ -750,16 +744,13 @@ function renderCharDossier(char, state) {
         const ka = char.knowledge_asymmetry;
         if (typeof ka === 'object' && !Array.isArray(ka)) {
             const kaItems = [];
-            for (const bucket of ['knows', 'unknown', 'hiding', 'misreading']) {
-                const map = ka[bucket];
-                if (map && typeof map === 'object') {
-                    for (const [k, v] of Object.entries(map)) {
-                        const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
-                        kaItems.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(k)}:</b> ${esc(String(v))}</li>`);
-                    }
-                }
+            for (const [k, v] of Object.entries(ka)) {
+                const m = /^(knows|unknown|hiding|misreading)_(.+)$/.exec(k);
+                if (!m) continue;
+                const label = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+                const subject = m[2].replace(/_/g, ' ');
+                kaItems.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(subject)}:</b> ${esc(String(v))}</li>`);
             }
-            if (ka.legacy) kaItems.push(`<li><span class="gl-ka-bucket">Legacy</span> ${esc(ka.legacy)}</li>`);
             if (kaItems.length) {
                 parts.push(`<div class="gl-d-row"><b>Knowledge:</b><ul class="gl-d-kalist">${kaItems.join('')}</ul></div>`);
             }
@@ -767,10 +758,8 @@ function renderCharDossier(char, state) {
             parts.push(`<div class="gl-d-row"><b>Knowledge:</b> ${esc(ka)}</div>`);
         }
     }
-    // Stance toward PC: prefer reads[pc] (may be append-log array), fall back to stance_toward_pc
-    const pcReads = char.reads?.pc;
-    const stanceTowardPc = Array.isArray(pcReads) ? (pcReads[pcReads.length - 1] || null) : (pcReads || null);
-    const stanceDisplay = stanceTowardPc || char.stance_toward_pc;
+    // Reads PC as — sourced from char.relationships.pc when present
+    const stanceDisplay = char.relationships?.pc;
     if (stanceDisplay) parts.push(`<div class="gl-d-row"><b>Reads PC as:</b> ${esc(stanceDisplay)}</div>`);
     const charWounds = toObj(char.wounds);
     if (Object.keys(charWounds).length) {
@@ -817,48 +806,12 @@ function renderCharDossier(char, state) {
         }
     }
 
-    // Relationships / Reads
-    const reads = toObj(char.reads);
-    if (typeof char.reads === 'string') {
-        parts.push(`<div class="gl-d-section"><b>Relationships:</b></div>`);
-        parts.push(`<div class="gl-d-row">${esc(char.reads)}</div>`);
-    } else if (Object.keys(reads).length) {
-        parts.push(`<div class="gl-d-section"><b>Relationships:</b></div>`);
-        for (const [target, read] of Object.entries(reads)) {
-            const hist = getFieldHistory(state, 'char', char.id, `reads.${target}`);
-            const logEntries = Array.isArray(read) ? read : (read ? [String(read)] : []);
-            parts.push(`<div class="gl-read-block">`);
-            parts.push(`<div class="gl-read-target">READS ${esc(target.toUpperCase())} AS:</div>`);
-            parts.push(`<div class="gl-read-text">${esc(latestRead(read))}</div>`);
-            if (logEntries.length > 1) {
-                const older = logEntries.slice(0, -1).map(e => `<div>${esc(e)}</div>`).join('');
-                parts.push(`<div class="gl-history-toggle">Earlier reads (${logEntries.length - 1})</div>`);
-                parts.push(`<div class="gl-history-list" style="display:none">${older}</div>`);
-            } else if (hist.length > 1) {
-                parts.push(`<div class="gl-history-toggle">Read history (${hist.length})</div>`);
-                parts.push(`<div class="gl-history-list" style="display:none">${hist.map(historyLine).join('<br>')}</div>`);
-            }
-            parts.push(`</div>`);
-        }
-    }
-
     // Structured relationships map (spec §2.1)
     const relationships = toObj(char.relationships);
     if (Object.keys(relationships).length) {
         parts.push(`<div class="gl-d-section"><b>Relationships:</b></div>`);
         for (const [target, descriptor] of Object.entries(relationships)) {
             parts.push(`<div class="gl-d-row"><b>${esc(target)}:</b> ${esc(String(descriptor))}</div>`);
-        }
-    }
-
-    // Intimacy stance
-    if (char.intimacy_stance) {
-        parts.push(`<div class="gl-d-section"><b>Intimacy Stance:</b></div>`);
-        parts.push(`<div class="gl-d-row gl-intimacy-stance">${esc(char.intimacy_stance)}</div>`);
-        const stanceHist = getFieldHistory(state, 'char', char.id, 'intimacy_stance');
-        if (stanceHist.length > 1) {
-            parts.push(`<div class="gl-history-toggle">Stance history (${stanceHist.length})</div>`);
-            parts.push(`<div class="gl-history-list" style="display:none">${stanceHist.map(historyLine).join('<br>')}</div>`);
         }
     }
 
@@ -869,13 +822,6 @@ function renderCharDossier(char, state) {
         for (const [key, val] of Object.entries(intimate)) {
             parts.push(`<div class="gl-d-row"><b>${esc(key)}:</b> ${esc(val)}</div>`);
         }
-    }
-
-    // Noticed details (Chekhov's guns)
-    const noticed = toArr(char.noticed_details);
-    if (noticed.length) {
-        parts.push(`<div class="gl-d-section"><b>Noticed Details:</b></div>`);
-        for (const d of noticed) parts.push(`<div class="gl-d-row gl-noticed">- ${esc(d)}</div>`);
     }
 
     // Key moments — timestamped
@@ -893,7 +839,7 @@ function renderCharDossier(char, state) {
 
 function renderWorld(state) {
     const parts = [];
-    const liveCollisions = Object.values(state.collisions || {}).filter(c => c.status !== 'RESOLVED');
+    const liveCollisions = Object.values(state.collisions || {}).filter(c => c.status === 'ACTIVE');
 
     // World state
     if (state.world.world_state) {
@@ -937,45 +883,24 @@ function renderWorld(state) {
             const members = toArr(f.members);
             if (members.length) parts.push(`<div class="gl-d-detail"><b>Members:</b> ${members.map(m => esc(m)).join(', ')}</div>`);
             if (f.territory) parts.push(`<div class="gl-d-detail"><b>Territory:</b> ${esc(f.territory)}</div>`);
-            // knowledge_asymmetry — spec §2.3; intel_on is the legacy name and we fall back to it.
-            const ka = (f.knowledge_asymmetry && typeof f.knowledge_asymmetry === 'object') ? f.knowledge_asymmetry
-                     : (f.intel_on && typeof f.intel_on === 'object') ? f.intel_on
+            // knowledge_asymmetry — spec §2.3, flat <category>_<subject> map
+            const ka = (f.knowledge_asymmetry && typeof f.knowledge_asymmetry === 'object')
+                     ? f.knowledge_asymmetry
                      : null;
             if (ka && Object.keys(ka).length) {
-                parts.push(`<div class="gl-d-detail"><b>Knowledge:</b></div>`);
-                for (const [subject, si] of Object.entries(ka)) {
-                    if (typeof si !== 'object' || Array.isArray(si)) {
-                        parts.push(`<div class="gl-d-detail" style="padding-left:1em"><b>${esc(subject)}:</b> ${esc(String(si))}</div>`);
-                        continue;
-                    }
-                    const siItems = [];
-                    for (const bucket of ['knows', 'unknown', 'hiding', 'misreading']) {
-                        const map = si[bucket];
-                        if (map && typeof map === 'object') {
-                            for (const [k, v] of Object.entries(map)) {
-                                const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
-                                siItems.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(k)}:</b> ${esc(String(v))}</li>`);
-                            }
-                        }
-                    }
-                    if (siItems.length) {
-                        parts.push(`<div class="gl-d-detail" style="padding-left:1em"><b>${esc(subject)}:</b><ul class="gl-d-kalist">${siItems.join('')}</ul></div>`);
-                    }
+                const items = [];
+                for (const [k, v] of Object.entries(ka)) {
+                    const m = /^(knows|unknown|hiding|misreading)_(.+)$/.exec(k);
+                    if (!m) continue;
+                    const label = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+                    const subject = m[2].replace(/_/g, ' ');
+                    items.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(subject)}:</b> ${esc(String(v))}</li>`);
+                }
+                if (items.length) {
+                    parts.push(`<div class="gl-d-detail"><b>Knowledge:</b><ul class="gl-d-kalist">${items.join('')}</ul></div>`);
                 }
             }
             parts.push(`</div>`);
-        }
-    }
-
-    // Legacy factions in world.factions array
-    const legacyFactions = toArr(state.world.factions);
-    for (const f of legacyFactions) {
-        if (typeof f === 'object' && f.name) {
-            parts.push(`<div class="gl-d-constraint"><b>${esc(f.name)}</b>`);
-            if (f.objective) parts.push(`<div class="gl-d-detail">${esc(f.objective)}</div>`);
-            parts.push(`</div>`);
-        } else if (typeof f === 'string') {
-            parts.push(`<div class="gl-d-row">${esc(f)}</div>`);
         }
     }
 
@@ -986,8 +911,8 @@ function renderWorld(state) {
 
 function renderCollisions(state) {
     const all = Object.values(state.collisions);
-    const active = all.filter(c => c.status !== 'RESOLVED');
-    const resolved = all.filter(c => c.status === 'RESOLVED');
+    const active = all.filter(c => c.status === 'ACTIVE');
+    const resolved = all.filter(c => c.status === 'RESOLVED' || c.status === 'CRASHED');
 
     if (all.length === 0) return '<div class="gl-empty">No collisions</div>';
 

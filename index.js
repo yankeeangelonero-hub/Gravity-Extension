@@ -1942,9 +1942,9 @@ async function handleAdvanceButton() {
             _currentState = computeCurrentState();
         }
 
-        // Reset timeskip_scale after consuming — use '' to survive JSON round-trip
+        // Reset timeskip_scale after consuming
         if (_currentState.world?.timeskip_scale) {
-            await append([{ op: 'S', e: 'world', id: '_', d: { f: 'timeskip_scale', v: '' }, r: 'system:advance:reset-timeskip' }]);
+            await append([{ op: 'S', e: 'world', id: '_', d: { f: 'timeskip_scale', v: null }, r: 'system:advance:reset-timeskip' }]);
             _currentState = computeCurrentState();
         }
 
@@ -1966,7 +1966,8 @@ async function handleAdvanceButton() {
         buildAndInjectArrivals(newArrivalIds, _currentState);
     }
     // ── Advance collision_health check (§4.4) — fires regardless of nudge counter ──
-    _pendingNudgeText = buildNudge_collisionHealth(_currentState);
+    const healthNudge = buildNudge_collisionHealth(_currentState);
+    if (healthNudge) _pendingNudgeText = healthNudge;
 
     injectPrompt('advance');
     const pcName = _currentState?.pc?.name || '{{user}}';

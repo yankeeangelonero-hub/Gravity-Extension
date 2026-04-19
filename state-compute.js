@@ -263,12 +263,6 @@ function applyTransaction(state, tx) {
                 Object.assign(state[collection], tx.d);
             } else {
                 const data = { id: tx.id, ...tx.d };
-                // Backward compat: normalize legacy CRASHED status on creation
-                if (tx.e === 'collision' && typeof data.status === 'string' &&
-                    data.status.trim().toUpperCase() === 'CRASHED') {
-                    data.status = 'RESOLVED';
-                    if (!data.outcome_type) data.outcome_type = 'CRASHED';
-                }
                 // Normalize place defaults
                 if (tx.e === 'place') {
                     if (!data.reach) data.reach = 'LOCAL';
@@ -297,16 +291,13 @@ function applyTransaction(state, tx) {
         case 'TR': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
-                let newTo = tx.d.to;
-                // Backward compat: normalize MOVE collision status CRASHED → RESOLVED
-                if (tx.e === 'collision' && tx.d.f === 'status' &&
-                    typeof newTo === 'string' && newTo.trim().toUpperCase() === 'CRASHED') {
-                    newTo = 'RESOLVED';
-                    if (!target.outcome_type) target.outcome_type = 'CRASHED';
-                }
                 const oldVal = target[tx.d.f];
-                target[tx.d.f] = newTo;
-                recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, newTo, tx);
+                target[tx.d.f] = tx.d.to;
+                // Phase 2: when collision lands in CRASHED, default outcome_type if absent
+                if (tx.e === 'collision' && tx.d.f === 'status' && tx.d.to === 'CRASHED' && !target.outcome_type) {
+                    target.outcome_type = 'CRASHED';
+                }
+                recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, tx.d.to, tx);
             }
             break;
         }
@@ -314,17 +305,14 @@ function applyTransaction(state, tx) {
         case 'S': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
-                let newVal = tx.d.v;
-                // Backward compat: normalize SET collision status CRASHED → RESOLVED
-                if (tx.e === 'collision' && tx.d.f === 'status' &&
-                    typeof newVal === 'string' && newVal.trim().toUpperCase() === 'CRASHED') {
-                    newVal = 'RESOLVED';
-                    if (!target.outcome_type) target.outcome_type = 'CRASHED';
-                }
                 const oldVal = target[tx.d.f];
-                target[tx.d.f] = newVal;
-                if (oldVal !== newVal) {
-                    recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, newVal, tx);
+                target[tx.d.f] = tx.d.v;
+                // Phase 2: when collision lands in CRASHED, default outcome_type if absent
+                if (tx.e === 'collision' && tx.d.f === 'status' && tx.d.v === 'CRASHED' && !target.outcome_type) {
+                    target.outcome_type = 'CRASHED';
+                }
+                if (oldVal !== tx.d.v) {
+                    recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, tx.d.v, tx);
                 }
             }
             break;
