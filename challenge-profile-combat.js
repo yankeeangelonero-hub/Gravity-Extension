@@ -263,15 +263,15 @@ const combatProfile = Object.freeze({
         lines.push(`Challenge runtime is active for combat:${runtime.entity_id}.`);
         lines.push(`Challenge lock: ${runtime.locked ? 'engaged' : 'released'}`);
         lines.push(`Phase: ${runtime.phase}`);
-        // Engine tracks exchange internally — do not expose to LLM (§combat runtime).
+        // Engine tracks clash counter (runtime.exchange) internally — never exposed to LLM (§7.2 / Phase 2 vocabulary: clash).
         lines.push(`Difficulty mode: ${runtime.difficulty_mode}`);
         lines.push(`Success thresholds: ${helpers.describeDcTable(helpers.dcTable)}`);
         lines.push(`Scene draw:\n${formatDrawBlock(runtime.scene_draw, {
             stripNarrativeForcing: true,
             active: runtime.scene_draw_active,
             guidance: runtime.scene_draw_active
-                ? 'Combat setup usage: use this draw to highlight the encounter circumstance, visible leverage, spacing, terrain, initiative, exposure, and why the opening options sit at their assessed categories. It reveals the shape and pressure of the encounter; it does not force a separate event or resolve the exchange by itself.'
-                : 'Scene draw has expired. Do not use it for further exchanges.',
+                ? 'Combat setup usage: use this draw to highlight the encounter circumstance, visible leverage, spacing, terrain, initiative, exposure, and why the opening options sit at their assessed categories. It reveals the shape and pressure of the encounter; it does not force a separate event or resolve the clash by itself.'
+                : 'Scene draw has expired. Do not use it for further clashes.',
         })}`);
         lines.push('');
         lines.push('PLAYER COMBAT PROFILE');
@@ -318,18 +318,18 @@ const combatProfile = Object.freeze({
             lines.push(`PENDING ROLL: ${formatRollSummary(runtime.pending_roll)}`);
             if (!runtime.pending_roll.skip) {
                 lines.push(`MECHANICAL RESULT: category ${runtime.pending_roll.category || '?'} | threshold ${describeSuccessThreshold(runtime.pending_roll.category, runtime.pending_roll.dc)} | rolled ${runtime.pending_roll.d20} => ${runtime.pending_roll.resolution || (runtime.pending_roll.success ? 'SUCCESS' : 'TRANSFORM')}`);
-                lines.push('These are compressed success thresholds, not open-ended narrative difficulty labels. Only the d20 is compared to the threshold. The draw card/hexagram/dice table result is interpretive context, not the mechanical roll total.');
+                lines.push('These are compressed success thresholds, not open-ended narrative difficulty labels. Only the d20 is compared to the threshold. The draw card / dice table result is interpretive context, not the mechanical roll total.');
             }
             if (runtime.pending_roll.draw) {
                 lines.push(`ROLL DRAW:\n${formatDrawBlock(runtime.pending_roll.draw, {
                     stripNarrativeForcing: true,
-                    guidance: 'Combat resolution usage: this draw colors the already-determined exchange result. It does not replace the d20/threshold result or force a separate twist unrelated to the action. Never compare the draw number to the threshold.',
+                    guidance: 'Combat resolution usage: this draw colors the already-determined clash result. It does not replace the d20/threshold result or force a separate twist unrelated to the action. Never compare the draw number to the threshold.',
                 })}`);
             }
         }
         if (runtime.last_resolution) {
             lines.push('');
-            lines.push(`LAST RESOLUTION: exchange ${runtime.last_resolution.exchange} | ${formatActionSummary(runtime.last_resolution.action)}`);
+            lines.push(`LAST RESOLUTION: clash ${runtime.last_resolution.exchange} | ${formatActionSummary(runtime.last_resolution.action)}`);
             lines.push(`LAST ROLL: ${formatRollSummary(runtime.last_resolution.roll)}`);
         }
 
@@ -363,7 +363,7 @@ const combatProfile = Object.freeze({
                     lines.push('Establish participants, hostiles, primary_enemy, terrain, situation, threat.');
                     lines.push('Assign justified power_base, power, power_basis, and abilities to important new enemies.');
                     lines.push('Use the scene draw to reveal encounter circumstance and leverage: who sees clearly, who is exposed, how the terrain is really working, and why the opening options fall where they do.');
-                    lines.push('Do not resolve the first exchange yet. Stop on the opening situation and output 3-4 clickable options.');
+                    lines.push('Do not resolve the first clash yet. Stop on the opening situation and output 3-4 clickable options.');
                 }
                 break;
             case 'awaiting_choice':
@@ -381,13 +381,13 @@ const combatProfile = Object.freeze({
                 break;
             case 'awaiting_resolution':
                 lines.push('');
-                lines.push('PHASE INSTRUCTION: RESOLVE ONE EXCHANGE');
-                lines.push('Resolve exactly one exchange, then stop and output the next 3-4 clickable options if combat continues.');
+                lines.push('PHASE INSTRUCTION: RESOLVE ONE CLASH');
+                lines.push('Resolve exactly one clash, then stop and output the next 3-4 clickable options if combat continues.');
                 if (runtime.pending_roll?.skip) {
                     lines.push(`This action ${runtime.pending_roll.reason === 'absolute' ? 'auto-succeeds' : 'auto-fails'}. Narrate it happening. No roll interpretation is needed.`);
                 } else if (runtime.pending_roll) {
                     lines.push(`Mechanical resolution is already fixed: ${runtime.pending_roll.category || '?'} action | threshold ${describeSuccessThreshold(runtime.pending_roll.category, runtime.pending_roll.dc)} | rolled ${runtime.pending_roll.d20} => ${runtime.pending_roll.resolution || (runtime.pending_roll.success ? 'SUCCESS' : 'TRANSFORM')}.`);
-                    lines.push('Do not reinterpret the threshold from the number alone. Treat the injected category as canonical, and do not compare the draw card/hexagram/table number to the threshold. The draw is interpretive only.');
+                    lines.push('Do not reinterpret the threshold from the number alone. Treat the injected category as canonical, and do not compare the draw card / table number to the threshold. The draw is interpretive only.');
                     lines.push('Do not decide success or transform yourself. The extension already decided it.');
                     lines.push('Interpret the combat draw explicitly.');
                     lines.push('- On success: the draw colors how the success lands.');
@@ -423,7 +423,7 @@ const combatProfile = Object.freeze({
     },
 
     resultDrawGuidance() {
-        return 'colors the already-determined exchange result';
+        return 'colors the already-determined clash result';
     },
 
     setupGuidance() {

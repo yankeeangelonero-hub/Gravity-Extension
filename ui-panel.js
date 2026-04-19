@@ -543,7 +543,8 @@ function applyChangeHighlights() {
         const kind = card.dataset.kind;
         const id = card.dataset.id;
         if (!kind || !id) return;
-        const prefix = kind === 'collision' ? 'collisions.' : kind === 'place' ? 'places.' : 'pressures.';
+        const prefix = kind === 'collision' ? 'collisions.' : kind === 'place' ? 'places.' : null;
+        if (!prefix) return;
         for (const key of _changedKeys) {
             if (key === `${prefix}${id}` || key.startsWith(`${prefix}${id}.`)) {
                 card.classList.add('gl-changed');
@@ -852,22 +853,28 @@ function renderWorld(state) {
         }
     }
 
-    // Timeskip scale (spec §2.2)
+    // Timeskip scale (spec §2.6)
     if (state.world.timeskip_scale) {
         parts.push(`<div class="gl-d-row"><b>Timeskip scale:</b> ${esc(state.world.timeskip_scale)}</div>`);
     }
 
-    // Collision archive (spec §2.2.1) — surfaced so dormant threads stay visible
+    // Collision archive (spec §2.6 / entry template §2.2.1) — surfaced so dormant threads stay visible
     const archive = toArr(state.world.collision_archive);
     if (archive.length) {
         parts.push(`<div class="gl-d-section"><b>Collision Archive (${archive.length}):</b></div>`);
         const archItems = archive.map(entry => {
             if (typeof entry === 'string') return `<div class="gl-d-row">${esc(entry)}</div>`;
             const name = entry.name || entry.id || '?';
-            const reason = entry.reason || entry.cause || '';
+            const resolution = entry.resolution || entry.reason || '';
+            const hook = entry.hook || '';
+            const aftermath = entry.aftermath || '';
             const tx = entry.archived_at_tx ?? entry.tx ?? '';
             const txTag = tx !== '' ? ` <span class="gl-history-time">[tx ${esc(tx)}]</span>` : '';
-            return `<div class="gl-d-row"><b>${esc(name)}</b>${reason ? ` — ${esc(reason)}` : ''}${txTag}</div>`;
+            const entryParts = [`<b>${esc(name)}</b>`];
+            if (resolution) entryParts.push(`<i>resolution:</i> ${esc(resolution)}`);
+            if (hook) entryParts.push(`<i>hook:</i> ${esc(hook)}`);
+            if (aftermath) entryParts.push(`<i>aftermath:</i> ${esc(aftermath)}`);
+            return `<div class="gl-archive-entry">${entryParts.join(' — ')}${txTag}</div>`;
         });
         parts.push(collapsibleList(archItems, 3, 'older archived collisions'));
     }
@@ -877,12 +884,17 @@ function renderWorld(state) {
     if (factions.length) {
         parts.push(`<div class="gl-d-section"><b>Factions:</b></div>`);
         for (const f of factions) {
-            parts.push(`<div class="gl-d-constraint">`);
+            parts.push(`<div class="gl-faction-card">`);
             parts.push(`<b>${esc(f.name || f.id)}</b>${f.state ? ` ${badge(f.state)}` : ''}`);
             if (f.agenda) parts.push(`<div class="gl-d-detail gl-agenda"><b>Agenda:</b> ${esc(f.agenda)}</div>`);
             const members = toArr(f.members);
-            if (members.length) parts.push(`<div class="gl-d-detail"><b>Members:</b> ${members.map(m => esc(m)).join(', ')}</div>`);
-            if (f.territory) parts.push(`<div class="gl-d-detail"><b>Territory:</b> ${esc(f.territory)}</div>`);
+            if (members.length) parts.push(`<div class="gl-d-detail"><b>Members:</b> ${members.map(m => {
+                const id = String(m).replace(/^char:/, '');
+                const ch = state.characters?.[id];
+                return esc(ch?.name || m);
+            }).join(', ')}</div>`);
+            const territory = toArr(f.territory);
+            if (territory.length) parts.push(`<div class="gl-d-detail"><b>Territory:</b> ${territory.map(t => esc(t)).join(', ')}</div>`);
             // knowledge_asymmetry — spec §2.3, flat <category>_<subject> map
             const ka = (f.knowledge_asymmetry && typeof f.knowledge_asymmetry === 'object')
                      ? f.knowledge_asymmetry
@@ -928,8 +940,17 @@ function renderCollisions(state) {
         parts.push(`<div class="gl-collision-name">${esc(col.name || col.id)} ${badge(col.status)}</div>`);
         if (forces) parts.push(`<div class="gl-d-detail"><b>Forces:</b> ${esc(forces)}</div>`);
         const involved = toArr(col.involved_chars);
-        if (involved.length) parts.push(`<div class="gl-d-detail"><b>Involved:</b> ${involved.map(c => esc(c)).join(', ')}</div>`);
-        if (col.location) parts.push(`<div class="gl-d-detail"><b>Location:</b> ${esc(col.location)}</div>`);
+        if (involved.length) {
+            parts.push(`<div class="gl-d-detail"><b>Involved:</b> ${involved.map(c => {
+                const id = String(c).replace(/^char:/, '');
+                return esc(state.characters?.[id]?.name || c);
+            }).join(', ')}</div>`);
+        }
+        if (col.location) {
+            const placeId = String(col.location).replace(/^place:/, '');
+            const placeName = state.places?.[placeId]?.name || col.location;
+            parts.push(`<div class="gl-d-detail"><b>Location:</b> ${esc(placeName)}</div>`);
+        }
         if (distBar) parts.push(distBar);
         if (parents.length) parts.push(`<div class="gl-d-detail"><b>From:</b> ${parents.map(p => esc(p)).join(', ')}</div>`);
 
@@ -954,8 +975,17 @@ function renderCollisions(state) {
             parts.push(`<div class="gl-collision-name">${esc(col.name || col.id)}${outcomeLabel}</div>`);
             if (forces) parts.push(`<div class="gl-d-detail"><b>Forces:</b> ${esc(forces)}</div>`);
             const involved = toArr(col.involved_chars);
-            if (involved.length) parts.push(`<div class="gl-d-detail"><b>Involved:</b> ${involved.map(c => esc(c)).join(', ')}</div>`);
-            if (col.location) parts.push(`<div class="gl-d-detail"><b>Location:</b> ${esc(col.location)}</div>`);
+            if (involved.length) {
+                parts.push(`<div class="gl-d-detail"><b>Involved:</b> ${involved.map(c => {
+                    const id = String(c).replace(/^char:/, '');
+                    return esc(state.characters?.[id]?.name || c);
+                }).join(', ')}</div>`);
+            }
+            if (col.location) {
+                const placeId = String(col.location).replace(/^place:/, '');
+                const placeName = state.places?.[placeId]?.name || col.location;
+                parts.push(`<div class="gl-d-detail"><b>Location:</b> ${esc(placeName)}</div>`);
+            }
             if (col.aftermath) parts.push(`<div class="gl-d-detail"><b>Aftermath:</b> ${esc(col.aftermath)}</div>`);
             if (parents.length) parts.push(`<div class="gl-d-detail"><b>From:</b> ${parents.map(p => esc(p)).join(', ')}</div>`);
             if (successors.length) parts.push(`<div class="gl-d-detail"><b>Spawned:</b> ${successors.map(s => esc(s)).join(', ')}</div>`);
@@ -1082,9 +1112,9 @@ function renderPlaces(state) {
 
     const parts = [];
     for (const p of places) {
-        parts.push(`<div class="gl-collision-card" data-kind="place" data-id="${esc(p.id)}">`);
+        parts.push(`<div class="gl-place-card" data-kind="place" data-id="${esc(p.id)}">`);
         parts.push(`<div class="gl-collision-name">${esc(p.name || p.id)} ${badge(p.state || 'unknown')}</div>`);
-        parts.push(`<div class="gl-d-detail"><b>Reach:</b> ${esc(p.reach || 'LOCAL')} <b>id:</b> ${esc(p.id)}</div>`);
+        parts.push(`<div class="gl-d-detail"><b>Reach:</b> ${badge(p.reach || 'LOCAL')} <span class="gl-history-time">id ${esc(p.id)}</span></div>`);
         if (p.description) parts.push(`<div class="gl-d-detail">${esc(p.description)}</div>`);
         parts.push(`</div>`);
     }

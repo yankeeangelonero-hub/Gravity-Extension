@@ -65,7 +65,7 @@ async function showSetupPopup() {
                 </div>
                 <div class="gl-setup-form">
                     <div class="gl-setup-section">
-                        <label class="gl-setup-label">Opening Arc <span class="gl-setup-hint">What's the story about?</span></label>
+                        <label class="gl-setup-label">Opening Situation <span class="gl-setup-hint">What's the story about?</span></label>
                         <input type="text" id="gl-setup-arc" class="gl-setup-input" placeholder="e.g. Escape the city before the faction finds us">
                     </div>
                     <div class="gl-setup-section">
@@ -109,7 +109,7 @@ async function showSetupPopup() {
 
         overlay.querySelector('.gl-setup-start').addEventListener('click', () => {
             const answers = {
-                arc: document.getElementById('gl-setup-arc').value.trim(),
+                opening: document.getElementById('gl-setup-arc').value.trim(),
                 power_scale: document.getElementById('gl-setup-power-scale').value.trim(),
                 power_ceiling: document.getElementById('gl-setup-power-ceiling').value.trim(),
                 power_notes: document.getElementById('gl-setup-power-notes').value.trim(),
@@ -135,7 +135,7 @@ function buildSetupPrompt(answers) {
     const filled = [];
     const blank = [];
 
-    if (answers.arc) filled.push(`Opening arc: ${answers.arc}`);
+    if (answers.opening) filled.push(`Opening situation: ${answers.opening}`);
     else blank.push('opening arc and central question (derive from scenario)');
 
     if (answers.power_scale) filled.push(`World power scale: ${answers.power_scale}`);
@@ -175,7 +175,6 @@ EMIT ALL OF THE FOLLOWING in one ---LEDGER--- block:
 
 1. PC (the player — {{user}}, from the persona):
 > SET pc field=name value="{{user}}"
-> SET pc field=doing value="[what {{user}} is doing at scene start]"
 > APPEND pc field=demonstrated_traits value="[trait from persona description]"
 {{personaDescription}}
 ${answers.pc_power_base ? `> SET pc field=power_base value=${answers.pc_power_base} -- Normal earned combat level when healthy\n> SET pc field=power value=${answers.pc_power_base} -- Current effective combat level starts at base unless setup establishes impairment or a boost` : ''}${answers.pc_power_basis ? '\n> SET pc field=power_basis value="[why the PC deserves this rating]" -- Narrative justification for the rating' : ''}${answers.pc_abilities ? '\n> APPEND pc field=abilities value="[combat-relevant ability, training, gear edge, or limitation]" -- Repeat 2-4 times as needed' : ''}

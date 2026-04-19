@@ -109,16 +109,21 @@
 .gl-badge-STRESSED  { background:#2a2a1a; color:#aa6; }
 .gl-badge-CRITICAL  { background:#3a2a1a; color:#d86; }
 .gl-badge-BREACHED  { background:#3a1a1a; color:#f66; }
-.gl-badge-SEEDED    { background:#1a1a2a; color:#669; }
-.gl-badge-SIMMERING { background:#2a2a3a; color:#88c; }
 .gl-badge-ACTIVE    { background:#2a1a2a; color:#c6c; }
-.gl-badge-RESOLVING { background:#3a2a1a; color:#da6; }
 .gl-badge-RESOLVED  { background:#1a2a1a; color:#696; }
 .gl-badge-CRASHED   { background:#3a1a1a; color:#f44; }
-.gl-badge-PLANNED   { background:#1a1a2a; color:#669; }
-.gl-badge-OPEN      { background:#1a2a1a; color:#6a6; }
-.gl-badge-CLOSING   { background:#2a2a1a; color:#aa6; }
-.gl-badge-CLOSED    { background:#2a2a2a; color:#888; }
+/* Phase 2 entity classes */
+.gl-pressure-list { list-style:none; padding:0; margin:6px 0; }
+.gl-pressure-item { font-size:11px; padding:3px 8px; border-left:2px solid #88c; margin:2px 0; opacity:.85; }
+.gl-pressure-item.gl-changed { opacity:1; }
+.gl-place-card { border:1px solid #2a3a3a; border-radius:4px; padding:6px 8px; margin:4px 0; background:rgba(100,150,150,.04); }
+.gl-faction-card { border:1px solid #3a3a2a; border-radius:4px; padding:6px 8px; margin:4px 0; background:rgba(150,150,100,.04); }
+.gl-archive-entry { font-size:10px; opacity:.6; padding:2px 6px; border-left:2px solid #555; margin:2px 0; }
+.gl-badge-LOCAL    { background:#1a2a3a; color:#6ac; }
+.gl-badge-DISTRICT { background:#1a3a2a; color:#6c8; }
+.gl-badge-CITY     { background:#2a3a1a; color:#aa6; }
+.gl-badge-REGIONAL { background:#3a2a1a; color:#da6; }
+.gl-badge-REMOTE   { background:#3a1a1a; color:#c66; }
 
 /* Change highlighting */
 #gravity-ledger-panel .gl-changed { animation:gl-flash 2s ease-out; border-color:#da6 !important; }

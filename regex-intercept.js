@@ -3,7 +3,7 @@
  *
  * Parses line-based commands from ---LEDGER--- blocks:
  *   > CREATE char:ada-wong name="Ada Wong" tier=KNOWN -- First encounter
- *   > SET char:ada-wong field=doing value="Investigating" -- New action
+ *   > SET char:ada-wong field=agenda value="Investigate the warehouse fire and find the witness" -- Updated agenda
  *   > MOVE constraint:c1 field=integrity from=STABLE to=STRESSED -- Pressure
  *   > APPEND char:ada-wong field=noticed_details value="Carries a katana" -- Observed
  *   > READ char:ada-wong target=autumn "Unknown variable" -- Initial read
@@ -311,10 +311,6 @@ function parseStateLine(line, lineNum) {
         return { entry: null, error: `Line ${lineNum}: Missing STATE path before ":"`, raw };
     }
 
-    if (path.toLowerCase() === 'summary') {
-        return { entry: { kind: kind === 'remove' ? 'removeSummary' : 'summary', value: parseStateScalar(rawValue), raw }, error: null, raw };
-    }
-
     const parts = path.split('.').map(p => p.trim()).filter(Boolean);
     if (parts.length === 0) {
         return { entry: null, error: `Line ${lineNum}: Invalid STATE path "${path}"`, raw };
@@ -329,8 +325,8 @@ function parseStateLine(line, lineNum) {
     const entityType = entityMatch[1].toLowerCase();
     const entityId = entityMatch[2] || '';
     const field = parts[1] || '';
-    // Depth-4+ paths (e.g. char:elena.knowledge_asymmetry.knows.apostle,
-    // faction:zaft.intel_on.archangel.knows.status) produce a dotted key
+    // Depth-4+ paths (e.g. char:elena.knowledge_asymmetry.knows_apostle,
+    // faction:zaft.knowledge_asymmetry.knows_archangel_status) produce a dotted key
     const key = parts.length >= 4 ? parts.slice(2).join('.') : (parts[2] || '');
 
     if (!field) {
