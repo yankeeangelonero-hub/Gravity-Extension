@@ -99,7 +99,7 @@ async function handleEval() {
     lines.push('');
     lines.push('AUDIT AND CLEANUP (uncapped - no line limit this turn):');
     lines.push('1. CONTINUITY: Check for errors, missing/ghost state, rule violations, stale fields.');
-    lines.push('2. STALE FIELDS: Review ALL location, condition, equipment, doing fields. Update any that are outdated.');
+    lines.push('2. STALE FIELDS: Review ALL location, equipment, and last_seen_at fields. Update any that are outdated.');
     lines.push('3. KNOWLEDGE GAPS: Verify pc.knowledge_gaps is accurate - add missing gaps, remove discovered ones.');
     lines.push('4. POWER: Audit power_base, power, power_basis, and abilities. Lower power only for real impairment. Raise power_base only when growth is earned.');
     lines.push('5. PRESSURE POINTS: For each pressure point, decide KEEP / REMOVE / ESCALATE. REMOVE fired or stale seams; if one now has actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point.');
@@ -164,16 +164,16 @@ async function handlePowerReview(match) {
         return `[LEDGER: No power-tracked target found for "${targetRef}". Use pc, all, char:id, an exact character id, or an exact character name.]`;
     }
 
-    const constants = state.world?.constants || {};
+    const w = state.world || {};
     const lines = [];
     lines.push('[GRAVITY POWER REVIEW]');
     lines.push('No prose scene. Re-judge combat power honestly against the established scale and current evidence.');
     if (requestReason) lines.push(`Player request: ${requestReason}`);
     lines.push('');
     lines.push('WORLD POWER CONTEXT:');
-    lines.push(`  Power scale: ${constants.power_scale || 'not set - infer a consistent scale from setup and existing state'}`);
-    lines.push(`  Power ceiling: ${constants.power_ceiling ?? 'not set'}`);
-    if (constants.power_notes) lines.push(`  Power notes: ${constants.power_notes}`);
+    lines.push(`  Power scale: ${w.power_scale || 'not set - infer a consistent scale from setup and existing state'}`);
+    lines.push(`  Power ceiling: ${w.power_ceiling ?? 'not set'}`);
+    if (w.power_notes) lines.push(`  Power notes: ${w.power_notes}`);
     lines.push('');
     lines.push('REVIEW TARGETS:');
 

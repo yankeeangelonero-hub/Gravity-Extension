@@ -24,7 +24,7 @@ There are no tests, no linter, and no CI. Validate changes by syntax-checking mo
 ### Three-Layer Design
 
 1. **Data Layer** - `ledger-store.js` stores append-only transactions in `chatMetadata['gravity_ledger']`. `snapshot-mgr.js` handles snapshots/rollback. Transactions are never deleted or overwritten.
-2. **Compute Layer** - `state-compute.js` replays all transactions to derive `_currentState`. `state-machine.js` defines valid transitions (documented, not enforced). `consistency.js` validates transaction format only.
+2. **Compute Layer** - `state-compute.js` replays all transactions to derive `_currentState`. `state-machine.js` defines valid transitions and exposes `validateTransition()`, which `index.js` calls at commit time. `consistency.js` validates transaction shape only.
 3. **Presentation Layer** - `state-view.js` formats state for prompt injection. `ui-panel.js` renders the floating DOM panel. `regex-intercept.js` extracts ledger blocks from LLM output.
 
 ### Data Flow (per turn)
@@ -48,12 +48,16 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_state`** - Entity registry + dossiers (full state view every turn)
 - **`_readme`** - Command format reference (core on regular/advance, full on integration)
 - **`_inject`** - Corrections + reinforcement prompts
-- **`_nudge`** - Turn format with deduction template (regular/combat/advance/intimacy)
+- **`_nudge`** - Active deduction-mode flag (regular/combat/advance/intimacy)
+- **`_nudge_maintenance`** - Array-size hygiene warnings (pressure/collision/etc. over cap)
 - **`_setup`** - Setup wizard phase prompts (when active)
 - **`_ooc`** - OOC command injection (from buttons)
-- **`_arrival`** - Collision arrival sanity-check injection (ON-SCREEN / OFF-SCREEN / IMPLODE decision — §3.5)
+- **`_arrival`** - Collision arrival sanity-check (ON-SCREEN / OFF-SCREEN / IMPLODE — §3.5)
 - **`_dist_warn`** - Distance-increase error corrections
-- **`_intimacy`** - Intimacy stance boundary enforcement
+- **`_foreshadow`** - Approaching/imminent/converging collision foreshadow nudge
+- **`_intimacy`** - (Phase 2: retained slot, now unused — cleared every turn; boundary lives in prose + knowledge_asymmetry)
+- **`_challenge`** - Challenge-session mechanics + task block (when a challenge is locked)
+- **`_combat`** - Legacy combat-mode injection
 - **`_faction`** - Faction heartbeat (every 10 regular turns)
 - **`_dormant`** - Dormant character nudge (every 15 regular turns)
 - **`_exemplars`** - Last 5 good prose paragraphs for style reference
@@ -63,7 +67,7 @@ Turn modes: `regular` (player prose), `advance` (world moves), `integration` (se
 ### Deduction Templates
 
 The extension injects turn-specific deduction templates via the `_nudge` slot:
-- **`regular`** - Full 12-field deduction (intent, story, collisions, constraints, factions, cost overlap, divination, tone, contest, scene, plan, updates)
+- **`regular`** - Full 11-field deduction (intent, story, collisions, constraints, factions, cost overlap, divination, contest, scene, plan, updates)
 - **`combat`** - Power assessment, advantages, enemy logic, wounds, distance
 - **`advance`** - Focus, what moves, divination, collision tracking
 - **`intimacy`** - Stance, constraint, partner wants, history, divination
@@ -77,8 +81,8 @@ The ledger tracks: collisions, constraints, factions, places, pressure points, P
 ## Key Conventions
 
 - **Operations**: `CR` (create), `S` (set), `TR` (transition/move), `A` (append), `R` (remove), `MS` (map_set/read), `MR` (map_del), `D` (destroy), `SNAP`, `ROLL`, `AMEND`
-- **Entity types**: `char`, `constraint`, `collision`, `faction`, `place`, `pressure`, `world`, `pc`, `divination`
-- **State machines** (char tiers, constraint integrity, collision status) are documented in `state-machine.js` and enforced by `validateTransition()` at commit time in `consistency.js`
+- **Entity types**: `char`, `constraint`, `collision`, `combat`, `faction`, `place`, `pressure`, `world`, `pc`, `divination`
+- **State machines** (char tiers, constraint integrity, collision status, combat status) are documented in `state-machine.js`. `validateTransition()` (state-machine.js:79) is called from `index.js:1551` at commit time to reject invalid TRs.
 - **Collision status**: `ACTIVE -> RESOLVED` or `ACTIVE -> CRASHED` (Phase 2 simplified state machine — §3.4)
 - **Arrival decision gate**: When a collision hits distance 0 (category IMMEDIATE arrives on creation; others on engine tick-down), the extension injects a single-turn sanity-check block asking the LLM to commit ON-SCREEN, OFF-SCREEN (REFRAME or DISSOLVE), or IMPLODE — all resolutions complete that turn. Tracked via `_firedCollisionArrivals` Set in `index.js`.
 - **Format validation only**: `consistency.js` checks structure, not gameplay rules
@@ -95,6 +99,6 @@ The ledger tracks: collisions, constraints, factions, places, pressure points, P
 ## Important Patterns
 
 - The extension imports SillyTavern globals (e.g., `getContext`, `setExtensionPrompt`, `saveMetadataDebounced`) from the ST environment - these are not local dependencies.
-- `index.js` is the central coordinator (~1,500 lines). It wires all modules together and handles the turn lifecycle.
+- `index.js` is the central coordinator (~2,300 lines). It wires all modules together and handles the turn lifecycle.
 - `gravity-system-prompt.md` is a legacy reference for the ledger command format. The current preset is `gravity_v15.json`; mode-specific playbooks can be imported from `Gravity World Info.json`. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
 - Divination uses two random tables (Arcana/Classic) defined in `index.js`. Yi Jing (I Ching) has been removed.

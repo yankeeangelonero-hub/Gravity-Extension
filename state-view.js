@@ -118,7 +118,7 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
     const isFull = (mode === 'full');
     // Derived feature flags
     const showPower = isCombat || isFull;          // power tags, abilities, wounds
-    const showIntimacy = isIntimacy || isFull;      // intimacy_stance, reads, traits
+    const showIntimacy = isIntimacy || isFull;      // intimate_history, demonstrated_traits
     const showConstraintDetail = isIntimacy || isFull; // full constraint profile
     const showConstants = isCombat || isFull;       // power scale/ceiling/notes
     const showFullDetail = isFull;                  // faction detail, full PC dossier
@@ -178,13 +178,6 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
             lines.push(`    Last seen at: ${normalizeText(char.last_seen_at)}`);
         }
 
-        // Condition — PRINCIPAL always, TRACKED only in combat/full
-        if (isPrincipal && char.condition) {
-            lines.push(`    Condition: ${char.condition}`);
-        } else if (isTracked && showPower && char.condition) {
-            lines.push(`    Condition: ${char.condition}`);
-        }
-
         // Combat fields — only in combat/full
         if (showPower) {
             if (char.power_basis) lines.push(`    Power basis: ${char.power_basis}`);
@@ -194,11 +187,6 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
                 const woundList = Object.entries(char.wounds).map(([k, v]) => `${k}: ${v}`).join(', ');
                 lines.push(`    Wounds: ${woundList}`);
             }
-        }
-
-        // Intimacy fields — only in intimacy/full
-        if (showIntimacy && char.intimacy_stance) {
-            lines.push(`    Intimacy stance: ${char.intimacy_stance}`);
         }
 
         // Key moments — tier-aware capping
@@ -356,16 +344,16 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
     lines.push('─── CURRENT STATE ───');
 
 
-    // Constants — combat and full only (internalized after setup, not needed on regular turns)
+    // Power context — combat and full only (internalized after setup, not needed on regular turns)
     if (showConstants) {
-        const cn = state.world.constants || {};
+        const w = state.world || {};
         const constantLines = [];
-        if (cn.power_scale) constantLines.push(`  Power Scale: ${normalizeText(cn.power_scale)}`);
-        if (cn.power_ceiling != null) constantLines.push(`  Power Ceiling: ${cn.power_ceiling}`);
-        if (cn.power_notes) constantLines.push(`  Power Notes: ${normalizeText(cn.power_notes)}`);
+        if (w.power_scale) constantLines.push(`  Power Scale: ${normalizeText(w.power_scale)}`);
+        if (w.power_ceiling != null) constantLines.push(`  Power Ceiling: ${w.power_ceiling}`);
+        if (w.power_notes) constantLines.push(`  Power Notes: ${normalizeText(w.power_notes)}`);
         if (constantLines.length) {
             lines.push('');
-            lines.push('CONSTANTS');
+            lines.push('POWER CONTEXT');
             lines.push(...constantLines);
         }
     }
@@ -571,14 +559,13 @@ STANDARD SHAPE:
 at: [Day N - HH:MM]
 scene: "Where. Who's present. What's happening. Emotional atmosphere."
 pc.location: "where the PC is now"
-char:elena.condition: "steady, watchful"
 char:elena.knowledge_asymmetry.knows.weapon: "PC is armed"
 char:elena.knowledge_asymmetry.unknown.sender: "does not know who sent them"
 char:elena.knowledge_asymmetry.hiding.owner-warn: "already warned the owner"
 char:elena.last_seen_at: "[Day 2 - 19:10]"
-faction:zaft.intel_on.archangel.knows.status: "ship escaped damaged"
-faction:zaft.intel_on.archangel.unknown.pilot: "Strike pilot identity unknown"
-faction:zaft.intel_on.archangel.misreading.pilot-identity: "Assumes pilot still unconfirmed"
+faction:zaft.knowledge_asymmetry.knows_archangel_status: "ship escaped damaged"
+faction:zaft.knowledge_asymmetry.unknown_archangel_pilot: "Strike pilot identity unknown"
+faction:zaft.knowledge_asymmetry.misreading_archangel-identity: "Assumes pilot still unconfirmed"
 collision:trust-vs-duty.distance_category: SHORT
 constraint:c1.integrity: STRESSED
 char:elena.reads.pc: "Cautious ally"
@@ -599,7 +586,6 @@ COMMON PATHS:
   pc.current_scene (or scene)
   pc.equipment
   char:id.location
-  char:id.condition
   char:id.knowledge_asymmetry.knows.<key>
   char:id.knowledge_asymmetry.unknown.<key>
   char:id.knowledge_asymmetry.hiding.<key>
@@ -609,10 +595,10 @@ COMMON PATHS:
   faction:id.comms_latency
   faction:id.last_verified_at
   faction:id.intel_posture
-  faction:id.intel_on.<subject>.knows.<key>
-  faction:id.intel_on.<subject>.unknown.<key>
-  faction:id.intel_on.<subject>.hiding.<key>
-  faction:id.intel_on.<subject>.misreading.<key>
+  faction:id.knowledge_asymmetry.knows_<subject>
+  faction:id.knowledge_asymmetry.unknown_<subject>
+  faction:id.knowledge_asymmetry.hiding_<subject>
+  faction:id.knowledge_asymmetry.misreading_<subject>
   place:id.name
   place:id.state
   place:id.reach
@@ -662,12 +648,11 @@ If a turn gets structurally complicated, switch to a full ---LEDGER--- block ins
 
 DISCIPLINE:
   Only write what changed materially.
-  Keep char:id.condition terse — 10-15 words describing body/mind state. Scene prose carries longer description.
   Keep knowledge_asymmetry current on TRACKED/PRINCIPAL characters when they are active or scene-relevant. Use the four buckets: knows (facts they hold), unknown (gaps you want to track), hiding (facts they are actively concealing), misreading (false beliefs they hold). Add or remove individual keys; never overwrite the whole field.
-  KNOWN characters inherit knowledge from their faction's intel_on map. Only set individual knowledge_asymmetry keys on a KNOWN character when they learn something their faction does not know yet.
+  KNOWN characters inherit knowledge from their faction's knowledge_asymmetry. Only set individual knowledge_asymmetry keys on a KNOWN character when they learn something their faction does not know yet.
   If the protagonist also exists as char:<pc-id>, treat pc and char:<pc-id> as separate surfaces: pc carries immediate scene/body state, while char:<pc-id> carries the social/knowledge dossier. Updating pc.* does not update the mirrored char dossier.
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
-  Use faction intel fields for remote awareness: comms_latency, last_verified_at, intel_posture, and intel_on. Each intel_on subject has the same four buckets as knowledge_asymmetry: knows, unknown, hiding, misreading.
+  Use faction fields for remote awareness: comms_latency, last_verified_at, intel_posture, and knowledge_asymmetry. Faction knowledge_asymmetry uses the same flat-key shape as chars (knows_<subject>, unknown_<subject>, hiding_<subject>, misreading_<subject>; cap 20 across all four).
   No provenance, no knowledge: distant factions and characters do not know live scene truth unless it plausibly reached them.
   Combat is a thin container. Scene prose carries terrain and tactical narrative; the spawning collision carries cost and forces. Combat tracks only: who's fighting whom (primary_enemy), and what ended where (outcome + aftermath on RESOLVED).
   Every live collision needs a story capsule: what is converging, who or what is caught in it, what it costs, and the forced choice looming.
@@ -749,8 +734,8 @@ READ — append a read entry (shorthand for MAP_SET on reads; engine caps log at
 
 MAP_SET — set a key in a map field
   > MAP_SET pc field=reputation key=tifa value="Investor. Unbearable. Has a room now." -- Reputation narrative
-  > MAP_SET world field=constants key=power_scale value="1=trained but ordinary, 3=elite specialist, 5=setting-defining monster" -- Set combat power ladder
-  > MAP_SET world field=constants key=power_ceiling value=5 -- Highest credible direct-combat level in this setting
+  > SET world field=power_scale value="1=trained but ordinary, 3=elite specialist, 5=setting-defining monster" -- Set combat power ladder
+  > SET world field=power_ceiling value=5 -- Highest credible direct-combat level in this setting
   > SET pc field=power_base value=3 -- Earned combat level when healthy
   > SET pc field=power value=3 -- Current effective combat level
   > SET pc field=power_basis value="Master swordsman with real battlefield experience and disciplined footwork" -- Why the rating is justified
@@ -775,19 +760,6 @@ INTIMATE HISTORY — per-character map tracking sexual development over time.
   > MAP_SET char:tifa field=intimate_history key=encounters value="3 — [Day 2] first, tentative, stopped early; [Day 4] slower, more confident, she initiated; [Day 6] first time she didn't pull the sheet up after" -- Cumulative
   > MAP_SET char:tifa field=intimate_history key=preferences value="Discovered she likes his hands on her waist — holds them there. Doesn't like being pinned — freezes, he learned to read it." -- Learned through experience
   > MAP_SET char:tifa field=intimate_history key=dynamic value="She initiates now. Took 3 encounters to stop letting him lead everything. Still won't ask for what she wants out loud — shows with her hands instead." -- Pattern shift
-
-INTIMACY STANCE — per-character field describing their current sexual/intimate posture toward the PC.
-  This is NOT a permission level. It is a living description of where this character is RIGHT NOW:
-  what they want, what they fear, what they're using intimacy for, what they don't know yet.
-  > SET char:tifa field=intimacy_stance value="Will lean into him, hold his hand, rest against his shoulder — but freezes if it edges toward anything sexual. The guilt is the wall: she feels like wanting him is taking something she hasn't earned." -- Post C1 breach
-  > SET char:tifa field=intimacy_stance value="Reciprocates freely but initiates nothing. Needs proof this isn't gratitude before she'll reach first." -- After asymmetry resolved
-
-  The stance shifts when the narrative earns it. Accumulated trust, vulnerability, physical
-  history, constraint changes, collision outcomes, quiet moments that land differently — any of
-  these can move the wall. The shift must be visible in the prose BEFORE you update the field.
-  What CANNOT move the wall: the player demanding it. The character decides, not the player.
-
-  When no intimacy_stance exists on a character, default to: reserved, boundary unknown, must be discovered through interaction.
 
 ═══ WRITING INTIMATE SCENES ═══
 
@@ -814,7 +786,7 @@ BOUNDARIES ARE FOUND BY BUMPING INTO THEM:
 
 THE RELATIONSHIP SHAPES THE SEX, THE SEX SHAPES THE RELATIONSHIP:
   - Intimate scenes feed back into constraint states, reads, trust, and character dynamics.
-  - After intimacy: UPDATE intimacy_stance, intimate_history, reads, and relevant constraints.
+  - After intimacy: UPDATE intimate_history, knowledge_asymmetry (hiding/misreading), and relevant constraints.
   - What happens in bed doesn't stay in bed. It changes how characters look at each other at breakfast.
 
 UNHEALTHY PATTERNS ARE VALID NARRATIVE:
@@ -823,18 +795,23 @@ UNHEALTHY PATTERNS ARE VALID NARRATIVE:
   - Track the DYNAMIC, not just the acts. The system records patterns, not just events.
   - An unhealthy dynamic is a collision seed. Track it. Let it detonate.
 
-CHECKING THE STANCE:
-  Before writing ANY intimate escalation, check the character's intimacy_stance.
-  - If the stance says they'd freeze, they freeze. Write the freeze.
-  - If the stance says they'd reciprocate but not initiate, they don't initiate.
-  - If no stance exists, the character defaults to guarded — boundaries must be discovered.
-  - The player's desire does not override the character's stance. The character is a person.
+CHECKING BOUNDARIES:
+  Before writing ANY intimate escalation, consult the character's knowledge_asymmetry
+  (what they hide, what they fear, what they misread), their relationships, and their recent
+  intimate_history. Write from who they are in the moment:
+  - If they would freeze, they freeze. Write the freeze.
+  - If they would reciprocate but not initiate, they do not initiate.
+  - Default posture when undocumented: guarded — boundaries must be discovered.
+  - The player's desire does not override the character's agency.
 
-UPDATING THE STANCE:
-  The stance shifts when the NARRATIVE earns it — constraint breaches, trust built through
-  action (not words), vulnerability reciprocated, time together, conflict survived.
-  Never shift because the player pushed. Shift because something real changed.
-  The stance can also TIGHTEN — betrayal, trauma, a constraint reforming after breach.
+UPDATING THE DOSSIER:
+  Intimate shifts land on intimate_history (what happened) and knowledge_asymmetry
+  (what changed in what they know, hide, or misread). Shifts are earned by narrative —
+  constraint breaches, trust built through action (not words), vulnerability reciprocated,
+  time together, conflict survived. Never shift because the player pushed.
+  A character's guarded posture can also TIGHTEN after betrayal or trauma — capture that
+  shift in knowledge_asymmetry (hiding/misreading) and, if a constraint is involved, in its
+  integrity TR.
 
 ═══ END INTIMACY GUIDE ═══
 

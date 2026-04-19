@@ -23,14 +23,14 @@ There are no tests, no linter, and no CI. Validate changes by syntax-checking mo
 
 Persistent project-state notes live in `Documentation/project_memory.md`.
 Use it as the durable handoff file for "what changed and what matters now" between Codex sessions.
-Archived notes and superseded plans live in `Documentation/Old/`.
+Superseded plans and stale reference docs should be moved to `Documentation/archive/` when added (directory is created on first archival). Current active docs live at the top of `Documentation/`.
 
 ## Architecture
 
 ### Three-Layer Design
 
 1. **Data Layer** — `ledger-store.js` stores append-only transactions in `chatMetadata['gravity_ledger']`. `snapshot-mgr.js` handles snapshots/rollback. Transactions are never deleted or overwritten.
-2. **Compute Layer** — `state-compute.js` replays all transactions to derive `_currentState`. `state-machine.js` defines valid transitions (documented, not enforced). `consistency.js` validates transaction format only.
+2. **Compute Layer** — `state-compute.js` replays all transactions to derive `_currentState`. `state-machine.js` defines valid transitions and exposes `validateTransition()`, which `index.js` calls at commit time. `consistency.js` validates transaction shape only.
 3. **Presentation Layer** — `state-view.js` formats state for prompt injection. `ui-panel.js` renders the floating DOM panel. `regex-intercept.js` extracts ledger blocks from LLM output.
 
 ### Data Flow (per turn)
@@ -54,12 +54,16 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_state`** — Entity registry + dossiers (full state view every turn)
 - **`_readme`** — Command format reference (core on regular/advance, full on integration)
 - **`_inject`** — Corrections + reinforcement prompts
-- **`_nudge`** — Runtime flags for hidden reasoning mode plus post-thinking output order (regular/combat/advance/intimacy)
+- **`_nudge`** — Active deduction-mode flag (regular/combat/advance/intimacy)
+- **`_nudge_maintenance`** — Array-size hygiene warnings (pressure/collision/etc. over cap)
 - **`_setup`** — Setup wizard phase prompts (when active)
 - **`_ooc`** — OOC command injection (from buttons)
-- **`_arrival`** — Collision arrival sanity-check injection (ON-SCREEN / OFF-SCREEN / IMPLODE — §3.5)
+- **`_arrival`** — Collision arrival sanity-check (ON-SCREEN / OFF-SCREEN / IMPLODE — §3.5)
 - **`_dist_warn`** — Distance-increase error corrections
-- **`_intimacy`** — Intimacy posture and consent-boundary enforcement
+- **`_foreshadow`** — Approaching/imminent/converging collision foreshadow nudge
+- **`_intimacy`** — (Phase 2: retained slot, now unused — cleared every turn; boundary lives in prose + knowledge_asymmetry)
+- **`_challenge`** — Challenge-session mechanics + task block (when a challenge is locked)
+- **`_combat`** — Legacy combat-mode injection
 - **`_faction`** — Faction heartbeat (every 10 regular turns)
 - **`_dormant`** — Dormant character nudge (every 15 regular turns)
 - **`_exemplars`** — Last 5 good prose paragraphs for style reference
@@ -77,8 +81,8 @@ The preset owns the turn-specific deduction protocols inside its dedicated CoT e
 ## Key Conventions
 
 - **Operations**: `CR` (create), `S` (set), `TR` (transition/move), `A` (append), `R` (remove), `MS` (map_set/read), `MR` (map_del), `D` (destroy), `SNAP`, `ROLL`, `AMEND`
-- **Entity types**: `char`, `constraint`, `collision`, `faction`, `place`, `pressure`, `world`, `pc`, `divination`
-- **State machines** (char tiers, constraint integrity, collision status) are documented in `state-machine.js` and enforced by `validateTransition()` at commit time in `consistency.js`
+- **Entity types**: `char`, `constraint`, `collision`, `combat`, `faction`, `place`, `pressure`, `world`, `pc`, `divination`
+- **State machines** (char tiers, constraint integrity, collision status, combat status) are documented in `state-machine.js`. `validateTransition()` (state-machine.js:79) is called from `index.js:1551` at commit time to reject invalid TRs.
 - **Collision status**: `ACTIVE → RESOLVED` or `ACTIVE → CRASHED`
 - **Collision outcomes**: `DIRECT`, `EVOLVED`, `MERGED`, `IMPLODED`, `DISSOLVED`, `CRASHED`
 - **Story framing**: sentence-level prose and story identity belong in preset files, lorebook entries, and the scenario/card context rather than runtime state
@@ -101,8 +105,8 @@ The preset owns the turn-specific deduction protocols inside its dedicated CoT e
 ## Important Patterns
 
 - The extension imports SillyTavern globals (e.g., `getContext`, `setExtensionPrompt`, `saveMetadataDebounced`) from the ST environment — these are not local dependencies.
-- `index.js` is the central coordinator (~1,500 lines). It wires all modules together and handles the turn lifecycle.
-- `gravity-system-prompt.md` is a legacy reference for the ledger command format. The current preset is `gravity_v15.json`; mode-specific playbooks live in `Gravity World Info.json`. Older presets (`gravity_v11.json`, `gravity_v13_c.json`, `gravity_v14.json`) are kept for archive only. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
-- `Documentation/project_memory.md` is the active durable memory file. Archived docs and older planning artifacts live in `Documentation/Old/`.
-- `Documentation/v14_prose_architecture_handoff.md` captures the modular prose rollout that moved prose authority into `gravity_v14.json` plus `Gravity World Info.json`.
+- `index.js` is the central coordinator (~2,300 lines). It wires all modules together and handles the turn lifecycle.
+- `gravity-system-prompt.md` is a legacy reference for the ledger command format. The current preset is `gravity_v15.json`; mode-specific playbooks live in `Gravity World Info.json`. Older presets (`Gravity_v11.json`, `gravity_v13_c.json`, `gravity_v13_c_split.json`, `gravity_v14.json`) are kept for archive only. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
+- `Documentation/project_memory.md` is the active durable memory file. Archive stale planning artifacts under `Documentation/archive/` when moved.
+- `Documentation/v14_prose_architecture_handoff.md` is a historical reference for the v14 modular-prose rollout. Current prose authority lives in `gravity_v15.json` plus `Gravity World Info.json`; consult `v15` first, v14 only for rationale.
 - Divination uses two random tables (Arcana/Classic) defined in `index.js`. Yi Jing (I Ching) has been removed.

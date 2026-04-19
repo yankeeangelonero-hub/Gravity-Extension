@@ -130,6 +130,15 @@ async function setChallengeCustomDcs(kind, customDcs) {
 
 function normalizeRuntime(runtime) {
     if (!runtime || typeof runtime !== 'object') return null;
+    // Phase 2 rename migration: runtime.exchange → runtime.clash
+    if (runtime && runtime.exchange !== undefined && runtime.clash === undefined) {
+        runtime.clash = runtime.exchange;
+        delete runtime.exchange;
+    }
+    if (runtime?.last_resolution && runtime.last_resolution.exchange !== undefined && runtime.last_resolution.clash === undefined) {
+        runtime.last_resolution.clash = runtime.last_resolution.exchange;
+        delete runtime.last_resolution.exchange;
+    }
     const normalized = clone(runtime) || {};
     if (typeof normalized.locked !== 'boolean') {
         normalized.locked = normalized.phase !== 'cleanup_grace';
@@ -275,7 +284,7 @@ async function startChallengeRuntime(kind, sceneDraw) {
         entity_type: profile.entityType,
         entity_id: entityId,
         phase: 'setup_opening',
-        exchange: 1,
+        clash: 1,
         scene_draw: clone(sceneDraw),
         scene_draw_active: true,
         difficulty_mode: mode,
@@ -446,7 +455,7 @@ function buildChallengeMechanicsBlock(runtime, profile, settings, dcTable, basel
     lines.push(`LOCKED: ${runtime?.locked ? 'true' : 'false'}`);
     lines.push(`ENTITY_TYPE: ${mechanicsValue(runtime?.entity_type)}`);
     lines.push(`ENTITY_ID: ${mechanicsValue(runtime?.entity_id)}`);
-    lines.push(`RUNTIME_EXCHANGE: ${mechanicsValue(runtime?.exchange)}`);
+    lines.push(`RUNTIME_CLASH: ${mechanicsValue(runtime?.clash)}`);
     lines.push(`DIFFICULTY_MODE: ${mechanicsValue(runtime?.difficulty_mode || settings?.mode)}`);
     lines.push(`SUCCESS_THRESHOLDS: ${describeDcTable(dcTable)}`);
     lines.push(`SCENE_DRAW_ACTIVE: ${boolText(!!runtime?.scene_draw_active)}`);
@@ -490,7 +499,7 @@ function buildChallengeTaskBlock(runtime, profile, entity) {
     const setupBuffered = runtime?.phase === 'setup_buffered';
     const needsAssessment = !!action?.assessment_only;
     const mustResolveBuffered = setupBuffered && !needsAssessment;
-    const mustResolveExchange = runtime?.phase === 'awaiting_resolution' || mustResolveBuffered;
+    const mustResolveClash = runtime?.phase === 'awaiting_resolution' || mustResolveBuffered;
     const mustOutputOptions = setupOpening
         || setupBuffered
         || (runtime?.phase === 'awaiting_choice' && (needsAssessment || !(runtime?.options || []).length));
@@ -505,7 +514,7 @@ function buildChallengeTaskBlock(runtime, profile, entity) {
     } else if (runtime?.phase === 'awaiting_choice') {
         turnObjective = needsAssessment ? 'ASSESS_ACTION_TO_OPTIONS' : 'WAIT_FOR_PLAYER_CHOICE';
     } else if (runtime?.phase === 'awaiting_resolution') {
-        turnObjective = 'RESOLVE_EXCHANGE';
+        turnObjective = 'RESOLVE_CLASH';
     } else if (runtime?.phase === 'awaiting_reassessment') {
         turnObjective = 'REASSESS_DIFFICULTY';
     } else if (runtime?.phase === 'cleanup_grace') {
@@ -521,16 +530,16 @@ function buildChallengeTaskBlock(runtime, profile, entity) {
     lines.push(`MUST_FILL_ENTITY_FIELDS: ${boolText(setupOpening || setupBuffered)}`);
     lines.push(`MUST_ESTABLISH_OPENING: ${boolText(setupOpening || setupBuffered)}`);
     lines.push(`MUST_ASSESS_ACTION_TO_OPTIONS: ${boolText(needsAssessment)}`);
-    lines.push(`MUST_NOT_RESOLVE_EXCHANGE: ${boolText(needsAssessment || runtime?.phase === 'awaiting_choice')}`);
+    lines.push(`MUST_NOT_RESOLVE_CLASH: ${boolText(needsAssessment || runtime?.phase === 'awaiting_choice')}`);
     lines.push(`MUST_RESOLVE_BUFFERED_ACTION: ${boolText(mustResolveBuffered)}`);
-    lines.push(`MUST_RESOLVE_EXCHANGE: ${boolText(mustResolveExchange)}`);
+    lines.push(`MUST_RESOLVE_CLASH: ${boolText(mustResolveClash)}`);
     lines.push(`MUST_OUTPUT_OPTIONS: ${boolText(mustOutputOptions)}`);
     lines.push(`OPTION_1_CAPTURES_PLAYER_INTENT: ${boolText(needsAssessment)}`);
     lines.push(`OPTION_COUNT: ${optionRange[0]}-${optionRange[1]}`);
     lines.push(`OUTPUT_OPTIONS_IF_CONTINUES: ${boolText(outputOptionsIfContinues)}`);
     lines.push(`MUST_PRESERVE_ROLL: ${boolText(runtime?.phase === 'awaiting_reassessment')}`);
     if (profile.usesD20) {
-        lines.push(`MUST_RECORD_LAST_DRAW: ${boolText(!!roll?.draw && !roll?.skip && mustResolveExchange)}`);
+        lines.push(`MUST_RECORD_LAST_DRAW: ${boolText(!!roll?.draw && !roll?.skip && mustResolveClash)}`);
     }
     lines.push(`MUST_WRITE_LASTING_CONSEQUENCES: ${boolText(runtime?.phase === 'cleanup_grace')}`);
     lines.push(`MUST_DESTROY_ENTITY: ${boolText(runtime?.phase === 'cleanup_grace')}`);
@@ -1004,7 +1013,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             let next = {
                 ...runtime,
                 last_resolution: {
-                    exchange: runtime.exchange,
+                    clash: runtime.clash,
                     action: clone(runtime.pending_action),
                     roll: clone(runtime.pending_roll),
                 },
@@ -1015,7 +1024,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
             }
 
             next = buildAwaitingChoiceRuntime(next, {
-                exchange: Math.max((runtime.exchange || 1) + 1, coerceNumber(entity?.exchange) ?? 0),
+                clash: Math.max((runtime.clash || 1) + 1, coerceNumber(entity?.clash) ?? 0),
                 scene_draw_active: false,
                 option_table_version: runtime.option_table_version || 0,
                 options: runtime.options || [],
@@ -1107,7 +1116,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
         let next = {
             ...runtime,
             last_resolution: {
-                exchange: runtime.exchange,
+                clash: runtime.clash,
                 action: clone(runtime.pending_action),
                 roll: clone(runtime.pending_roll),
             },
@@ -1119,7 +1128,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
         }
 
         next = buildAwaitingChoiceRuntime(next, {
-            exchange: Math.max((runtime.exchange || 1) + 1, coerceNumber(entity?.exchange) ?? 0),
+            clash: Math.max((runtime.clash || 1) + 1, coerceNumber(entity?.clash) ?? 0),
         });
         const { runtime: stored, correction } = await storeOptionsAndValidate(profile, next, options, state, committedTxns);
 

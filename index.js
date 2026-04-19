@@ -362,46 +362,31 @@ function getCollisionForcesText(col) {
 
 function buildCollisionStoryCapsule(id, col) {
     const lines = [];
-    const details = normalizeText(col?.details);
     const forces = getCollisionForcesText(col);
-    const cost = normalizeText(col?.cost);
-    const targetConstraint = normalizeText(col?.target_constraint);
-    if (details) lines.push(`Thread: ${details}`);
+    const location = normalizeText(col?.location);
+    const involvedChars = Array.isArray(col?.involved_chars) ? col.involved_chars.filter(Boolean) : [];
     if (forces) lines.push(`Forces: ${forces}`);
-    else if (!details) lines.push(`Collision: ${col?.name || id}`);
-
-    if (cost) lines.push(`Cost: ${cost}`);
-    if (targetConstraint) lines.push(`Target constraint: ${targetConstraint}`);
-
+    else lines.push(`Collision: ${col?.name || id}`);
+    if (location) lines.push(`Location: ${location}`);
+    if (involvedChars.length) lines.push(`Involved: ${involvedChars.join(', ')}`);
     return lines.join('\n');
-}
-
-function isThinCollisionDetails(details) {
-    const clean = normalizeText(details);
-    if (!clean) return false;
-    const words = clean.split(/\s+/).filter(Boolean);
-    return clean.length < 80 || words.length < 12;
 }
 
 function buildCollisionNarrativeWarnings(id, col, status) {
     const warnings = [];
     const name = col?.name || id;
-    const details = normalizeText(col?.details);
-    const cost = normalizeText(col?.cost);
     const forces = getCollisionForcesText(col);
+    const location = normalizeText(col?.location);
+    const involvedChars = Array.isArray(col?.involved_chars) ? col.involved_chars.filter(Boolean) : [];
 
     if (!forces) {
         warnings.push(`"${name}" is ${status} but missing forces — SET collision:${id}.forces so the pressure has named poles.`);
     }
-
-    if (!details) {
-        warnings.push(`"${name}" is ${status} but missing details — every live collision needs a narrative thread. SET collision:${id}.details to a compact story capsule naming: what is converging, who or what is caught in it, how it is surfacing now, and the forced choice looming.`);
-    } else if (isThinCollisionDetails(details)) {
-        warnings.push(`"${name}" details are still too thin — rewrite collision:${id}.details as a fuller story capsule with source pressure, the people or places at risk, the present expression, and the forced choice looming.`);
+    if (status === 'ACTIVE' && !location) {
+        warnings.push(`"${name}" is ${status} but missing location — SET collision:${id}.location so the pressure is grounded in a place.`);
     }
-
-    if (status === 'ACTIVE' && !cost) {
-        warnings.push(`"${name}" is ${status} but missing cost — SET collision:${id}.cost to what engagement, delay, or failure will cost.`);
+    if (status === 'ACTIVE' && !involvedChars.length) {
+        warnings.push(`"${name}" is ${status} but no involved_chars — APPEND collision:${id}.involved_chars so the pressure has a cast.`);
     }
 
     return warnings;
@@ -1169,13 +1154,12 @@ function injectPrompt(mode) {
             const factions = Object.values(_currentState.factions || {});
             if (factions.length > 0) {
                 const factionDetails = factions.map(f => {
-                    let detail = `${f.name || f.id} (${f.objective || '?'})`;
-                    if (f.power) detail += ` [${f.power}]`;
-                    if (f.momentum) detail += ` — doing: ${f.momentum}`;
+                    let detail = `${f.name || f.id} (${f.agenda || '?'})`;
+                    if (f.state) detail += ` [${f.state}]`;
                     return detail;
                 }).join('\n  ');
                 setExtensionPrompt(`${MODULE_NAME}_faction`,
-                    `[FACTION HEARTBEAT — Turn ${_turnCounter}.\n  ${factionDetails}\nFactions execute operations independently based on their MOMENTUM. Leaders command subordinates — show the chain of command. Rising factions expand; declining factions get desperate. Check faction RELATIONS for alliance/rivalry dynamics. You may CUT to a faction scene before cutting back. If no faction has visibly acted in recent turns, one MUST advance NOW — pick the faction whose MOMENTUM most threatens the current scene.]`,
+                    `[FACTION HEARTBEAT — Turn ${_turnCounter}.\n  ${factionDetails}\nFactions execute operations independently, driven by their AGENDA. Leaders command subordinates — show the chain of command. Check faction knowledge_asymmetry to keep intel consistent. You may CUT to a faction scene before cutting back. If no faction has visibly acted in recent turns, one MUST advance NOW — pick the faction whose AGENDA most threatens the current scene.]`,
                     PROMPT_IN_CHAT, 0);
             } else {
                 setExtensionPrompt(`${MODULE_NAME}_faction`, '', PROMPT_NONE, 0);
@@ -1196,12 +1180,12 @@ function injectPrompt(mode) {
                 const lastTx = charTxns.length > 0 ? charTxns[charTxns.length - 1].tx : 0;
                 const gap = totalTx - lastTx;
                 if (gap >= DORMANT_THRESHOLD) {
-                    dormant.push(`${char.name || id} [${char.tier}] — WANT: ${char.want || '?'} — last activity ${gap} transactions ago`);
+                    dormant.push(`${char.name || id} [${char.tier}] — AGENDA: ${char.agenda || '?'} — last activity ${gap} transactions ago`);
                 }
             }
             if (dormant.length > 0) {
                 setExtensionPrompt(`${MODULE_NAME}_dormant`,
-                    `[DORMANT CHARACTERS — gravity still pulls these characters toward collision:\n${dormant.map(d => '  • ' + d).join('\n')}\nGravity is constant — however weak, it pulls toward collision. Their WANT is a force. Their DOING has consequences. Advance them toward the nearest collision — or spawn a new one from their WANT intersecting the current situation.]`,
+                    `[DORMANT CHARACTERS — gravity still pulls these characters toward collision:\n${dormant.map(d => '  • ' + d).join('\n')}\nGravity is constant — however weak, it pulls toward collision. Their AGENDA is a force. Their actions have consequences. Advance them toward the nearest collision — or spawn a new one from their AGENDA intersecting the current situation.]`,
                     PROMPT_IN_CHAT, 0);
             } else {
                 setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
@@ -1269,23 +1253,9 @@ function injectPrompt(mode) {
             setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
         }
 
-        // Intimacy stance enforcement — surface active stances so the LLM checks before writing
-        if (_currentState) {
-            const stanceLines = [];
-            for (const [id, char] of Object.entries(_currentState.characters || {})) {
-                if (!char.intimacy_stance) continue;
-                stanceLines.push(`  ${char.name || id}: ${char.intimacy_stance}`);
-            }
-            if (stanceLines.length > 0) {
-                setExtensionPrompt(`${MODULE_NAME}_intimacy`,
-                    `[INTIMACY STANCE CHECK — respect these before writing intimate content:\n${stanceLines.join('\n')}\nThe character's stance is the boundary. The player's desire does not override it. If the scene escalates past what the stance allows, the character resists, freezes, or redirects — write THAT. Update the stance via SET only when a constraint shift or significant narrative event earns it.]`,
-                    PROMPT_IN_CHAT, 0);
-            } else {
-                setExtensionPrompt(`${MODULE_NAME}_intimacy`, '', PROMPT_NONE, 0);
-            }
-        } else {
-            setExtensionPrompt(`${MODULE_NAME}_intimacy`, '', PROMPT_NONE, 0);
-        }
+        // Intimacy boundary enforcement is now Phase 2: carried in prose + knowledge_asymmetry
+        // (hiding/misreading buckets). No runtime slot injection needed.
+        setExtensionPrompt(`${MODULE_NAME}_intimacy`, '', PROMPT_NONE, 0);
 
         // Nudge now only signals the active deduction mode; the preset owns the actual protocol.
         const reasonMode = nextReasonMode || 'regular';
@@ -1351,15 +1321,8 @@ function checkArraySizes(state) {
             warnings.push(`${cfg.label}: ${arr.length} entries (cap ${cfg.cap}) — consolidate. REMOVE resolved/stale/duplicate entries.`);
         }
     }
-    // Check per-character arrays
-    for (const [id, char] of Object.entries(state.characters || {})) {
-        const noticed = char.noticed_details;
-        if (Array.isArray(noticed) && noticed.length > 15) {
-            warnings.push(`${char.name || id} NOTICED_DETAILS: ${noticed.length} entries — REMOVE fired/resolved details.`);
-        }
-        // key_moments are PERMANENT — never warn about size, never trim.
-        // They are the character's lived history.
-    }
+    // Per-character arrays: key_moments are PERMANENT (never warn, never trim).
+    // Phase 2 removed noticed_details; nothing per-char to cap here.
     if (warnings.length === 0) return null;
     return `[LEDGER HYGIENE WARNING — arrays over capacity:\n${warnings.map(w => '  • ' + w).join('\n')}\nPrune 2–3 stale entries per turn using REMOVE. Do NOT batch-remove everything at once — spread cleanup across multiple turns. Pressure points that fired or resolved are history, not live wires.]`;
 }
@@ -1995,14 +1958,6 @@ function handleIntimacyButton() {
     _pendingDeductionType = 'intimacy';
     const pcName = _currentState?.pc?.name || '{{user}}';
 
-    const stances = [];
-    for (const [id, char] of Object.entries(_currentState?.characters || {})) {
-        if (char.tier === 'UNKNOWN' || char.tier === 'KNOWN') continue;
-        if (char.intimacy_stance) {
-            stances.push(`${char.name || id}: ${char.intimacy_stance}`);
-        }
-    }
-
     const histories = [];
     for (const [id, char] of Object.entries(_currentState?.characters || {})) {
         const ih = char.intimate_history;
@@ -2012,9 +1967,6 @@ function handleIntimacyButton() {
     }
 
     const intimacyDraw = drawDivination();
-    const stanceBlock = stances.length
-        ? `ACTIVE STANCES:\n${stances.map(s => `  ${s}`).join('\n')}`
-        : 'No explicit intimacy stances are stored yet.';
     const historyBlock = histories.length
         ? `INTIMATE HISTORY:\n${histories.map(h => `  ${h}`).join('\n')}`
         : 'No intimate history exists yet. Treat this as discovery.';
@@ -2026,8 +1978,6 @@ function handleIntimacyButton() {
 ${formatDrawInstruction(intimacyDraw, 'The draw colors tone and texture, not consent or plot.')}
 
 Before activating, check that the scene is earned, clearly beyond casual contact, and that consent is plausible from the current dossiers and stances. If any answer is no, ignore this instruction and write normal prose.
-
-${stanceBlock}
 
 ${historyBlock}
 

@@ -8,7 +8,7 @@
  * 4. Divination — active system, last draw, reading history
  */
 
-import { getFieldHistory, getEntityHistory, getArrayItemHistory } from './state-compute.js';
+import { getFieldHistory, getEntityHistory, getArrayItemHistory, CATEGORY_DISTANCES } from './state-compute.js';
 import {
     buildDcTable,
     getCombatBaseline,
@@ -1028,7 +1028,7 @@ function renderCombat(state) {
     parts.push(`<div class="gl-d-row"><b>Combat ID:</b> ${esc(runtime.combat_id)}</div>`);
     parts.push(`<div class="gl-d-row"><b>Lock:</b> ${esc(runtime.locked ? 'engaged' : 'released')}</div>`);
     parts.push(`<div class="gl-d-row"><b>Phase:</b> ${esc(runtime.phase || '?')}</div>`);
-    parts.push(`<div class="gl-d-row"><b>Exchange:</b> ${esc(runtime.exchange ?? '?')}</div>`);
+    parts.push(`<div class="gl-d-row"><b>Clash:</b> ${esc(runtime.clash ?? '?')}</div>`);
     if (baseline) {
         parts.push(`<div class="gl-d-row"><b>Baseline:</b> ${esc(baseline.category)}${baseline.gap != null ? ` (gap ${esc(baseline.gap)})` : ''}</div>`);
         if (baseline.category === 'Highly likely' || baseline.category === 'Average' || baseline.category === 'Highly unlikely') {
@@ -1090,8 +1090,7 @@ function renderCombat(state) {
 }
 
 function renderDistanceBar(dist, category) {
-    const MAX_BY_CATEGORY = { IMMEDIATE: 1, SHORT: 10, MEDIUM: 20, LONG: 50 };
-    const max = MAX_BY_CATEGORY[category] || 10;
+    const max = CATEGORY_DISTANCES[category] || 10;
     // IMMEDIATE is always "about to arrive" — paint the bar full-red regardless of dist.
     if (category === 'IMMEDIATE') {
         const catLabel = ` [${category}]`;

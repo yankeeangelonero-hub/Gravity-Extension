@@ -165,7 +165,7 @@ function storeParsedOptions(runtime, options) {
         option_table_version: nextVersion,
         options: options.map(option => ({
             ...option,
-            id: option.id || `opt-e${runtime?.exchange || 1}-v${nextVersion}-${option.index}`,
+            id: option.id || `opt-c${runtime?.clash || 1}-v${nextVersion}-${option.index}`,
             table_version: nextVersion,
         })),
     };
