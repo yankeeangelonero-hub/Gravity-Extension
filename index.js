@@ -1224,6 +1224,14 @@ function injectPrompt(mode) {
             const closureWarnings = [];
             for (const [id, col] of Object.entries(_currentState.collisions || {})) {
                 const status = (col.status || '').trim().toUpperCase();
+                // Half-closed: outcome_type set but status still ACTIVE.
+                // Usually means the LLM emitted outcome/aftermath but the TR
+                // didn't land (wrong grammar or rejected). The status TR is
+                // missing and must be added on the next turn.
+                if (status === 'ACTIVE' && col.outcome_type) {
+                    closureWarnings.push(`"${col.name || id}" has outcome_type=${col.outcome_type} but status is still ACTIVE — the status transition didn't land. In a ---STATE--- block add: collision:${id}.status: ${col.outcome_type === 'CRASHED' ? 'CRASHED' : 'RESOLVED'}. In a ---LEDGER--- block use: TR collision:${id} field=status from=ACTIVE to=${col.outcome_type === 'CRASHED' ? 'CRASHED' : 'RESOLVED'}.`);
+                    continue;
+                }
                 if (status !== 'RESOLVED') continue;
                 if (!col.outcome_type) closureWarnings.push(`"${col.name || id}" is RESOLVED but missing outcome_type (DIRECT / EVOLVED / MERGED / DISSOLVED / IMPLODED / CRASHED)`);
                 if (!col.aftermath) closureWarnings.push(`"${col.name || id}" is RESOLVED but missing aftermath — what changed, what was lost, what it left behind`);
@@ -1915,6 +1923,10 @@ async function applyAdvanceTick() {
 async function handleAdvanceButton() {
     if (_advanceLocked) return;
     _advanceLocked = true;
+
+    // eventSource / event_types live on the SillyTavern context, not the module
+    // scope — extract locally so the reenable listener can wire and unwire.
+    const { eventSource, event_types } = SillyTavern.getContext();
 
     // Lock DOM button immediately; re-enable on next MESSAGE_RECEIVED OR after
     // a 2-minute timeout (covers silent LLM failures, stream stalls, etc.).

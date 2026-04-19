@@ -63,6 +63,18 @@ const OP_ALIASES = {
     'AMEND': 'AMEND', 'FIX': 'AMEND', 'CORRECT': 'AMEND',
 };
 
+// Regex that matches any OP_ALIASES key at the start of a line (case-insensitive,
+// followed by a word boundary). Used by parseStateLine to route verb-syntax
+// lines (including short-form codes like TR, CR, S) to parseLine. Must be
+// derived from OP_ALIASES so whitelist can't drift.
+const DIRECT_TX_VERB_REGEX = new RegExp(
+    '^(' + Object.keys(OP_ALIASES)
+        .sort((a, b) => b.length - a.length) // longest-first so MAP_SET matches before MS
+        .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|') + ')\\b',
+    'i'
+);
+
 // ─── Line Parser ────────────────────────────────────────────────────────────────
 
 /**
@@ -271,7 +283,7 @@ function parseStateLine(line, lineNum) {
     let cleaned = raw.replace(/^[>\-\*]\s*/, '').trim();
     if (!cleaned) return { entry: null, error: null, raw };
 
-    if (/^(create|set|move|append|remove|read|map_set|map_del|destroy|amend|new|update|add|delete_from|unread|kill|remove_entity|correct|fix)\b/i.test(cleaned)) {
+    if (DIRECT_TX_VERB_REGEX.test(cleaned)) {
         const { tx, error } = parseLine(cleaned, lineNum);
         if (tx) return { entry: { kind: 'directTx', tx, raw }, error: null, raw };
         return { entry: null, error, raw };
@@ -293,7 +305,14 @@ function parseStateLine(line, lineNum) {
 
     const separatorIndex = findStateSeparatorIndex(cleaned);
     if (separatorIndex === -1) {
-        return { entry: null, error: `Line ${lineNum}: STATE line must be "path: value"`, raw };
+        // Heuristic: if the line looks like ledger syntax (first word, then
+        // entity:id, then one or more key=value pairs), the LLM likely used
+        // the wrong grammar. Point them at the dotted-path form explicitly.
+        const looksLikeLedgerSyntax = /^\w+\s+\w+:[\w-]+\s+\w+=/.test(cleaned);
+        const hint = looksLikeLedgerSyntax
+            ? ' — this looks like ledger-block syntax. Inside ---STATE--- blocks, use dotted-path form (e.g. "collision:id.status: RESOLVED"), not verb form ("TR collision:id field=status …"). Verb syntax belongs in ---LEDGER--- blocks.'
+            : '';
+        return { entry: null, error: `Line ${lineNum}: STATE line must be "path: value"${hint}`, raw };
     }
     let path = cleaned.slice(0, separatorIndex).trim();
     const rawValue = cleaned.slice(separatorIndex + 1);

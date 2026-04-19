@@ -630,6 +630,7 @@ DISCIPLINE:
   Pressure points (pressure:<id>) are seeds — small tensions not yet a collision. Cap is 5; oldest auto-drops on overflow. Destroy when consumed: D pressure:<id>.
   If 3+ related pressure points accumulate, combine them into a collision (CR collision) and destroy the consumed pressures.
   WEEKS or MONTHS timeskips automatically clear all pressure points — the engine handles this.
+  Collision closure grammar: inside ---STATE--- blocks use dotted-path form — collision:id.status: RESOLVED (and .outcome_type, .aftermath). Do NOT use ledger verb syntax (TR collision:id field=status from=ACTIVE to=RESOLVED) inside STATE blocks — it will be silently dropped. Verb syntax is only for ---LEDGER--- blocks.
   key_moments are permanent under 100 entries per character. When a character's key_moments list hits 100, drop the oldest or least load-bearing entry with a full-array SET (not a partial REMOVE) before adding a new one. This is infrequent given the high cap.
   Cleanup is still capped on normal turns; save bulk pruning for eval or OOC: eval.
   On advance turns, emit: world.timeskip_scale: HOURS|DAYS|WEEKS|MONTHS (default HOURS). WEEKS and MONTHS clear all pressure points.

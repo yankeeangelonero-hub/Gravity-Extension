@@ -1,0 +1,1311 @@
+{
+  "transactions": [
+    {
+      "tx": 0,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "place",
+      "id": "reactor-5-sublevel",
+      "d": {
+        "name": "Reactor 5 — Sublevel Corridors",
+        "reach": "LOCAL",
+        "state": "hostile",
+        "description": "Hot, loud, and collapsing in sections. Warning lights strobe red through chemical smoke. Shinra response units are sweeping inward."
+      },
+      "r": ""
+    },
+    {
+      "tx": 1,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "place",
+      "id": "sector-7-slums",
+      "d": {
+        "name": "Sector 7 Slums",
+        "reach": "DISTRICT",
+        "state": "contested",
+        "description": "The underplate sprawl beneath Sector 7. Dense, loud, lived-in. Shinra patrols the perimeter but the interior belongs to whoever shows up."
+      },
+      "r": ""
+    },
+    {
+      "tx": 2,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "place",
+      "id": "seventh-heaven",
+      "d": {
+        "name": "Seventh Heaven",
+        "reach": "LOCAL",
+        "state": "safe",
+        "description": "Tifa's bar in the heart of Sector 7. Warm, crowded most nights, with a piano nobody asks about and a child sleeping upstairs."
+      },
+      "r": ""
+    },
+    {
+      "tx": 3,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "power_scale",
+        "v": "1=ordinary civilian, 2=trained fighter or armed soldier, 3=elite specialist or seasoned combatant, 4=superhuman-tier threat (SOLDIER 1st Class, summon-enhanced), 5=setting-defining force (Sephiroth). Ruby Weapon (7) exists beyond the playable ceiling."
+      },
+      "r": ""
+    },
+    {
+      "tx": 4,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "power_ceiling",
+        "v": "5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 5,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "power_notes",
+        "v": "Materia and summons can spike effective power temporarily. SOLDIER enhancements are permanent biological upgrades. Ashina techniques function at their canon level — supernatural precision and timing, mortal body. The Mortal Blade kills the wielder after use (power 6, then death)."
+      },
+      "r": ""
+    },
+    {
+      "tx": 6,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "world_state",
+        "v": "Midgar, night. Avalanche reactor operation gone sideways. Shinra response units closing. Cloud and Barret are elsewhere in the reactor. Sector 7 slums are the fallback point."
+      },
+      "r": ""
+    },
+    {
+      "tx": 7,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "timeskip_scale",
+        "v": "HOURS"
+      },
+      "r": ""
+    },
+    {
+      "tx": 8,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "name",
+        "v": "Autumn"
+      },
+      "r": ""
+    },
+    {
+      "tx": 9,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "place:reactor-5-sublevel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 10,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "power_base",
+        "v": "3"
+      },
+      "r": ""
+    },
+    {
+      "tx": 11,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "power",
+        "v": "3"
+      },
+      "r": ""
+    },
+    {
+      "tx": 12,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "power_basis",
+        "v": "Mortal swordsman trained in the Ashina school — superhuman reaction time, perfect deflection technique, and iaijutsu-speed draws. Lethal against conventional opponents. Limited by a human body with no mako enhancement."
+      },
+      "r": ""
+    },
+    {
+      "tx": 13,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "abilities",
+        "v": "Ashina swordsmanship: Mikiri Counter, Perfect Deflection, Ashina Cross, Ichimonji Double, Floating Passage, Lightning Reversal, Posture Mastery"
+      },
+      "r": ""
+    },
+    {
+      "tx": 14,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "abilities",
+        "v": "Mortal Blade (emergency): power spikes to 6, kills the wielder after use"
+      },
+      "r": ""
+    },
+    {
+      "tx": 15,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "demonstrated_traits",
+        "v": "Disciplined composure — remains calm even facing death"
+      },
+      "r": ""
+    },
+    {
+      "tx": 16,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "demonstrated_traits",
+        "v": "Reactive combatant — studies patterns before committing to attack"
+      },
+      "r": ""
+    },
+    {
+      "tx": 17,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "demonstrated_traits",
+        "v": "Economical speech — prefers metaphor over explanation"
+      },
+      "r": ""
+    },
+    {
+      "tx": 18,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "demonstrated_traits",
+        "v": "Merciful to those who yield, decisive against threats to the innocent"
+      },
+      "r": ""
+    },
+    {
+      "tx": 19,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "name": "Tifa Lockhart",
+        "tier": "PRINCIPAL"
+      },
+      "r": ""
+    },
+    {
+      "tx": 20,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "agenda",
+        "v": "Get everyone out of this reactor alive — Autumn included, now that she's responsible for them — while limiting civilian fallout and keeping Avalanche's identity protected"
+      },
+      "r": ""
+    },
+    {
+      "tx": 21,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "power_base",
+        "v": "3"
+      },
+      "r": ""
+    },
+    {
+      "tx": 22,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "power",
+        "v": "3"
+      },
+      "r": ""
+    },
+    {
+      "tx": 23,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "power_basis",
+        "v": "Zangan-style martial artist with years of real combat experience. Fast, precise, and capable of breaking through armored opponents with bare hands. No mako enhancement — peak human performance earned through relentless training."
+      },
+      "r": ""
+    },
+    {
+      "tx": 24,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "abilities",
+        "v": "Zangan-ryū martial arts: Beat Rush, Somersault, Waterkick, Meteodrive"
+      },
+      "r": ""
+    },
+    {
+      "tx": 25,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "abilities",
+        "v": "Close-quarters specialist — fights best in confined spaces with no room to disengage"
+      },
+      "r": ""
+    },
+    {
+      "tx": 26,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "abilities",
+        "v": "Reactor layout knowledge — has memorized extraction routes for this operation"
+      },
+      "r": ""
+    },
+    {
+      "tx": 27,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "knows_reactor_layout",
+        "v": "Has the extraction route memorized and knows the Shinra sweep pattern"
+      },
+      "r": ""
+    },
+    {
+      "tx": 28,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "knows_autumn_armed",
+        "v": "Noticed the katana — knows he's not a civilian wanderer"
+      },
+      "r": ""
+    },
+    {
+      "tx": 29,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "unknown_autumn_skill",
+        "v": "Has no idea what Ashina techniques are or what Autumn is capable of"
+      },
+      "r": ""
+    },
+    {
+      "tx": 30,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "unknown_autumn_motive",
+        "v": "Doesn't know why Autumn was in the reactor"
+      },
+      "r": ""
+    },
+    {
+      "tx": 31,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "hiding_avalanche",
+        "v": "Will not reveal Avalanche's name, membership, or base of operations to a stranger"
+      },
+      "r": ""
+    },
+    {
+      "tx": 32,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "hiding_marlene",
+        "v": "Will not mention Marlene or Seventh Heaven's real function"
+      },
+      "r": ""
+    },
+    {
+      "tx": 33,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "hiding_cloud_history",
+        "v": "Will not explain her history with Cloud to someone she just met"
+      },
+      "r": ""
+    },
+    {
+      "tx": 34,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "misreading_autumn_role",
+        "v": "Reads Autumn as a capable drifter who wandered into the wrong corridor — not someone with a philosophy or discipline behind the blade"
+      },
+      "r": ""
+    },
+    {
+      "tx": 35,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "constraint",
+      "id": "c1-steady",
+      "d": {
+        "name": "The Steady One",
+        "owner_id": "tifa",
+        "integrity": "STABLE",
+        "prevents": "Showing exhaustion, fear, or the weight of carrying everyone. Admitting she needs help or is overwhelmed.",
+        "threshold": "Sustained, genuine care aimed at her from someone she can't redirect — especially when she's already stretched thin",
+        "replacement": "Stillness without purpose — she stops moving, stops being useful, and doesn't know what to do with her hands",
+        "replacement_type": "regression",
+        "shedding_order": "1"
+      },
+      "r": ""
+    },
+    {
+      "tx": 36,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "constraint",
+      "id": "c2-firewall",
+      "d": {
+        "name": "Avalanche Firewall",
+        "owner_id": "tifa",
+        "integrity": "STABLE",
+        "prevents": "Revealing Avalanche operations, members, Seventh Heaven's true purpose, or Marlene's existence to outsiders",
+        "threshold": "A situation where protecting the secret directly conflicts with protecting someone in front of her",
+        "replacement": "Displacement — redirects the conversation to something adjacent and true but not the real answer",
+        "replacement_type": "displacement",
+        "shedding_order": "2"
+      },
+      "r": ""
+    },
+    {
+      "tx": 37,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "constraint",
+      "id": "c3-cloud",
+      "d": {
+        "name": "The Cloud Question",
+        "owner_id": "tifa",
+        "integrity": "STABLE",
+        "prevents": "Examining aloud what Cloud's return means to her, whether the person she knew is still in there, or how much of her attention he occupies",
+        "threshold": "Someone noticing her distraction and naming it without accusation",
+        "replacement": "A shift inward — stops tracking Cloud externally but the attention moves deeper, becomes harder to shake",
+        "replacement_type": "depth_shift",
+        "shedding_order": "3"
+      },
+      "r": ""
+    },
+    {
+      "tx": 38,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "char",
+      "id": "cloud",
+      "d": {
+        "name": "Cloud Strife",
+        "tier": "TRACKED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 39,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "cloud",
+      "d": {
+        "f": "agenda",
+        "v": "Complete the reactor mission and get paid — everything else is someone else's problem"
+      },
+      "r": ""
+    },
+    {
+      "tx": 40,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "cloud",
+      "d": {
+        "f": "power_base",
+        "v": "4"
+      },
+      "r": ""
+    },
+    {
+      "tx": 41,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "cloud",
+      "d": {
+        "f": "power",
+        "v": "4"
+      },
+      "r": ""
+    },
+    {
+      "tx": 42,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "cloud",
+      "d": {
+        "f": "power_basis",
+        "v": "Mako-enhanced ex-SOLDIER (claimed). Superhuman speed, strength, and reflexes. Wields the Buster Sword with one hand. Combat instincts exceed what his stated history should account for."
+      },
+      "r": ""
+    },
+    {
+      "tx": 43,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "char",
+      "id": "cloud",
+      "d": {
+        "f": "abilities",
+        "v": "Mako-enhanced physiology — speed and strength beyond human limits"
+      },
+      "r": ""
+    },
+    {
+      "tx": 44,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "char",
+      "id": "cloud",
+      "d": {
+        "f": "abilities",
+        "v": "Buster Sword mastery — heavy blade used with unnatural precision"
+      },
+      "r": ""
+    },
+    {
+      "tx": 45,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "char",
+      "id": "cloud",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "unknown_autumn",
+        "v": "Has no idea Autumn exists or that Tifa pulled a stranger into the extraction"
+      },
+      "r": ""
+    },
+    {
+      "tx": 46,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "char",
+      "id": "cloud",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "hiding_memory_gaps",
+        "v": "Will not acknowledge the inconsistencies in his own memory of SOLDIER service"
+      },
+      "r": ""
+    },
+    {
+      "tx": 47,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "char",
+      "id": "barret",
+      "d": {
+        "name": "Barret Wallace",
+        "tier": "KNOWN"
+      },
+      "r": ""
+    },
+    {
+      "tx": 48,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "barret",
+      "d": {
+        "f": "power_base",
+        "v": "3"
+      },
+      "r": ""
+    },
+    {
+      "tx": 49,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "barret",
+      "d": {
+        "f": "power",
+        "v": "3"
+      },
+      "r": ""
+    },
+    {
+      "tx": 50,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "char",
+      "id": "barret",
+      "d": {
+        "f": "power_basis",
+        "v": "Gun-arm integration, years of guerrilla combat experience, sheer physical size and endurance"
+      },
+      "r": ""
+    },
+    {
+      "tx": 51,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "faction",
+      "id": "avalanche",
+      "d": {
+        "name": "Avalanche",
+        "state": "active"
+      },
+      "r": ""
+    },
+    {
+      "tx": 52,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "faction",
+      "id": "avalanche",
+      "d": {
+        "f": "agenda",
+        "v": "Destroy Shinra's mako reactors to stop the slow death of the Planet — and survive the escalating cost of doing it"
+      },
+      "r": ""
+    },
+    {
+      "tx": 53,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "faction",
+      "id": "avalanche",
+      "d": {
+        "f": "members",
+        "v": "char:tifa"
+      },
+      "r": ""
+    },
+    {
+      "tx": 54,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "faction",
+      "id": "avalanche",
+      "d": {
+        "f": "members",
+        "v": "char:cloud"
+      },
+      "r": ""
+    },
+    {
+      "tx": 55,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "faction",
+      "id": "avalanche",
+      "d": {
+        "f": "members",
+        "v": "char:barret"
+      },
+      "r": ""
+    },
+    {
+      "tx": 56,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "faction",
+      "id": "avalanche",
+      "d": {
+        "f": "territory",
+        "v": "place:seventh-heaven"
+      },
+      "r": ""
+    },
+    {
+      "tx": 57,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "avalanche",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "knows_reactor_5_layout",
+        "v": "Mapped the sublevel extraction routes before the op"
+      },
+      "r": ""
+    },
+    {
+      "tx": 58,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "avalanche",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "unknown_shinra_response_scale",
+        "v": "Don't know how many sweep teams Shinra has deployed — expected two, hearing more"
+      },
+      "r": ""
+    },
+    {
+      "tx": 59,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "avalanche",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "hiding_base_location",
+        "v": "Seventh Heaven's connection to Avalanche is their most guarded secret"
+      },
+      "r": ""
+    },
+    {
+      "tx": 60,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "faction",
+      "id": "shinra",
+      "d": {
+        "name": "Shinra Electric Power Company",
+        "state": "dominant"
+      },
+      "r": ""
+    },
+    {
+      "tx": 61,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "S",
+      "e": "faction",
+      "id": "shinra",
+      "d": {
+        "f": "agenda",
+        "v": "Neutralize the Avalanche threat — capture or kill operatives, secure reactor infrastructure, demonstrate that resistance has consequences"
+      },
+      "r": ""
+    },
+    {
+      "tx": 62,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "A",
+      "e": "faction",
+      "id": "shinra",
+      "d": {
+        "f": "territory",
+        "v": "place:reactor-5-sublevel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 63,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "shinra",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "knows_avalanche_in_reactor",
+        "v": "Confirmed hostile presence in Reactor 5 sublevel — sweep teams deployed"
+      },
+      "r": ""
+    },
+    {
+      "tx": 64,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "shinra",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "unknown_avalanche_base",
+        "v": "Do not know where Avalanche operates from or who funds them"
+      },
+      "r": ""
+    },
+    {
+      "tx": 65,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "shinra",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "unknown_avalanche_size",
+        "v": "Overestimating Avalanche's numbers — treating them as a larger cell than they are"
+      },
+      "r": ""
+    },
+    {
+      "tx": 66,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "shinra",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "misreading_autumn",
+        "v": "If encountered, will be tagged as an Avalanche operative — wrong affiliation, same kill order"
+      },
+      "r": ""
+    },
+    {
+      "tx": 67,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "reactor-extraction",
+      "d": {
+        "name": "The Extraction",
+        "distance_category": "IMMEDIATE",
+        "forces": "Avalanche needs to get out of Reactor 5 alive; Shinra sweep teams are closing the exits; Autumn is an unknown variable Tifa can't leave behind and can't fully trust",
+        "involved_chars": "[pc,char:tifa,char:cloud,char:barret]",
+        "location": "place:reactor-5-sublevel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 68,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "stranger-in-the-machine",
+      "d": {
+        "name": "The Stranger Problem",
+        "distance_category": "SHORT",
+        "forces": "Autumn has seen Avalanche operate; Tifa's instinct to protect conflicts with Avalanche's need for secrecy; trust must be earned before information can be shared",
+        "involved_chars": "[pc,char:tifa]",
+        "location": "place:reactor-5-sublevel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 69,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "pressure",
+      "id": "cloud-position",
+      "d": {
+        "name": "Cloud's position in the field",
+        "source": "char:tifa",
+        "related_to": "[collision:reactor-extraction]"
+      },
+      "r": "Tifa is tracking Cloud without admitting how much attention she's spending on it"
+    },
+    {
+      "tx": 70,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "pressure",
+      "id": "shinra-escalation",
+      "d": {
+        "name": "Shinra deploying more units than expected",
+        "source": "faction:shinra",
+        "related_to": "[collision:reactor-extraction]"
+      },
+      "r": "The sweep is bigger than Avalanche planned for"
+    },
+    {
+      "tx": 71,
+      "t": "[Day 1 — 22:47]",
+      "_ts": "2026-04-19T13:59:56.801Z",
+      "op": "CR",
+      "e": "pressure",
+      "id": "autumn-witnessed",
+      "d": {
+        "name": "Autumn has seen too much",
+        "source": "pc",
+        "related_to": "[collision:stranger-in-the-machine]"
+      },
+      "r": "A stranger now has operational knowledge of an Avalanche mission"
+    },
+    {
+      "tx": 72,
+      "t": "[Day 1 - 22:48]",
+      "_ts": "2026-04-19T14:02:47.121Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Reactor 5 maintenance staging area. Open floor, 10m to the shaft. Two Shinra infantry on the overhead catwalk, rifles up. Tifa sprinting for the exit. Autumn on her left with a clear line to the catwalk."
+      },
+      "r": ""
+    },
+    {
+      "tx": 73,
+      "t": "[Day 1 - 22:48]",
+      "_ts": "2026-04-19T14:02:47.121Z",
+      "op": "A",
+      "e": "collision",
+      "id": "reactor-extraction",
+      "d": {
+        "f": "involved_chars",
+        "v": "pc"
+      },
+      "r": ""
+    },
+    {
+      "tx": 74,
+      "t": "[Day 1 - 22:48]",
+      "_ts": "2026-04-19T14:02:47.121Z",
+      "op": "A",
+      "e": "collision",
+      "id": "reactor-extraction",
+      "d": {
+        "f": "involved_chars",
+        "v": "char:tifa"
+      },
+      "r": ""
+    },
+    {
+      "tx": 75,
+      "t": "[Day 1 - 22:48]",
+      "_ts": "2026-04-19T14:02:47.121Z",
+      "op": "A",
+      "e": "collision",
+      "id": "reactor-extraction",
+      "d": {
+        "f": "involved_chars",
+        "v": "char:cloud"
+      },
+      "r": ""
+    },
+    {
+      "tx": 76,
+      "t": "[Day 1 - 22:48]",
+      "_ts": "2026-04-19T14:02:47.121Z",
+      "op": "A",
+      "e": "collision",
+      "id": "reactor-extraction",
+      "d": {
+        "f": "involved_chars",
+        "v": "char:barret"
+      },
+      "r": ""
+    },
+    {
+      "tx": 77,
+      "t": "[Day 1 - 22:48]",
+      "_ts": "2026-04-19T14:02:47.121Z",
+      "op": "A",
+      "e": "collision",
+      "id": "stranger-in-the-machine",
+      "d": {
+        "f": "involved_chars",
+        "v": "pc"
+      },
+      "r": ""
+    },
+    {
+      "tx": 78,
+      "t": "[Day 1 - 22:48]",
+      "_ts": "2026-04-19T14:02:47.121Z",
+      "op": "A",
+      "e": "collision",
+      "id": "stranger-in-the-machine",
+      "d": {
+        "f": "involved_chars",
+        "v": "char:tifa"
+      },
+      "r": ""
+    },
+    {
+      "tx": 79,
+      "t": "[Day 1 - 22:48]",
+      "_ts": "2026-04-19T14:02:47.121Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "misreading_autumn_role",
+        "v": "Upgrading — his composure and movement read as trained, not just armed. Still doesn't know the discipline."
+      },
+      "r": ""
+    },
+    {
+      "tx": 80,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-19T14:09:03.977Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Reactor 5 drainage tunnel. Tight, dark, stinking of mako runoff. Tifa leading, Autumn following with a bleeding shoulder. Distant gunfire above — different part of the reactor. Four hundred meters to the exit under the plate."
+      },
+      "r": ""
+    },
+    {
+      "tx": 81,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-19T14:09:03.977Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "Reactor 5 drainage tunnel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 82,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-19T14:09:03.977Z",
+      "op": "S",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "location",
+        "v": "Reactor 5 drainage tunnel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 83,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-19T14:09:03.977Z",
+      "op": "MR",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "unknown_autumn_skill"
+      },
+      "r": ""
+    },
+    {
+      "tx": 84,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-19T14:09:03.977Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "knows_autumn_combat",
+        "v": "Deflected automatic rifle fire with a katana — technique she doesn't recognize, clearly trained at an elite level, not mako-enhanced"
+      },
+      "r": ""
+    },
+    {
+      "tx": 85,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-19T14:09:03.977Z",
+      "op": "MS",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "misreading_autumn_role",
+        "v": "No longer reads him as a drifter. Reads him as something disciplined and dangerous she can't categorize yet."
+      },
+      "r": ""
+    },
+    {
+      "tx": 86,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-19T14:09:03.977Z",
+      "op": "S",
+      "e": "collision",
+      "id": "reactor-extraction",
+      "d": {
+        "f": "outcome_type",
+        "v": "DIRECT"
+      },
+      "r": ""
+    },
+    {
+      "tx": 87,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-19T14:09:03.977Z",
+      "op": "S",
+      "e": "collision",
+      "id": "reactor-extraction",
+      "d": {
+        "f": "aftermath",
+        "v": "Tifa and Autumn escaped through the maintenance shaft. Autumn demonstrated elite combat ability covering their retreat. Cloud and Barret's extraction is unconfirmed — gunfire heard from a different sector. Shinra sweep teams have visual confirmation of at least two hostiles and a swordsman who can deflect bullets."
+      },
+      "r": ""
+    },
+    {
+      "tx": 88,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-19T14:09:03.977Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "collision_archive",
+        "v": "[collision] The Extraction [resolution] Autumn deflected rifle fire covering Tifa's sprint; both escaped through maintenance shaft to drainage tunnel [hook] Cloud and Barret still unaccounted for; Shinra now has a description of a swordsman operating with Avalanche [aftermath] Tifa's read on Autumn has shifted from stranger-with-a-sword to unknown-tier combatant she can't classify"
+      },
+      "r": ""
+    },
+    {
+      "tx": 89,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-19T14:09:03.977Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "shinra",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "k": "knows_swordsman",
+        "v": "Sweep team reported a hostile with a blade who deflected rifle rounds — flagged as possible SOLDIER defector or unknown enhancement"
+      },
+      "r": ""
+    },
+    {
+      "tx": 90,
+      "t": "[Day 1 - 22:55]",
+      "_ts": "2026-04-19T14:12:45.678Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Underplate exit point, edge of Sector 7 slums. Drainage grate. Open air — damp, cold, smelling of scrap and cooking smoke from somewhere distant. Tifa and Autumn, standing. No pursuit. Gunfire from reactor has stopped."
+      },
+      "r": ""
+    },
+    {
+      "tx": 91,
+      "t": "[Day 1 - 22:55]",
+      "_ts": "2026-04-19T14:12:45.678Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "place:sector-7-slums"
+      },
+      "r": ""
+    },
+    {
+      "tx": 92,
+      "t": "[Day 1 - 22:55]",
+      "_ts": "2026-04-19T14:12:45.678Z",
+      "op": "S",
+      "e": "char",
+      "id": "tifa",
+      "d": {
+        "f": "location",
+        "v": "place:sector-7-slums"
+      },
+      "r": ""
+    },
+    {
+      "tx": 93,
+      "t": "[Day 1 - 22:55]",
+      "_ts": "2026-04-19T14:12:45.678Z",
+      "op": "S",
+      "e": "collision",
+      "id": "reactor-extraction",
+      "d": {
+        "f": "aftermath",
+        "v": "Tifa and Autumn escaped through the drainage tunnel to Sector 7 underplate. Cloud and Barret's status unknown — gunfire stopped mid-transit, which could mean extraction or capture. Shinra has a description of the swordsman."
+      },
+      "r": ""
+    },
+    {
+      "tx": 94,
+      "t": "[Day 1 - 22:55]",
+      "_ts": "2026-04-19T14:12:45.678Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "collision_archive",
+        "v": "[collision] The Extraction [resolution] Tifa led Autumn through drainage tunnel to Sector 7 exit; Autumn covered retreat with blade deflections [hook] Cloud and Barret status unknown; Shinra flagged swordsman as possible SOLDIER defector [aftermath] Tifa brought a stranger into her territory; silence from the reactor is louder than gunfire"
+      },
+      "r": ""
+    },
+    {
+      "tx": 95,
+      "t": "[Day 1 - 22:55]",
+      "_ts": "2026-04-19T14:12:45.678Z",
+      "op": "TR",
+      "e": "constraint",
+      "id": "c3-cloud",
+      "d": {
+        "f": "integrity",
+        "from": "STABLE",
+        "to": "STRESSED"
+      },
+      "r": ""
+    }
+  ],
+  "snapshots": [],
+  "lastTxId": 96,
+  "createdAt": "2026-04-19T13:47:01.893Z",
+  "updatedAt": "2026-04-19T14:12:45.679Z"
+}
