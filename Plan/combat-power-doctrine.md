@@ -26,11 +26,11 @@ The world defines the scale first. Individual ratings are assigned relative to t
 
 Recommended world constants:
 
-- `world.constants.power_scale`
+- `world.power_scale`
   A short ladder explaining what each level means in this story.
-- `world.constants.power_ceiling`
+- `world.power_ceiling`
   The highest credible direct-combat level in the current setting.
-- `world.constants.power_notes`
+- `world.power_notes`
   Optional caveats that shape combat judgment, such as "guns dominate at range" or "magic requires setup and concentration."
 
 Example:

@@ -66,7 +66,7 @@ async function showSetupPopup() {
                 <div class="gl-setup-form">
                     <div class="gl-setup-section">
                         <label class="gl-setup-label">Opening Situation <span class="gl-setup-hint">What's the story about?</span></label>
-                        <input type="text" id="gl-setup-arc" class="gl-setup-input" placeholder="e.g. Escape the city before the faction finds us">
+                        <input type="text" id="gl-setup-opening" class="gl-setup-input" placeholder="e.g. Escape the city before the faction finds us">
                     </div>
                     <div class="gl-setup-section">
                         <label class="gl-setup-label">Power Scale <span class="gl-setup-hint">Optional - what the combat ratings mean in this setting</span></label>
@@ -109,7 +109,7 @@ async function showSetupPopup() {
 
         overlay.querySelector('.gl-setup-start').addEventListener('click', () => {
             const answers = {
-                opening: document.getElementById('gl-setup-arc').value.trim(),
+                opening: document.getElementById('gl-setup-opening').value.trim(),
                 power_scale: document.getElementById('gl-setup-power-scale').value.trim(),
                 power_ceiling: document.getElementById('gl-setup-power-ceiling').value.trim(),
                 power_notes: document.getElementById('gl-setup-power-notes').value.trim(),
@@ -122,7 +122,7 @@ async function showSetupPopup() {
         });
 
         // Focus first input
-        setTimeout(() => document.getElementById('gl-setup-arc')?.focus(), 100);
+        setTimeout(() => document.getElementById('gl-setup-opening')?.focus(), 100);
     });
 }
 
@@ -213,7 +213,7 @@ ${answers.power_scale ? '> SET world field=power_scale value="[power ladder summ
 > MAP_SET faction:name field=knowledge_asymmetry key=misreading_[topic] value="[false assumption they operate on]"
 
 5. COLLISIONS (at least 1 ACTIVE; each must be a compact narrative thread with live pressure, not just a label):
-> CREATE collision:slug name="[short descriptive label]" status=ACTIVE distance_category=MEDIUM forces="force1 vs force2 — what narrative pressures are driving this collision" involved_chars="pc,char:principal-id" location=place:[place-id]
+> CREATE collision:slug name="[short descriptive label]" distance_category=MEDIUM forces="force1 vs force2 — what narrative pressures are driving this collision" involved_chars=[pc,char:principal-id] location=place:[place-id]
 
 6. PLACES (at least 1 for the opening scene; more if the PC, PRINCIPAL, or factions are anchored elsewhere):
 > CREATE place:[slug] name="[Display name]" reach=LOCAL state="[safe/contested/hostile/unknown]" description="[one or two sentences — what this place is and what makes it notable]"

@@ -82,7 +82,7 @@ The ledger tracks: collisions, constraints, factions, places, pressure points, P
 
 - **Operations**: `CR` (create), `S` (set), `TR` (transition/move), `A` (append), `R` (remove), `MS` (map_set/read), `MR` (map_del), `D` (destroy), `SNAP`, `ROLL`, `AMEND`
 - **Entity types**: `char`, `constraint`, `collision`, `combat`, `faction`, `place`, `pressure`, `world`, `pc`, `divination`
-- **State machines** (char tiers, constraint integrity, collision status, combat status) are documented in `state-machine.js`. `validateTransition()` (state-machine.js:79) is called from `index.js:1551` at commit time to reject invalid TRs.
+- **State machines** (char tiers, constraint integrity, collision status, combat status) are documented in `state-machine.js`. `validateTransition()` (state-machine.js:79) is called from `index.js:1514` at commit time to reject invalid TRs.
 - **Collision status**: `ACTIVE -> RESOLVED` or `ACTIVE -> CRASHED` (Phase 2 simplified state machine — §3.4)
 - **Arrival decision gate**: When a collision hits distance 0 (category IMMEDIATE arrives on creation; others on engine tick-down), the extension injects a single-turn sanity-check block asking the LLM to commit ON-SCREEN, OFF-SCREEN (REFRAME or DISSOLVE), or IMPLODE — all resolutions complete that turn. Tracked via `_firedCollisionArrivals` Set in `index.js`.
 - **Format validation only**: `consistency.js` checks structure, not gameplay rules
@@ -99,6 +99,6 @@ The ledger tracks: collisions, constraints, factions, places, pressure points, P
 ## Important Patterns
 
 - The extension imports SillyTavern globals (e.g., `getContext`, `setExtensionPrompt`, `saveMetadataDebounced`) from the ST environment - these are not local dependencies.
-- `index.js` is the central coordinator (~2,300 lines). It wires all modules together and handles the turn lifecycle.
+- `index.js` is the central coordinator (~2,250 lines). It wires all modules together and handles the turn lifecycle.
 - `gravity-system-prompt.md` is a legacy reference for the ledger command format. The current preset is `gravity_v15.json`; mode-specific playbooks can be imported from `Gravity World Info.json`. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
 - Divination uses two random tables (Arcana/Classic) defined in `index.js`. Yi Jing (I Ching) has been removed.

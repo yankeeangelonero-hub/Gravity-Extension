@@ -279,7 +279,7 @@
       ],
       "keysecondary": [],
       "comment": "Gravity Mode - Chapter Close Core [DISABLED — chapters removed in Phase 2]",
-      "content": "### Gravity Mode: Chapter Close\n\nThis is a structural turn.\n\nYour job:\n- Close the current chapter honestly.\n- Ask what the chapter actually became, not what it was supposed to be.\n- Compress the chapter into durable memory.\n- Set up the next chapter's opening pressure.\n\nChapter close should usually produce chapter status changes, a chapter summary, refreshed world, faction, and collision state, and a new opening scene.\n\nUse ---LEDGER--- for this mode unless the structural work is unusually small.\n\nLength: Audit prose 200–400 words, opening prose 300–500 words. Keep prose short — spend tokens on LEDGER cleanup and structural updates.",
+      "content": "(DISABLED — chapter-close logic removed in Phase 2; entry retained only so legacy uid 9 resolves.)",
       "constant": false,
       "vectorized": false,
       "selective": false,

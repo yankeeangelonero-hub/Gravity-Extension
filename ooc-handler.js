@@ -103,7 +103,7 @@ async function handleEval() {
     lines.push('3. KNOWLEDGE GAPS: Verify pc.knowledge_gaps is accurate - add missing gaps, remove discovered ones.');
     lines.push('4. POWER: Audit power_base, power, power_basis, and abilities. Lower power only for real impairment. Raise power_base only when growth is earned.');
     lines.push('5. PRESSURE POINTS: For each pressure point, decide KEEP / REMOVE / ESCALATE. REMOVE fired or stale seams; if one now has actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point.');
-    lines.push('6. PRUNE: REMOVE stale noticed details, resolved entries, duplicate fields.');
+    lines.push('6. PRUNE: REMOVE stale key_moments (consolidate first), resolved entries, duplicate fields.');
     lines.push('7. FIX: emit AMEND for any continuity errors found.');
     lines.push('This turn is UNCAPPED - emit as many ledger lines as needed for a thorough cleanup.');
     lines.push('=== END EVALUATION ===');
@@ -198,7 +198,7 @@ async function handlePowerReview(match) {
     lines.push('REVIEW RULES:');
     lines.push('- power = current effective combat level used for math.');
     lines.push('- power_base = normal earned combat level when healthy and fully functional.');
-    lines.push('- Lower power only if current condition, lost gear, fear, exhaustion, or severe wounds materially reduce the real combat ceiling.');
+    lines.push('- Lower power only if lost gear, fear, exhaustion, or severe wounds materially reduce the real combat ceiling.');
     lines.push('- Raise power_base only if training, earned skill growth, major gear upgrades, or permanent supernatural change justify it.');
     lines.push('- Do not double-count minor wounds. Minor wounds usually affect narration and option quality without changing power.');
     lines.push('- No naked numbers. If the rating changes, update power_basis and abilities when the explanation also needs refinement.');

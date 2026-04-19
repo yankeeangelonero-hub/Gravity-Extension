@@ -32,21 +32,13 @@ function getCollisionForcesText(col) {
     return normalizeText(col?.forces);
 }
 
-function getCollisionNarrativeLines(col, options = {}) {
+function getCollisionNarrativeLines(col) {
     const lines = [];
-    const details = normalizeText(col?.details);
-    const forces = getCollisionForcesText(col);
-    const cost = normalizeText(col?.cost);
-    const targetConstraint = normalizeText(col?.target_constraint);
-    const includeForces = options.includeForces !== false;
-
-    if (details) lines.push(`Thread: ${details}`);
-    else if (forces) lines.push(`Forces: ${forces}`);
-
-    if (includeForces && details && forces) lines.push(`Forces: ${forces}`);
-    if (cost) lines.push(`Cost: ${cost}`);
-    if (targetConstraint) lines.push(`Target constraint: ${targetConstraint}`);
-
+    if (col.forces) lines.push(`Forces: ${getCollisionForcesText(col)}`);
+    if (col.location) lines.push(`Location: ${col.location}`);
+    const involved = toList(col.involved_chars);
+    if (involved.length) lines.push(`Involved: ${involved.join(', ')}`);
+    if (col.aftermath) lines.push(`Aftermath: ${col.aftermath}`);
     return lines;
 }
 
@@ -151,19 +143,14 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         // KNOWN tier: name + location only (knowledge proxied by faction intel)
         if (isKnown) continue;
 
-        // TRACKED+ fields: knowledge_asymmetry, last_seen_at
+        // TRACKED+ fields: knowledge_asymmetry (flat keys: knows_/unknown_/hiding_/misreading_/legacy), last_seen_at
         const ka = char.knowledge_asymmetry;
         if (ka !== undefined && ka !== null) {
             if (typeof ka === 'object' && !Array.isArray(ka)) {
                 const kaLines = [];
-                for (const bucket of ['knows', 'unknown', 'hiding', 'misreading']) {
-                    const map = ka[bucket];
-                    if (map && typeof map === 'object' && Object.keys(map).length) {
-                        const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
-                        for (const [k, v] of Object.entries(map)) {
-                            kaLines.push(`      [${label}] ${k}: ${v}`);
-                        }
-                    }
+                for (const [k, v] of Object.entries(ka)) {
+                    if (k === 'legacy') continue;
+                    if (typeof v === 'string' && v) kaLines.push(`      ${k}: ${v}`);
                 }
                 if (ka.legacy) kaLines.push(`      [legacy] ${ka.legacy}`);
                 if (kaLines.length) {
@@ -174,6 +161,7 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
                 lines.push(`    Knowledge asymmetry: ${normalizeText(ka)}`);
             }
         }
+        if (char.agenda) lines.push(`    Agenda: ${normalizeText(char.agenda)}`);
         if (char.last_seen_at !== undefined && char.last_seen_at !== null && normalizeText(char.last_seen_at)) {
             lines.push(`    Last seen at: ${normalizeText(char.last_seen_at)}`);
         }
@@ -269,7 +257,7 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
     // Singletons — PC fields are mode-aware
     lines.push('');
     lines.push('Singletons (no id needed):');
-    lines.push('  world — constants, world_state, collision_archive');
+    lines.push('  world — power_scale, power_ceiling, power_notes, world_state, collision_archive');
     if (state.pc.name) {
         let pcSingleton = `  pc — "${state.pc.name}"`;
         // Only show location when current_scene is not set (scene subsumes location)
@@ -303,28 +291,15 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         }
     }
 
-    // Factions — lite/combat/intimacy: name + stance + power; full: detail section below
+    // Factions — lite/combat/intimacy: name + territory/state; full: detail section below
     const factionEntities = Object.values(state.factions || {});
-    const legacyFactions = Array.isArray(state.world.factions) ? state.world.factions : [];
-    if (factionEntities.length || legacyFactions.length) {
+    if (factionEntities.length) {
         lines.push('');
         lines.push('Factions:');
         for (const f of factionEntities) {
-            if (!showFullDetail) {
-                const fStance = getLatestRead(f.reads, 'pc') || f.stance_toward_pc || '?';
-                const fPower = f.power ? ` [${f.power}]` : '';
-                lines.push(`  ${f.name || f.id}${fPower} | Stance: ${fStance} → id: ${f.id}`);
-            } else {
-                lines.push(`  ${f.name || f.id} → id: ${f.id}`);
-            }
-        }
-        for (const f of legacyFactions) {
-            if (typeof f === 'object' && f.name) {
-                const alreadyListed = factionEntities.some(fe => fe.name === f.name);
-                if (!alreadyListed) lines.push(`  ${f.name}: ${f.objective || ''} | Stance: ${f.stance_toward_pc || '?'}`);
-            } else if (typeof f === 'string') {
-                lines.push(`  ${f}`);
-            }
+            const territory = f.territory ? ` @ ${f.territory}` : '';
+            const fState = f.state ? ` [${f.state}]` : '';
+            lines.push(`  ${f.name || f.id}${territory}${fState} → id: ${f.id}`);
         }
     }
 
@@ -402,55 +377,29 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         }
     }
 
-    // Factions detail — full mode only
+    // Factions detail — full mode only. Phase 2 schema: name/members/territory/state/agenda/knowledge_asymmetry.
     if (showFullDetail && factionEntities.length) {
         lines.push('');
         lines.push('FACTIONS');
         for (const f of factionEntities) {
-            if (f.profile) {
-                lines.push(`  ${f.name || f.id}: ${f.profile}`);
-            } else {
-                let line = `  ${f.name || f.id}: ${f.objective || ''}`;
-                line += ` | Resources: ${f.resources || '?'}`;
-                const factionStance = getLatestRead(f.reads, 'pc') || f.stance_toward_pc || '?';
-                line += ` | Stance: ${factionStance}`;
-                if (f.power) line += ` | Power: ${f.power}`;
-                const momentum = f.last_move && f.momentum && !f.momentum.includes(f.last_move)
-                    ? `${f.momentum}; last: ${f.last_move}` : (f.momentum || f.last_move || '');
-                if (momentum) line += ` | Momentum: ${momentum}`;
-                lines.push(line);
-                if (f.leverage) lines.push(`    Leverage: ${f.leverage}`);
-                if (f.vulnerability) lines.push(`    Vulnerability: ${f.vulnerability}`);
-                if (f.comms_latency) lines.push(`    Comms latency: ${f.comms_latency}`);
-                if (f.last_verified_at) lines.push(`    Last verified at: ${f.last_verified_at}`);
-                if (f.intel_posture) lines.push(`    Intel posture: ${f.intel_posture}`);
-            }
-            if (f.intel_on && typeof f.intel_on === 'object' && Object.keys(f.intel_on).length) {
-                lines.push('    Intel on:');
-                for (const [subject, si] of Object.entries(f.intel_on)) {
-                    if (typeof si !== 'object' || Array.isArray(si)) {
-                        lines.push(`      ${subject}: ${si}`);
-                        continue;
-                    }
-                    const siLines = [];
-                    for (const bucket of ['knows', 'unknown', 'hiding', 'misreading']) {
-                        const map = si[bucket];
-                        if (map && typeof map === 'object' && Object.keys(map).length) {
-                            const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
-                            for (const [k, v] of Object.entries(map)) {
-                                siLines.push(`        [${label}] ${k}: ${v}`);
-                            }
-                        }
-                    }
-                    if (siLines.length) {
-                        lines.push(`      ${subject}:`);
-                        lines.push(...siLines);
-                    }
+            const header = [`  ${f.name || f.id}`];
+            if (f.territory) header.push(`territory: ${f.territory}`);
+            if (f.state) header.push(`state: ${f.state}`);
+            lines.push(header.join(' | '));
+            if (f.agenda) lines.push(`    Agenda: ${normalizeText(f.agenda)}`);
+            const members = toList(f.members);
+            if (members.length) lines.push(`    Members: ${members.join(', ')}`);
+            const ka = f.knowledge_asymmetry;
+            if (ka && typeof ka === 'object' && !Array.isArray(ka)) {
+                const kaLines = [];
+                for (const [k, v] of Object.entries(ka)) {
+                    if (k === 'legacy') continue;
+                    if (typeof v === 'string' && v) kaLines.push(`      ${k}: ${v}`);
                 }
-            }
-            if (f.relations && typeof f.relations === 'object') {
-                for (const [targetId, relation] of Object.entries(f.relations)) {
-                    lines.push(`    ↔ ${targetId}: ${relation}`);
+                if (ka.legacy) kaLines.push(`      [legacy] ${ka.legacy}`);
+                if (kaLines.length) {
+                    lines.push('    Knowledge asymmetry:');
+                    lines.push(...kaLines);
                 }
             }
         }
@@ -478,11 +427,11 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         }
     }
 
-    // PC dossier — traits & reads (intimacy and full modes)
+    // PC dossier — traits & how-others-see-PC (intimacy and full modes).
+    // Phase 2: "how X sees PC" lives in X.knowledge_asymmetry — look for keys mentioning pc.
     if (showIntimacy && state.pc.name) {
         lines.push('');
         lines.push(`PC DOSSIER: ${state.pc.name}`);
-        // Traits — intimacy: last 5, full: last 10
         const allTraits = Array.isArray(state.pc.demonstrated_traits) ? state.pc.demonstrated_traits : (state.pc.demonstrated_traits ? [String(state.pc.demonstrated_traits)] : []);
         const traitCap = isFull ? 10 : 5;
         const traits = allTraits.slice(-traitCap);
@@ -490,33 +439,27 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
             const traitPrefix = allTraits.length > traitCap ? `  Traits (${allTraits.length} total, showing last ${traitCap}): ` : '  Traits: ';
             lines.push(`${traitPrefix}${traits.join(', ')}`);
         }
-        // Reads/reputation — how others see the PC
-        const pcReputation = [];
+        const pcReads = [];
         for (const char of Object.values(state.characters)) {
             if (char.tier === 'UNKNOWN') continue;
-            // In intimacy mode, skip KNOWN (their reads are low-fidelity)
             if (isIntimacy && !isFull && char.tier === 'KNOWN') continue;
-            const readsLog = char.reads?.pc || char.reads?.[state.pc.name];
-            const readsArr = Array.isArray(readsLog) ? readsLog : (readsLog ? [readsLog] : null);
-            const readOfPc = readsArr ? readsArr[readsArr.length - 1] : char.stance_toward_pc;
-            if (readOfPc) pcReputation.push({ who: char.name || char.id, read: readOfPc, log: readsArr });
-        }
-        // Legacy pc.reputation entries not covered by character reads
-        const legacyRep = (state.pc.reputation && typeof state.pc.reputation === 'object' && !Array.isArray(state.pc.reputation)) ? state.pc.reputation : {};
-        for (const [who, r] of Object.entries(legacyRep)) {
-            if (!pcReputation.some(p => p.who.toLowerCase().includes(who.toLowerCase()))) {
-                pcReputation.push({ who, read: r });
-            }
-        }
-        if (pcReputation.length) {
-            lines.push(`  How others see PC:`);
-            for (const { who, read, log } of pcReputation) {
-                if (isFull && log && log.length > 1) {
-                    lines.push(`    ${who} (${log.length} reads):`);
-                    for (const entry of log) lines.push(`      - ${entry}`);
-                } else {
-                    lines.push(`    ${who}: ${read}`);
+            const ka = char.knowledge_asymmetry;
+            if (!ka || typeof ka !== 'object' || Array.isArray(ka)) continue;
+            const pcEntries = [];
+            for (const [k, v] of Object.entries(ka)) {
+                if (typeof v !== 'string' || !v) continue;
+                if (k === 'legacy') continue;
+                if (k.endsWith('_pc') || k.includes('_pc_') || k.toLowerCase().includes(state.pc.name.toLowerCase())) {
+                    pcEntries.push(`${k}: ${v}`);
                 }
+            }
+            if (pcEntries.length) pcReads.push({ who: char.name || char.id, entries: pcEntries });
+        }
+        if (pcReads.length) {
+            lines.push(`  How others see PC:`);
+            for (const { who, entries } of pcReads) {
+                lines.push(`    ${who}:`);
+                for (const e of entries) lines.push(`      - ${e}`);
             }
         }
     }
@@ -566,9 +509,10 @@ char:elena.last_seen_at: "[Day 2 - 19:10]"
 faction:zaft.knowledge_asymmetry.knows_archangel_status: "ship escaped damaged"
 faction:zaft.knowledge_asymmetry.unknown_archangel_pilot: "Strike pilot identity unknown"
 faction:zaft.knowledge_asymmetry.misreading_archangel-identity: "Assumes pilot still unconfirmed"
+faction:zaft.agenda: "Recover the N-Jammer cores before the Alliance regroups"
 collision:trust-vs-duty.distance_category: SHORT
 constraint:c1.integrity: STRESSED
-char:elena.reads.pc: "Cautious ally"
+char:elena.knowledge_asymmetry.hiding_trust: "Reads PC as a cautious ally but will not say so"
 world.collision_archive+: "[collision] ... [resolution] ... [hook] ... [aftermath] ..."
 ---END STATE---
 
@@ -586,15 +530,17 @@ COMMON PATHS:
   pc.current_scene (or scene)
   pc.equipment
   char:id.location
-  char:id.knowledge_asymmetry.knows.<key>
-  char:id.knowledge_asymmetry.unknown.<key>
-  char:id.knowledge_asymmetry.hiding.<key>
-  char:id.knowledge_asymmetry.misreading.<key>
+  char:id.knowledge_asymmetry.knows_<subject>
+  char:id.knowledge_asymmetry.unknown_<subject>
+  char:id.knowledge_asymmetry.hiding_<subject>
+  char:id.knowledge_asymmetry.misreading_<subject>
   char:id.last_seen_at
-  char:id.reads.pc
-  faction:id.comms_latency
-  faction:id.last_verified_at
-  faction:id.intel_posture
+  char:id.agenda
+  faction:id.name
+  faction:id.territory
+  faction:id.state
+  faction:id.agenda
+  faction:id.members+
   faction:id.knowledge_asymmetry.knows_<subject>
   faction:id.knowledge_asymmetry.unknown_<subject>
   faction:id.knowledge_asymmetry.hiding_<subject>
@@ -605,9 +551,6 @@ COMMON PATHS:
   place:id.description
   collision:id.name
   collision:id.forces
-  collision:id.details
-  collision:id.cost
-  collision:id.target_constraint
   collision:id.distance_category   (set on creation: IMMEDIATE|SHORT|MEDIUM|LONG)
   collision:id.distance             (engine-owned — read only; do not SET)
   collision:id.location
@@ -652,7 +595,7 @@ DISCIPLINE:
   KNOWN characters inherit knowledge from their faction's knowledge_asymmetry. Only set individual knowledge_asymmetry keys on a KNOWN character when they learn something their faction does not know yet.
   If the protagonist also exists as char:<pc-id>, treat pc and char:<pc-id> as separate surfaces: pc carries immediate scene/body state, while char:<pc-id> carries the social/knowledge dossier. Updating pc.* does not update the mirrored char dossier.
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
-  Use faction fields for remote awareness: comms_latency, last_verified_at, intel_posture, and knowledge_asymmetry. Faction knowledge_asymmetry uses the same flat-key shape as chars (knows_<subject>, unknown_<subject>, hiding_<subject>, misreading_<subject>; cap 20 across all four).
+  Use faction knowledge_asymmetry for remote awareness — flat-key shape: knows_<subject>, unknown_<subject>, hiding_<subject>, misreading_<subject> (cap 20 across all four). Update after plausible intel events; do not globally synchronize.
   No provenance, no knowledge: distant factions and characters do not know live scene truth unless it plausibly reached them.
   Combat is a thin container. Scene prose carries terrain and tactical narrative; the spawning collision carries cost and forces. Combat tracks only: who's fighting whom (primary_enemy), and what ended where (outcome + aftermath on RESOLVED).
   Every live collision needs a story capsule: what is converging, who or what is caught in it, what it costs, and the forced choice looming.
@@ -727,13 +670,10 @@ APPEND — add to an array field
   > APPEND world field=collision_archive value="[collision] Ada betrayal [resolution] on-screen — PC caught her at the handoff [hook] the flash drive she dropped; eye contact [aftermath] trust cracked" -- Resolved collision
 
 REMOVE — remove from an array field
-  > REMOVE char:tifa field=noticed_details value="Scratches on bracer" -- Detail resolved
-
-READ — append a read entry (shorthand for MAP_SET on reads; engine caps log at 5, newest wins)
-  > READ char:tifa target=cloud "Something wrong with his memories" -- Updated after evasion
+  > REMOVE char:tifa field=key_moments value="[Day 1 — 22:00] Confronted Cloud at the well." -- Prune after consolidation
 
 MAP_SET — set a key in a map field
-  > MAP_SET pc field=reputation key=tifa value="Investor. Unbearable. Has a room now." -- Reputation narrative
+  > MAP_SET char:elena field=knowledge_asymmetry key=hiding_pc value="Reads PC as cautious but will not say so" -- Flat-key KA
   > SET world field=power_scale value="1=trained but ordinary, 3=elite specialist, 5=setting-defining monster" -- Set combat power ladder
   > SET world field=power_ceiling value=5 -- Highest credible direct-combat level in this setting
   > SET pc field=power_base value=3 -- Earned combat level when healthy
@@ -764,7 +704,7 @@ INTIMATE HISTORY — per-character map tracking sexual development over time.
 ═══ WRITING INTIMATE SCENES ═══
 
 Sex is not a reward. It is two people navigating consent, desire, fear, trust, and their own damage.
-The system tracks this through intimacy_stance (where they are) and intimate_history (what happened).
+The system tracks this through intimate_history (what happened) and knowledge_asymmetry (what they hide or misread about each other).
 
 CONSENT IS ONGOING:
   - Consent is not a gate that opens once. It is active, every moment.
@@ -816,26 +756,23 @@ UPDATING THE DOSSIER:
 ═══ END INTIMACY GUIDE ═══
 
 MAP_DEL — remove a key from a map field
-  > MAP_DEL char:tifa field=reads key=barret -- No longer relevant
+  > MAP_DEL char:tifa field=knowledge_asymmetry key=hiding_barret -- Reveal no longer relevant
 
 DESTROY — remove an entity permanently
   > DESTROY char:minor-npc -- Left the story
 
-FACTIONS — create and manage factions with political simulation
-  > CREATE faction:shinra name="Shinra Corp" objective="Control the reactors" resources="Military" stance_toward_pc="Hostile" power="stable" momentum="Expanding into Sector 7" leverage="Military force" vulnerability="Public opinion" -- Full political profile
-  > SET faction:shinra field=power value="declining" -- Lost reactor control
-  > MAP_SET faction:shinra field=relations key=avalanche value="Hostile — active operations against" -- Inter-faction relation
-  > SET faction:zaft field=comms_latency value="Ship-to-ship near-real-time; long-range relay delayed by jamming" -- Intel travel speed
-  > SET faction:zaft field=last_verified_at value="[Day 4 — 09:20]" -- Last trustworthy refresh
-  > MAP_SET faction:zaft field=intel_on key=archangel.knows.status value="Ship escaped damaged" -- Confirmed intel
-  > MAP_SET faction:zaft field=intel_on key=archangel.unknown.pilot value="Strike pilot identity" -- Known gap
-  > MAP_SET faction:zaft field=intel_on key=archangel.misreading.pilot-identity value="Assumes pilot still unconfirmed" -- False belief
+FACTIONS — create and manage factions as organizations with territory, agenda, and asymmetric knowledge
+  > CREATE faction:shinra name="Shinra Corp" territory="Midgar plate" state="dominant" agenda="Consolidate reactor control before the Wutai investigation lands" -- Phase 2 shape
+  > SET faction:shinra field=state value="declining" -- Lost reactor control
+  > SET faction:shinra field=agenda value="Recover reactor control before the board meets" -- Agenda shifts with story
+  > APPEND faction:shinra field=members value="char:tseng" -- Named member
+  > MAP_SET faction:zaft field=knowledge_asymmetry key=knows_archangel_status value="Ship escaped damaged" -- Confirmed intel
+  > MAP_SET faction:zaft field=knowledge_asymmetry key=unknown_archangel_pilot value="Strike pilot identity" -- Known gap
+  > MAP_SET faction:zaft field=knowledge_asymmetry key=misreading_archangel-identity value="Assumes pilot still unconfirmed" -- False belief
 
-  Faction fields: name, objective, resources, stance_toward_pc, power (rising/stable/declining/collapsed),
-  momentum (current action), last_move (last visible action), leverage, vulnerability,
-  relations (map: faction_id → stance string). Optional: doctrine, leadership, territory, alliances,
-  comms_latency, last_verified_at, intel_posture,
-  intel_on (nested map: subject → {knows, unknown, hiding, misreading} — four buckets per subject).
+  Faction fields (Phase 2): name, members (array of char: ids or string names), territory, state,
+  agenda, knowledge_asymmetry (flat map; keys: knows_<subject> / unknown_<subject> / hiding_<subject> /
+  misreading_<subject>; cap 20 across all four categories).
   Pressure points (pressure:<id> entities) are collision fuel — small tensions not yet collisions.
   Cap is 5; oldest auto-drops on overflow. Destroy when consumed into a collision.
   > CREATE pressure:perimeter-tension name="Demon scouts testing church perimeter" source="faction:demon-vanguard" related_to=[char:pc,place:church] -- New seam
@@ -853,14 +790,13 @@ STATE MACHINES (MOVE between adjacent states only, no skipping):
 
 COLLISIONS ARE STORY ENGINES, NOT LABELS:
   Every live collision should tell you, cold:
-  1. what is converging
-  2. who or what is trapped in it
-  3. what engagement, delay, or failure costs
-  4. how it is showing up in the scene right now
-  5. what forced choice is looming
-  details           — the story capsule for the collision
-  cost              — the price of delay, engagement, or failure
-  target_constraint — which tracked defense this pressure is leaning on (if personal)
+  1. what is converging (forces)
+  2. who is in the line of fire (involved_chars)
+  3. where it is landing (location)
+  4. how close it is (distance_category → distance)
+  5. what status it sits in (ACTIVE → RESOLVED or CRASHED)
+  Cost, stakes, and tactical detail live in scene prose and the collision's `forces` string —
+  not as separate structured fields.
 
 COLLISION CLOSURE (required on every RESOLVED transition):
   Every collision that reaches RESOLVED must record three fields:
@@ -882,7 +818,7 @@ COLLISION CLOSURE (required on every RESOLVED transition):
   > SET collision:shadow-activity field=outcome_type value=EVOLVED
   > SET collision:shadow-activity field=aftermath value="The watcher was neutralized, but not before transmitting. Someone now knows Arcueid is in the district."
   > SET collision:shadow-activity field=successor_collision_ids+ value=handler-convergence
-  > CREATE collision:handler-convergence name="Handler Convergence" status=ACTIVE distance=7 forces="handler network, Arcueid's exposure" cost="If they move first: extraction becomes impossible" details="The watcher's transmission went through. The handler network now has a confirmed sighting. This is not over — it has moved upstream." parent_collision_ids=shadow-activity
+  > CREATE collision:handler-convergence name="Handler Convergence" distance_category=SHORT forces="handler network advancing on Arcueid; if they move first extraction becomes impossible" location=district-safehouse involved_chars=[pc,arcueid] parent_collision_ids=shadow-activity
 
 HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):
   - Pressure points: REMOVE when activated (converted into collision fuel) or no longer relevant. These are seeds, not history.
@@ -894,9 +830,9 @@ VOLUME PER TURN (HARD CAP: 20 lines — excess lines are DROPPED):
   NEVER dump bulk REMOVE operations. Prune 2–3 stale entries per turn.
 
 PRIORITY ORDER — when near the cap, emit in this order:
-  1. State machine transitions  2. Collision distance  3. DOING/WANT  4. World state
-  5. Faction updates  6. Summary  7. Moments/details  8. READS  9. PC  10. Intimate history
-  11. REMOVEs — always last, 2–3 max
+  1. State machine transitions  2. Collision distance  3. agenda / knowledge_asymmetry  4. World state
+  5. Faction updates  6. Key moments  7. Scene / PC location  8. Intimate history
+  9. REMOVEs — always last, 2–3 max
 
 OOC COMMANDS (player types in chat):
   OOC: snapshot | rollback | rollback to #N | eval | history [id] | archive

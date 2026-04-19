@@ -7,7 +7,7 @@ This document captures the complete combat system design for Gravity Ledger, agr
 This handoff predates the repository's power-doctrine refactor. The overall combat-loop vision below is still the target, but the following points now supersede older assumptions in this document:
 
 - Combat baseline is computed from current effective `power`, not the narrative character `tier` ladder. `tier` remains `UNKNOWN/KNOWN/TRACKED/PRINCIPAL` and is not a combat stat.
-- Setup no longer authors `world.constants.combat_rules`. It now authors `world.constants.power_scale`, `world.constants.power_ceiling`, optional `world.constants.power_notes`, plus `power_base`, `power`, `power_basis`, and `abilities` on the PC and important combatants.
+- Setup no longer authors `world.constants.combat_rules`. It now authors `world.power_scale`, `world.power_ceiling`, optional `world.power_notes`, plus `power_base`, `power`, `power_basis`, and `abilities` on the PC and important combatants.
 - `power` is dynamic. `power_base` is the healthy earned rating. Severe impairment can lower `power`; lasting growth or decline can change `power_base`.
 - `OOC: power review pc|char:id|all` is the supported re-judgment path when the story earns a power change.
 - The full combat runtime is now live in `combat-state.js`, with a dedicated `_combat` injection slot, a first-class `combat` entity type, cleanup grace behavior, and synced panel difficulty controls.
@@ -37,13 +37,13 @@ Every injury, setback, or complication should exist to **advance a relationship,
 
 ### 1. Spawn (Divination)
 
-The extension casts a hexagram (or draws from whichever divination system the player has configured) at the start of combat. The hexagram determines the situation - enemies, terrain, timing, and tone. The LLM spawns the encounter to match the hexagram's nature.
+The extension makes a divination draw (from whichever system the player has configured — Arcana/Classic; hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only) at the start of combat. The draw determines the situation - enemies, terrain, timing, and tone. The LLM spawns the encounter to match the draw's nature.
 
-- Grim hexagram (Obstruction, The Abysmal, Splitting Apart) — grim situation. More enemies, worse terrain, bad timing.
-- Favorable hexagram (Peace, The Creative) — favorable situation. The player has the advantage, fewer or weaker enemies.
+- Grim draw (e.g. Obstruction, The Abysmal, Splitting Apart) — grim situation. More enemies, worse terrain, bad timing.
+- Favorable draw (e.g. Peace, The Creative) — favorable situation. The player has the advantage, fewer or weaker enemies.
 - The spawn draw is not the combat math anchor. Baseline difficulty comes from current `power` versus the opposition; the draw colors the setup and tone.
 
-The spawn hexagram sets the stage. After this, the oracle steps back - per-exchange randomness comes from the d20 and divination draw.
+The spawn draw sets the stage. After this, the oracle steps back - per-exchange randomness comes from the d20 and divination draw.
 
 ### 2. Scene Description
 
@@ -188,7 +188,7 @@ The director describes the new situation and presents new options. The loop repe
 
 The player can also declare "I disengage" or "I escape" at any time. Same assessment, same roll.
 
-**There is no mechanical exit condition.** No stress boxes, no exchange counters, no terminal hexagrams. The fight ends when the player decides to end it and the dice agree.
+**There is no mechanical exit condition.** No stress boxes, no exchange counters, no terminal draws. The fight ends when the player decides to end it and the dice agree.
 
 ---
 
@@ -243,7 +243,7 @@ A collision can *trigger* a combat, but they are tracked as separate entities. T
 ### Combat Entity Fields
 
 ```
-CR combat.sublevel4 status=ACTIVE terrain="corridor" spawn_hex="Hexagram 29 — The Abysmal"
+CR combat.sublevel4 status=ACTIVE terrain="corridor" spawn_hex="The Abysmal"  (hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only)
 MS combat.sublevel4 "enemies" "turk_squad(4,power2), turk_captain(1,power3)"
 MS combat.sublevel4 "autumn_stance" "aggressive"
 MS combat.sublevel4 "autumn_wounds" "lance burn across ribs"
@@ -264,7 +264,7 @@ Valid in `consistency.js`: add `combat` to `VALID_ENTITIES`.
 ### 1. Player-Initiated
 
 The player hits the **Combat mode button** in the extension UI. The extension:
-- Draws the spawn hexagram
+- Makes the spawn divination draw (hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only)
 - Creates the combat entity
 - Enters combat mode
 - Injects the `_combat` slot
@@ -272,7 +272,7 @@ The player hits the **Combat mode button** in the extension UI. The extension:
 ### 2. Collision-Spawned
 
 A collision escalates to violence organically. The LLM writes `CR combat.X ...` in a ledger block during collision resolution. The extension detects the new combat entity and:
-- Draws the spawn hexagram (or uses the collision's existing oracle draw)
+- Makes the spawn divination draw, or uses the collision's existing oracle draw (hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only)
 - Enters combat mode
 - Injects the `_combat` slot
 
@@ -280,7 +280,7 @@ A collision escalates to violence organically. The LLM writes `CR combat.X ...` 
 
 During a world advance turn, divination suggests danger. The LLM spawns a combat encounter and writes `CR combat.X ...` in the ledger. Same detection and activation as collision-spawned.
 
-All three paths converge to the same state: combat mode active, spawn hexagram drawn, `_combat` injection slot firing.
+All three paths converge to the same state: combat mode active, spawn draw made (hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only), `_combat` injection slot firing.
 
 ---
 
@@ -295,7 +295,7 @@ Contents:
 ```
 [COMBAT — Exchange {n}]
 Mode: {difficulty_toggle} — {framing_summary}
-Spawn: {hexagram_name} ({hexagram_number}) — {hexagram_meaning}
+Spawn: {draw_name} — {draw_meaning}  (hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only)
 
 SITUATION:
 {Full situation carry-forward — all exchanges in this combat. Compressed only after combat ends.}
@@ -320,7 +320,7 @@ PLAYER ASSESSED DIFFICULTY: {category — Situation 2 only}
 
 ROLLS THIS EXCHANGE:
   d20: {result}
-  Draw: {card/hexagram name} — {brief traditional meaning}
+  Draw: {card name} — {brief traditional meaning}  (hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only)
   DC: {number, from difficulty toggle table}
 Resolution: {SUCCESS / TRANSFORM / CRITICAL SUCCESS / CRITICAL TRANSFORM}
 
@@ -361,7 +361,7 @@ Inside `<think>`, the LLM runs the combat deduction. Fields:
 
 Manages the combat lifecycle. Responsibilities:
 
-- **Enter combat** — triggered by Combat mode button OR detection of `CR combat.X` in ledger. Draws the spawn hexagram. Sets mode to combat.
+- **Enter combat** — triggered by Combat mode button OR detection of `CR combat.X` in ledger. Makes the spawn divination draw (hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only). Sets mode to combat.
 - **Per-exchange rolls** — generates d20 + divination draw. Looks up DC from difficulty toggle table. Computes resolution type (success/transform/crit success/crit failure). For Absolute/Impossible: skips the roll.
 - **Power differential** — computes from current effective `power` in current state. Derives baseline category.
 - **Assessment validation (Situation 2)** — compares player's self-assessed difficulty against power baseline. If 2+ steps more generous, flags for LLM challenge.
@@ -385,7 +385,7 @@ Store in the extension or in `Gravity World Info.json` as keyword-triggered entr
 No new operations needed. Combat uses existing operations on the new `combat` entity type:
 
 ```
-CR combat.sublevel4 status=ACTIVE terrain="corridor" spawn_hex="Hexagram 29"
+CR combat.sublevel4 status=ACTIVE terrain="corridor" spawn_hex="The Abysmal"  (hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only)
 MS combat.sublevel4 "autumn_stance" "aggressive"
 MS combat.sublevel4 "autumn_wounds" "lance burn across ribs"
 MS combat.sublevel4 "turk_squad_remaining" "3"
@@ -407,7 +407,7 @@ Already implemented in the repo:
 - Setup now authors the combat power doctrine (`power_scale`, `power_ceiling`, `power_notes`, `power_base`, `power`, `power_basis`, `abilities`) instead of old freeform combat rules.
 - OOC power review is live via `OOC: power review pc|char:id|all`, with manual `power` and `power base` overrides still available.
 - Prompt/state/UI surfacing for `power_base`, `power`, `power_basis`, and `abilities` is live in setup, state view, panel dossiers, combat prompt text, and supporting docs/prompt assets.
-- Old `world.constants.combat_rules` / `gravity_combat_rules` setup flow has been stripped from the active runtime path.
+- Old `world.constants.combat_rules` (deprecated flat path) / `gravity_combat_rules` setup flow has been stripped from the active runtime path.
 - `combat` is now a first-class entity in validation and computed state.
 - `combat-state.js` is now live and owns combat runtime state, baseline math, rolls, option parsing, and cleanup grace behavior.
 - The dedicated `_combat` injection slot is live in `index.js`.
@@ -431,7 +431,7 @@ Still pending / notable gaps:
 | Combat deduction protocol | Preset / World Info | LLM reasoning scaffold |
 | Director framing prompts | World Info or extension config | Mode-specific LLM framing |
 | DC tables | Extension settings | Player-configurable numbers |
-| Spawn hexagram | Existing divination system in `index.js` | Random generation |
+| Spawn draw (hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only) | Existing divination system in `index.js` | Random generation |
 | Per-exchange draws | Existing divination system in `index.js` | Random generation |
 | Combat entity type | `consistency.js` (addition) | Format validation |
 | Combat detection | `index.js` (addition) | Auto-detect `CR combat.X` |
@@ -441,7 +441,7 @@ Still pending / notable gaps:
 ## Summary of the Loop
 
 ```
-Spawn hexagram sets the stage
+Spawn draw sets the stage (hexagram/Yi Jing deprecated — Yi Jing removed; divination now uses Arcana/Classic only)
   -> LLM describes scene (everyone's wounds/abilities/state as narrative fuel)
   -> SITUATION 1: LLM presents 3-4 options with difficulty categories
      -> Player picks one

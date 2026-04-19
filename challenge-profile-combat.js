@@ -263,7 +263,7 @@ const combatProfile = Object.freeze({
         lines.push(`Challenge runtime is active for combat:${runtime.entity_id}.`);
         lines.push(`Challenge lock: ${runtime.locked ? 'engaged' : 'released'}`);
         lines.push(`Phase: ${runtime.phase}`);
-        // Engine tracks clash counter (runtime.exchange) internally — never exposed to LLM (§7.2 / Phase 2 vocabulary: clash).
+        // Engine tracks clash counter (runtime.clash) internally — never exposed to LLM (§7.2 / Phase 2 vocabulary: clash).
         lines.push(`Difficulty mode: ${runtime.difficulty_mode}`);
         lines.push(`Success thresholds: ${helpers.describeDcTable(helpers.dcTable)}`);
         lines.push(`Scene draw:\n${formatDrawBlock(runtime.scene_draw, {
@@ -329,7 +329,7 @@ const combatProfile = Object.freeze({
         }
         if (runtime.last_resolution) {
             lines.push('');
-            lines.push(`LAST RESOLUTION: clash ${runtime.last_resolution.exchange} | ${formatActionSummary(runtime.last_resolution.action)}`);
+            lines.push(`LAST RESOLUTION: clash ${runtime.last_resolution.clash} | ${formatActionSummary(runtime.last_resolution.action)}`);
             lines.push(`LAST ROLL: ${formatRollSummary(runtime.last_resolution.roll)}`);
         }
 
@@ -396,7 +396,7 @@ const combatProfile = Object.freeze({
                     lines.push('- On critical transform: the draw determines the catastrophic transformation.');
                     lines.push('- On tonal mismatch: interpret from the opposition\'s perspective or as ironic contrast.');
                     lines.push('Low rolls are not ordinary "failure." They are the world forcing a new angle, trade, complication, or opening.');
-                    lines.push('Record divination.last_draw in the update block for rolled exchanges.');
+                    lines.push('Record divination.last_draw in the update block for rolled clashes.');
                 }
                 lines.push('If combat resolves, write status=RESOLVED plus outcome/aftermath and clean up the combat entity in the same turn if possible.');
                 break;

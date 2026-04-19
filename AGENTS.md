@@ -82,12 +82,12 @@ The preset owns the turn-specific deduction protocols inside its dedicated CoT e
 
 - **Operations**: `CR` (create), `S` (set), `TR` (transition/move), `A` (append), `R` (remove), `MS` (map_set/read), `MR` (map_del), `D` (destroy), `SNAP`, `ROLL`, `AMEND`
 - **Entity types**: `char`, `constraint`, `collision`, `combat`, `faction`, `place`, `pressure`, `world`, `pc`, `divination`
-- **State machines** (char tiers, constraint integrity, collision status, combat status) are documented in `state-machine.js`. `validateTransition()` (state-machine.js:79) is called from `index.js:1551` at commit time to reject invalid TRs.
+- **State machines** (char tiers, constraint integrity, collision status, combat status) are documented in `state-machine.js`. `validateTransition()` (state-machine.js:79) is called from `index.js:1514` at commit time to reject invalid TRs.
 - **Collision status**: `ACTIVE → RESOLVED` or `ACTIVE → CRASHED`
 - **Collision outcomes**: `DIRECT`, `EVOLVED`, `MERGED`, `IMPLODED`, `DISSOLVED`, `CRASHED`
 - **Story framing**: sentence-level prose and story identity belong in preset files, lorebook entries, and the scenario/card context rather than runtime state
 - **Live setup-authored world fields**: `world.power_scale`, `world.power_ceiling`, and optional `world.power_notes` are the setup-authored combat constants. `world.constants` and the older framing fields (`story_kind`, `guidelines`, `motivation`, `objective`, `length`) are removed in Phase 2.
-- **Knowledge asymmetry**: a first-class Phase 2 field on TRACKED/PRINCIPAL chars and on factions. Use a flat map of `knows_<subject>`, `unknown_<subject>`, `hiding_<subject>`, `misreading_<subject>` keys (cap 20 across all four categories). Mutate via `MS`/`MR` on `field=knowledge_asymmetry`; `reads` and `noticed_details` are removed.
+- **Knowledge asymmetry**: a first-class Phase 2 field on TRACKED/PRINCIPAL chars and on factions. Use a flat map of `knows_<subject>`, `unknown_<subject>`, `hiding_<subject>`, `misreading_<subject>` keys (cap 20 across all four categories). Mutate via `MS`/`MR` on `field=knowledge_asymmetry`. Legacy fields `reads`, `noticed_details`, `stance_toward_pc`, `pc.reputation`, and faction `intel_on` / `blindspots` / `false_beliefs` are all migrated into `knowledge_asymmetry` by `state-compute.migrateFactionToPhase2()` at load time and then dropped from the faction entity.
 - **Knowledge gaps**: `pc.knowledge_gaps` is referenced by `OOC: eval` guidance but is not a fully surfaced runtime feature yet
 - **Arrival decision gate**: When a collision hits distance 0 (category IMMEDIATE arrives on creation; others on engine tick-down), the extension injects a single-turn sanity-check block asking the LLM to commit ON-SCREEN, OFF-SCREEN (REFRAME or DISSOLVE), or IMPLODE — all resolutions complete that turn. Tracked via `_firedCollisionArrivals` Set in `index.js`.
 - **Pressure points**: first-class `pressure` entities (capped at 5, FIFO) — raw narrative seeds consumed by collision feeding. Create with `CR pressure:<id> name="..." source="..."`, destroy when consumed with `D pressure:<id>`. WEEKS/MONTHS timeskips auto-clear all pressure points.
@@ -105,7 +105,7 @@ The preset owns the turn-specific deduction protocols inside its dedicated CoT e
 ## Important Patterns
 
 - The extension imports SillyTavern globals (e.g., `getContext`, `setExtensionPrompt`, `saveMetadataDebounced`) from the ST environment — these are not local dependencies.
-- `index.js` is the central coordinator (~2,300 lines). It wires all modules together and handles the turn lifecycle.
+- `index.js` is the central coordinator (~2,250 lines). It wires all modules together and handles the turn lifecycle.
 - `gravity-system-prompt.md` is a legacy reference for the ledger command format. The current preset is `gravity_v15.json`; mode-specific playbooks live in `Gravity World Info.json`. Older presets (`Gravity_v11.json`, `gravity_v13_c.json`, `gravity_v13_c_split.json`, `gravity_v14.json`) are kept for archive only. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
 - `Documentation/project_memory.md` is the active durable memory file. Archive stale planning artifacts under `Documentation/archive/` when moved.
 - `Documentation/v14_prose_architecture_handoff.md` is a historical reference for the v14 modular-prose rollout. Current prose authority lives in `gravity_v15.json` plus `Gravity World Info.json`; consult `v15` first, v14 only for rationale.

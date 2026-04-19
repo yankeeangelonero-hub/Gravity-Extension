@@ -7,6 +7,7 @@
 
 // NOTE: spec §2 uses state.chars as shorthand; codebase keeps state.characters (D1 decision).
 const CATEGORY_DISTANCES = { IMMEDIATE: 1, SHORT: 10, MEDIUM: 20, LONG: 50 };
+const MAX_COLLISION_ARCHIVE = 20;
 
 /**
  * @typedef {Object} ComputedState
@@ -97,69 +98,79 @@ function normalizeCharacterKnowledgeAsymmetry(state) {
     }
 }
 
-function ensureIntelSubject(intel_on, subject) {
-    if (typeof intel_on[subject] !== 'object' || Array.isArray(intel_on[subject])) {
-        intel_on[subject] = {};
-    }
-    const s = intel_on[subject];
-    if (!s.knows || typeof s.knows !== 'object') s.knows = {};
-    if (!s.unknown || typeof s.unknown !== 'object') s.unknown = {};
-    if (!s.hiding || typeof s.hiding !== 'object') s.hiding = {};
-    if (!s.misreading || typeof s.misreading !== 'object') s.misreading = {};
-}
+// Phase 2: faction shape is name/members/territory/state/agenda/knowledge_asymmetry.
+// Anything else written by legacy chats must migrate INTO knowledge_asymmetry and then
+// be dropped from the faction entity — `intel_on`, `blindspots`, `false_beliefs`,
+// `comms_latency`, `last_verified_at`, `intel_posture`, `reads`, `stance_toward_pc`,
+// `power`, `momentum`, `leverage`, `vulnerability`, `last_move`, `objective`, `resources`,
+// `relations` are all removed at load time.
+function migrateFactionToPhase2(state) {
+    const LEGACY_FACTION_FIELDS = [
+        'comms_latency', 'last_verified_at', 'intel_posture', 'reads',
+        'stance_toward_pc', 'power', 'momentum', 'leverage', 'vulnerability',
+        'last_move', 'objective', 'resources', 'relations', 'doctrine', 'leadership',
+        'alliances', 'profile',
+    ];
 
-function normalizeFactionIntel(state) {
     for (const faction of Object.values(state.factions || {})) {
-        if (faction.comms_latency === undefined || faction.comms_latency === null) {
-            faction.comms_latency = '';
+        if (!faction.knowledge_asymmetry || typeof faction.knowledge_asymmetry !== 'object' || Array.isArray(faction.knowledge_asymmetry)) {
+            faction.knowledge_asymmetry = {};
         }
-        if (faction.last_verified_at === undefined || faction.last_verified_at === null) {
-            faction.last_verified_at = '';
-        }
-        if (faction.intel_posture === undefined || faction.intel_posture === null) {
-            faction.intel_posture = '';
-        }
-        // Migrate top-level blindspots string to a display-only legacy slot, then drop.
-        if (typeof faction.blindspots === 'string') {
-            const topLegacy = faction.blindspots.trim();
-            if (topLegacy) faction.blindspots_legacy = topLegacy;
-            delete faction.blindspots;
-        }
-        if (!faction.intel_on || typeof faction.intel_on !== 'object' || Array.isArray(faction.intel_on)) {
-            faction.intel_on = {};
-        }
-        // Migrate legacy intel_on string values to .knows.legacy
-        for (const [subject, val] of Object.entries(faction.intel_on)) {
-            if (typeof val === 'string') {
-                const trimmed = val.trim();
-                faction.intel_on[subject] = trimmed
-                    ? { knows: { legacy: trimmed }, unknown: {}, hiding: {}, misreading: {} }
-                    : { knows: {}, unknown: {}, hiding: {}, misreading: {} };
-            } else {
-                ensureIntelSubject(faction.intel_on, subject);
+        const ka = faction.knowledge_asymmetry;
+        const setKaKey = (key, value) => {
+            if (typeof value !== 'string' || !value.trim()) return;
+            if (!ka[key]) ka[key] = value.trim();
+        };
+
+        // Migrate intel_on (nested subject → {knows, unknown, hiding, misreading}) into flat keys.
+        if (faction.intel_on && typeof faction.intel_on === 'object' && !Array.isArray(faction.intel_on)) {
+            for (const [subject, si] of Object.entries(faction.intel_on)) {
+                if (typeof si === 'string') {
+                    setKaKey(`knows_${subject}`, si);
+                    continue;
+                }
+                if (!si || typeof si !== 'object') continue;
+                for (const bucket of ['knows', 'unknown', 'hiding', 'misreading']) {
+                    const map = si[bucket];
+                    if (!map || typeof map !== 'object') continue;
+                    for (const [k, v] of Object.entries(map)) {
+                        if (typeof v !== 'string' || !v.trim()) continue;
+                        const flatKey = k === 'legacy' ? `${bucket}_${subject}` : `${bucket}_${subject}_${k}`;
+                        setKaKey(flatKey, v);
+                    }
+                }
             }
         }
-        // Fold false_beliefs into intel_on.<subject>.misreading.legacy
+        delete faction.intel_on;
+
+        // Migrate false_beliefs (map: subject → belief) into misreading_<subject>.
         if (faction.false_beliefs && typeof faction.false_beliefs === 'object' && !Array.isArray(faction.false_beliefs)) {
             for (const [subject, belief] of Object.entries(faction.false_beliefs)) {
-                if (typeof belief !== 'string' || !belief.trim()) continue;
-                if (!faction.intel_on[subject]) ensureIntelSubject(faction.intel_on, subject);
-                if (!faction.intel_on[subject].misreading.legacy) {
-                    faction.intel_on[subject].misreading.legacy = belief.trim();
-                }
+                setKaKey(`misreading_${subject}`, belief);
             }
         }
         delete faction.false_beliefs;
-        // Fold blindspots map (per-subject prose) into intel_on.<subject>.unknown.legacy.
-        if (faction.blindspots && typeof faction.blindspots === 'object' && !Array.isArray(faction.blindspots)) {
+
+        // Migrate blindspots (string or map) into unknown_<subject> or a rollup legacy key.
+        if (typeof faction.blindspots === 'string') {
+            setKaKey('legacy', faction.blindspots);
+        } else if (faction.blindspots && typeof faction.blindspots === 'object' && !Array.isArray(faction.blindspots)) {
             for (const [subject, gap] of Object.entries(faction.blindspots)) {
-                if (typeof gap !== 'string' || !gap.trim()) continue;
-                if (!faction.intel_on[subject]) ensureIntelSubject(faction.intel_on, subject);
-                if (!faction.intel_on[subject].unknown.legacy) {
-                    faction.intel_on[subject].unknown.legacy = gap.trim();
-                }
+                setKaKey(`unknown_${subject}`, gap);
             }
-            delete faction.blindspots;
+        }
+        delete faction.blindspots;
+        delete faction.blindspots_legacy;
+
+        // Drop all remaining banned fields.
+        for (const field of LEGACY_FACTION_FIELDS) {
+            delete faction[field];
+        }
+
+        // Cap flat KA at 20 entries (L4 §2.3). Oldest keys win insertion order; drop excess.
+        const kaKeys = Object.keys(ka);
+        if (kaKeys.length > 20) {
+            for (const k of kaKeys.slice(20)) delete ka[k];
         }
     }
 }
@@ -257,6 +268,13 @@ function applyTransaction(state, tx) {
         return state;
     }
 
+    // Phase 2: legacy collision statuses migrate to ACTIVE (SEEDED/SIMMERING/RESOLVING were
+    // removed from the state machine; chats containing them must still replay cleanly).
+    const migrateCollisionStatus = (val) => {
+        if (val === 'SEEDED' || val === 'SIMMERING' || val === 'RESOLVING') return 'ACTIVE';
+        return val;
+    };
+
     switch (tx.op) {
         case 'CR': {
             if (isSingleton) {
@@ -281,7 +299,7 @@ function applyTransaction(state, tx) {
                         data.distance_category = 'SHORT';
                         if (data.distance == null) data.distance = 10;
                     }
-                    if (!data.status) data.status = 'ACTIVE';
+                    data.status = migrateCollisionStatus(data.status) || 'ACTIVE';
                 }
                 state[collection][tx.id] = data;
             }
@@ -292,12 +310,16 @@ function applyTransaction(state, tx) {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
                 const oldVal = target[tx.d.f];
-                target[tx.d.f] = tx.d.to;
+                let toVal = tx.d.to;
+                if (tx.e === 'collision' && tx.d.f === 'status') {
+                    toVal = migrateCollisionStatus(toVal);
+                }
+                target[tx.d.f] = toVal;
                 // Phase 2: when collision lands in CRASHED, default outcome_type if absent
-                if (tx.e === 'collision' && tx.d.f === 'status' && tx.d.to === 'CRASHED' && !target.outcome_type) {
+                if (tx.e === 'collision' && tx.d.f === 'status' && toVal === 'CRASHED' && !target.outcome_type) {
                     target.outcome_type = 'CRASHED';
                 }
-                recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, tx.d.to, tx);
+                recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, toVal, tx);
             }
             break;
         }
@@ -306,13 +328,17 @@ function applyTransaction(state, tx) {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
                 const oldVal = target[tx.d.f];
-                target[tx.d.f] = tx.d.v;
+                let newVal = tx.d.v;
+                if (tx.e === 'collision' && tx.d.f === 'status') {
+                    newVal = migrateCollisionStatus(newVal);
+                }
+                target[tx.d.f] = newVal;
                 // Phase 2: when collision lands in CRASHED, default outcome_type if absent
-                if (tx.e === 'collision' && tx.d.f === 'status' && tx.d.v === 'CRASHED' && !target.outcome_type) {
+                if (tx.e === 'collision' && tx.d.f === 'status' && newVal === 'CRASHED' && !target.outcome_type) {
                     target.outcome_type = 'CRASHED';
                 }
-                if (oldVal !== tx.d.v) {
-                    recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, tx.d.v, tx);
+                if (oldVal !== newVal) {
+                    recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, newVal, tx);
                 }
             }
             break;
@@ -331,11 +357,11 @@ function applyTransaction(state, tx) {
                 if (!isDuplicate) {
                     target[tx.d.f].push(tx.d.v);
                     recordHistory(state, tx.e, tx.id, `${tx.d.f}[]`, undefined, tx.d.v, tx);
-                    // Auto-trim collision_archive to MAX_COLLISION_ARCHIVE (20) entries
+                    // Auto-trim collision_archive to MAX_COLLISION_ARCHIVE entries
                     if (tx.e === 'world' && tx.d.f === 'collision_archive') {
                         const arr = state.world.collision_archive;
-                        if (Array.isArray(arr) && arr.length > 20) {
-                            state.world.collision_archive = arr.slice(-20);
+                        if (Array.isArray(arr) && arr.length > MAX_COLLISION_ARCHIVE) {
+                            state.world.collision_archive = arr.slice(-MAX_COLLISION_ARCHIVE);
                         }
                     }
                 }
@@ -466,7 +492,7 @@ function computeState(snapshot, transactions) {
     // Ensure _history exists (may be missing from old snapshots)
     if (!state._history) state._history = {};
     if (!state.factions) state.factions = {};
-    if (!state.divination) state.divination = { active_system: '', last_draw: null, readings: [] };
+    if (!state.divination) state.divination = { active_system: 'arcana', last_draw: null, readings: [] };
 
     // First pass: collect amendments
     const amendments = new Map();
@@ -488,7 +514,7 @@ function computeState(snapshot, transactions) {
     }
 
     normalizeCharacterKnowledgeAsymmetry(state);
-    normalizeFactionIntel(state);
+    migrateFactionToPhase2(state);
 
     return state;
 }

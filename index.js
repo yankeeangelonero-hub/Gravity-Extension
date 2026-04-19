@@ -1322,7 +1322,6 @@ function checkArraySizes(state) {
         }
     }
     // Per-character arrays: key_moments are PERMANENT (never warn, never trim).
-    // Phase 2 removed noticed_details; nothing per-char to cap here.
     if (warnings.length === 0) return null;
     return `[LEDGER HYGIENE WARNING — arrays over capacity:\n${warnings.map(w => '  • ' + w).join('\n')}\nPrune 2–3 stale entries per turn using REMOVE. Do NOT batch-remove everything at once — spread cleanup across multiple turns. Pressure points that fired or resolved are history, not live wires.]`;
 }
