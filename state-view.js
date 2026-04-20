@@ -172,8 +172,22 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         charLine += ` → id: ${char.id}`;
         lines.push(charLine);
 
-        // KNOWN tier: name only (knowledge proxied by faction intel; location not tracked)
-        if (isKnown) continue;
+        // KNOWN tier: name only, but emit KA if present (exception cases per readme)
+        if (isKnown) {
+            const ka = char.knowledge_asymmetry;
+            if (ka && typeof ka === 'object' && !Array.isArray(ka)) {
+                const kaLines = [];
+                for (const [k, v] of Object.entries(ka)) {
+                    if (k === 'legacy') continue;
+                    if (typeof v === 'string' && v) kaLines.push(`    ${k}: ${v}`);
+                }
+                if (ka.legacy) kaLines.push(`    [legacy] ${ka.legacy}`);
+                for (const kl of kaLines) lines.push(kl);
+            } else if (typeof ka === 'string' && ka) {
+                lines.push(`    Knowledge asymmetry: ${normalizeText(ka)}`);
+            }
+            continue;
+        }
 
         // Location — TRACKED/PRINCIPAL only
         if (char.location) lines.push(`    Location: ${char.location}`);
@@ -318,7 +332,7 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         }
     }
 
-    // Factions — lite/combat/intimacy: name + territory/state; full: detail section below
+    // Factions — lite/combat/intimacy: name + territory/state + compact KA; full: detail section below
     const factionEntities = Object.values(state.factions || {});
     if (factionEntities.length) {
         lines.push('');
@@ -328,6 +342,17 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
             const territory = territoryStr ? ` @ ${territoryStr}` : '';
             const fState = f.state ? ` [${f.state}]` : '';
             lines.push(`  ${f.name || f.id}${territory}${fState} → id: ${f.id}`);
+            // Lite mode: emit compact KA so the model can use faction.knowledge_asymmetry on regular turns
+            if (isLite) {
+                const ka = f.knowledge_asymmetry;
+                if (ka && typeof ka === 'object' && !Array.isArray(ka)) {
+                    for (const [k, v] of Object.entries(ka)) {
+                        if (k === 'legacy') continue;
+                        if (typeof v === 'string' && v) lines.push(`    ${k}: ${v}`);
+                    }
+                    if (ka.legacy) lines.push(`    [legacy] ${ka.legacy}`);
+                }
+            }
         }
     }
 
@@ -610,6 +635,7 @@ If a turn gets structurally complicated, switch to a full ---LEDGER--- block ins
 DISCIPLINE:
   Only write what changed materially.
   Keep knowledge_asymmetry current on TRACKED/PRINCIPAL characters when they are active or scene-relevant. knowledge_asymmetry is a FLAT map of semantic keys — pick a short, meaningful key per fact (e.g., weapon_concealed, lying_about_alibi, misreads_pc_as_friendly, owner_already_warned). Add or remove individual keys; never overwrite the whole field.
+  Use misreads_* keys for false beliefs (e.g., misreads_pilot_as_unconfirmed). misreading_* is a legacy prefix; both are accepted by the engine but misreads_* is canonical.
   KNOWN characters inherit knowledge from their faction's knowledge_asymmetry. Only set individual knowledge_asymmetry keys on a KNOWN character when they learn something their faction does not know yet.
   If the protagonist also exists as char:<pc-id>, treat pc and char:<pc-id> as separate surfaces: pc carries immediate scene/body state, while char:<pc-id> carries the social/knowledge dossier. Updating pc.* does not update the mirrored char dossier.
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
@@ -621,7 +647,7 @@ DISCIPLINE:
   Pressure points (pressure:<id>) are seeds — small tensions not yet a collision. Cap is 5; oldest auto-drops on overflow. Destroy when consumed: D pressure:<id>.
   If 3+ related pressure points accumulate, combine them into a collision (CR collision) and destroy the consumed pressures.
   WEEKS or MONTHS timeskips automatically clear all pressure points — the engine handles this.
-  Collision closure grammar: inside ---STATE--- blocks use dotted-path form — collision:id.status: RESOLVED (and .outcome_type, .aftermath). Do NOT use ledger verb syntax (TR collision:id field=status from=ACTIVE to=RESOLVED) inside STATE blocks — it will be silently dropped. Verb syntax is only for ---LEDGER--- blocks.
+  Collision closure grammar: inside ---STATE--- blocks use dotted-path form — collision:id.status: RESOLVED (and .outcome_type, .aftermath). Do NOT use ledger verb syntax (TR collision:id field=status from=ACTIVE to=RESOLVED) inside STATE blocks — verb syntax is REJECTED; move it to a ---LEDGER--- block.
   key_moments are permanent under 100 entries per character. When a character's key_moments list hits 100, drop the oldest or least load-bearing entry with a full-array SET (not a partial REMOVE) before adding a new one. This is infrequent given the high cap.
   Cleanup is still capped on normal turns; save bulk pruning for eval or OOC: eval.
   On advance turns, emit: world.timeskip_scale: HOURS|DAYS|WEEKS|MONTHS (default HOURS). WEEKS and MONTHS clear all pressure points.

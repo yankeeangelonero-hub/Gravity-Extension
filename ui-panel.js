@@ -765,10 +765,15 @@ function renderCharDossier(char, state) {
             const kaItems = [];
             for (const [k, v] of Object.entries(ka)) {
                 const m = /^(knows|unknown|hiding|misreading)_(.+)$/.exec(k);
-                if (!m) continue;
-                const label = m[1].charAt(0).toUpperCase() + m[1].slice(1);
-                const subject = m[2].replace(/_/g, ' ');
-                kaItems.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(subject)}:</b> ${esc(String(v))}</li>`);
+                if (m) {
+                    const label = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+                    const subject = m[2].replace(/_/g, ' ');
+                    kaItems.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(subject)}:</b> ${esc(String(v))}</li>`);
+                } else {
+                    // Semantic flat keys (e.g. weapon_concealed, archangel_status) — render under "Other"
+                    const label = k.replace(/_/g, ' ');
+                    kaItems.push(`<li><span class="gl-ka-bucket">Other</span> <b>${esc(label)}:</b> ${esc(String(v))}</li>`);
+                }
             }
             if (kaItems.length) {
                 parts.push(`<div class="gl-d-row"><b>Knowledge:</b><ul class="gl-d-kalist">${kaItems.join('')}</ul></div>`);
@@ -777,8 +782,31 @@ function renderCharDossier(char, state) {
             parts.push(`<div class="gl-d-row"><b>Knowledge:</b> ${esc(ka)}</div>`);
         }
     }
-    // Reads PC as — sourced from char.relationships.pc when present
-    const stanceDisplay = char.relationships?.pc;
+    // Reads PC as — sourced from knowledge_asymmetry (authoritative); falls back to relationships.pc for legacy data
+    let stanceDisplay = null;
+    if (char.knowledge_asymmetry && typeof char.knowledge_asymmetry === 'object') {
+        const kaKeys = Object.keys(char.knowledge_asymmetry);
+        // "Reads PC as" extraction:
+        //   misreads_pc_as_<stance>  → uses the suffix (stance lives in the key name)
+        //   misreading_pc             → uses the value (legacy freeform entry)
+        //   knows_pc_<fact>           → uses the suffix
+        // If all miss, falls back to legacy char.relationships.pc.
+        const misreadsKey = kaKeys.find(k => /^misreads_pc_as_(.+)$/.test(k));
+        if (misreadsKey) {
+            stanceDisplay = misreadsKey.replace(/^misreads_pc_as_/, '').replace(/_/g, ' ');
+        } else {
+            const misreadingKey = kaKeys.find(k => k === 'misreading_pc');
+            if (misreadingKey) {
+                stanceDisplay = String(char.knowledge_asymmetry[misreadingKey]);
+            } else {
+                const knowsPcKey = kaKeys.find(k => k.startsWith('knows_pc_'));
+                if (knowsPcKey) {
+                    stanceDisplay = knowsPcKey.replace(/^knows_pc_/, '').replace(/_/g, ' ') || String(char.knowledge_asymmetry[knowsPcKey]);
+                }
+            }
+        }
+    }
+    if (!stanceDisplay) stanceDisplay = char.relationships?.pc || null; // legacy fallback
     if (stanceDisplay) parts.push(`<div class="gl-d-row"><b>Reads PC as:</b> ${esc(stanceDisplay)}</div>`);
     const charWounds = toObj(char.wounds);
     if (Object.keys(charWounds).length) {
@@ -921,10 +949,15 @@ function renderWorld(state) {
                 const items = [];
                 for (const [k, v] of Object.entries(ka)) {
                     const m = /^(knows|unknown|hiding|misreading)_(.+)$/.exec(k);
-                    if (!m) continue;
-                    const label = m[1].charAt(0).toUpperCase() + m[1].slice(1);
-                    const subject = m[2].replace(/_/g, ' ');
-                    items.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(subject)}:</b> ${esc(String(v))}</li>`);
+                    if (m) {
+                        const label = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+                        const subject = m[2].replace(/_/g, ' ');
+                        items.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(subject)}:</b> ${esc(String(v))}</li>`);
+                    } else {
+                        // Semantic flat keys — render under "Other" so no key is silently dropped
+                        const label = k.replace(/_/g, ' ');
+                        items.push(`<li><span class="gl-ka-bucket">Other</span> <b>${esc(label)}:</b> ${esc(String(v))}</li>`);
+                    }
                 }
                 if (items.length) {
                     parts.push(`<div class="gl-d-detail"><b>Knowledge:</b><ul class="gl-d-kalist">${items.join('')}</ul></div>`);

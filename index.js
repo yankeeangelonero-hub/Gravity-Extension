@@ -196,11 +196,14 @@ function rewriteDuplicateActiveChallengeCreate(transactions, state) {
             if (field === 'id' || valuesEquivalent(existing?.[field], value)) continue;
             const stateField = getStateMachineField(tx.e, field);
             if (stateField) {
+                // Read current value from state so TR has a valid `from`; skip if none exists
+                const currentFieldValue = existing?.[field];
+                if (currentFieldValue === undefined || currentFieldValue === null) continue;
                 rewritten.push({
                     op: 'TR',
                     e: tx.e,
                     id: tx.id,
-                    d: { f: field, to: value },
+                    d: { f: field, from: currentFieldValue, to: value },
                     r: reason,
                 });
             } else {
@@ -580,7 +583,14 @@ function clearMatchedCorrections(committedTxns) {
     _pendingCorrections = _pendingCorrections.filter(corr => {
         // Engine-pushed corrections may lack `raw`; they fall through to attempt-count expiry.
         for (const tx of committedTxns) {
-            if (tx.id && corr.raw?.includes(tx.id)) return false;
+            if (!tx.id || !corr.raw) continue;
+            // Match the full entity:id token to prevent partial-id collisions (e.g. char:ada vs char:adam)
+            const fullToken = tx.e ? `${tx.e}:${tx.id}` : null;
+            if (fullToken && corr.raw.includes(fullToken)) return false;
+            // Fallback: bare id with non-word-char boundaries (capture-group form avoids lookbehind for ES2017 compat)
+            const escapedId = tx.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const bareRe = new RegExp('(^|[^\\w:])' + escapedId + '(?![\\w:])');
+            if (bareRe.test(corr.raw)) return false;
         }
         return true;
     });
@@ -993,7 +1003,8 @@ function buildNudge_collisionValidity(state) {
 }
 
 function buildNudge_destroyedCleanup(state) {
-    return `[GRAVITY NUDGE — destroyed_cleanup]\nScan for destroyed character IDs still referenced in collision.involved_chars, faction.members, or pressure.related_to.\nRemove stale refs with S (overwrite array) or MR operations.\nIf nothing stale, skip.`;
+    // These fields are arrays; MR is map-delete and is invalid here — use R (remove from array) or S (rewrite array)
+    return `[GRAVITY NUDGE — destroyed_cleanup]\nScan for destroyed character IDs still referenced in collision.involved_chars, faction.members, or pressure.related_to.\nRemove stale refs with R (remove from array) or S (overwrite array) operations.\nIf nothing stale, skip.`;
 }
 
 /**
@@ -1383,6 +1394,8 @@ async function initialize(force = false) {
     _foreshadowedCollisions = new Map();
     _arrivalLastFiredTurn = -1;
     _archiveCorrectionAttempts = new Map();
+    _archiveInjectedVersion = null;
+    _pendingNudgeText = null;
     _lastInjectFingerprint = -1;
     _lastInjectSnapshot = null;
     _injectFingerprint = 0;
@@ -1521,10 +1534,12 @@ async function onMessageReceived(messageId) {
         const tx = extractedTransactions[i];
         const result = validateBatch([tx]);
         if (!result.valid) {
+            // Include entity:id token in raw so clearMatchedCorrections can match it when fixed
+            const entityToken = tx.e && tx.id ? `${tx.e}:${tx.id}` : (tx.e ? tx.e : `tx-${i}`);
             validationErrors.push({
                 lineNum: i,
                 error: result.errors.map(e => e.message).join('; '),
-                raw: `[validated tx ${i}]`,
+                raw: `[validated tx ${i}] ${entityToken}`,
             });
             continue;
         }
@@ -1555,6 +1570,34 @@ async function onMessageReceived(messageId) {
             }
         }
 
+        // ── CR char location gate (§2.1, §2.4) — mirrors the S gate above ────
+        // A CR with a location field bypasses the S gate; apply the same tier+travel check.
+        if (tx.op === 'CR' && tx.e === 'char' && tx.d?.location !== undefined) {
+            const charBefore = pendingState.characters?.[tx.id];
+            const tier = String((charBefore?.tier ?? tx.d?.tier ?? 'UNKNOWN')).toUpperCase();
+            if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') {
+                validationErrors.push({
+                    lineNum: i,
+                    error: `char:${tx.id} is tier ${tier}; location is only tracked for TRACKED/PRINCIPAL chars (§2.1). Promote first or omit location from CR.`,
+                    fix: `Include tier=TRACKED or higher in the CR payload, or create the character first and then set location in a follow-up S op.`,
+                    raw: `[char:${tx.id} location]`,
+                });
+                continue;
+            }
+            const fromPlaceId = charBefore?.location;
+            // fromPlaceId undefined on genuine first create — validateTravel treats this as first placement (returns valid:true when fromPlace is falsy)
+            const travel = validateTravel(tx.id, fromPlaceId, tx.d.location, pendingState, _lastCompletedMode || _currentInjectMode);
+            if (!travel.valid) {
+                validationErrors.push({
+                    lineNum: i,
+                    error: travel.error,
+                    fix: travel.fix,
+                    raw: `[char:${tx.id} location]`,
+                });
+                continue;
+            }
+        }
+
         // State-machine TR validation runs as a post-loop batch call below
         // (consistency.js::validateTransitions, §6.1). Retained stub only to
         // document intent at the per-tx site.
@@ -1564,6 +1607,37 @@ async function onMessageReceived(messageId) {
         // Apply state-machine TRs (tier/integrity/status) to pendingState so subsequent same-batch
         // ops see the post-transition snapshot. Only state-machine fields need replay here.
         if (tx.op === 'TR' && (tx.d?.f === 'tier' || tx.d?.f === 'integrity' || tx.d?.f === 'status')) {
+            try {
+                applyTransaction(pendingState, {
+                    tx: -(i + 1), // negative tx.tx marks intra-batch shadow replay — pendingState is discarded after validation, so recordHistory pollution is contained
+                    t: tx.t || '',
+                    _ts: '',
+                    op: tx.op,
+                    e: tx.e,
+                    id: tx.id || '',
+                    d: tx.d || {},
+                    r: tx.r || '',
+                });
+            } catch (_) { /* validation-only mirror, ignore replay failures */ }
+        }
+
+        // Replay CR char/place into pendingState so later same-batch location gates see real tier/reach
+        if (tx.op === 'CR' && (tx.e === 'char' || tx.e === 'place')) {
+            try {
+                applyTransaction(pendingState, {
+                    tx: -(i + 1),
+                    t: tx.t || '',
+                    _ts: '',
+                    op: tx.op,
+                    e: tx.e,
+                    id: tx.id || '',
+                    d: tx.d || {},
+                    r: tx.r || '',
+                });
+            } catch (_) { /* validation-only mirror, ignore replay failures */ }
+        }
+        // Replay S place reach writes so validateTravel sees up-to-date reach in same batch
+        if (tx.op === 'S' && tx.e === 'place' && (tx.d?.f === 'reach' || tx.d?.f === 'contains')) {
             try {
                 applyTransaction(pendingState, {
                     tx: -(i + 1),
@@ -2002,18 +2076,17 @@ async function handleAdvanceButton() {
     _pendingDeductionType = 'advance';
 
     // ── Advance preconditions (§3.2) ──────────────────────────────────────────
+    // TODO: move arrival check to post-commit per spec (§3.5) — the LLM should be able to
+    // resolve arrivals during the advance turn itself, not be blocked before generation.
     if (_currentState) {
-        // Hard block: any ACTIVE collision at distance 0 must be resolved first
+        // Warn only: unresolved arrivals should be resolved by the LLM this turn, not blocked pre-generation
         const unresolved = Object.values(_currentState.collisions || {}).find(col =>
             (col.status || '').toUpperCase() === 'ACTIVE' &&
             parseFloat(col.distance) <= 0
         );
         if (unresolved) {
-            toastr.error(`Unresolved arrival: "${unresolved.name || unresolved.id}" has arrived (distance 0). Resolve it before advancing.`);
-            if (reenableAdvBtn) eventSource.off(event_types.MESSAGE_RECEIVED, reenableAdvBtn);
-            if (advBtn) { advBtn.disabled = false; }
-            _advanceLocked = false;
-            return;
+            toastr.warning(`Unresolved arrival: "${unresolved.name || unresolved.id}" has arrived (distance 0). The advance will proceed — the LLM should resolve it this turn.`);
+            // Proceed rather than abort — the LLM commits the resolution during this advance turn
         }
 
         // Advisory: PC in active combat

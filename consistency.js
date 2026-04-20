@@ -333,6 +333,40 @@ function validateTransitions(transactions, state) {
             valid.push(tx);
             continue;
         }
+
+        // Verify tx.d.from matches the entity's actual current state (mirrors S-path check above).
+        const trMachineField = getStateMachineField(tx.e, tx.d?.f);
+        if (trMachineField) {
+            const trCollection = ENTITY_TO_COLLECTION[tx.e];
+            const trEntity = state?.[trCollection]?.[tx.id];
+            // same-batch CR-then-TR not covered — mirrors S-path behavior at line ~303
+            if (trEntity !== undefined) {
+                const trActual = trEntity?.[trMachineField];
+                // If entity exists but field not yet set, allow only if claimed from == initial state.
+                const INITIAL_STATES = { char: 'UNKNOWN', constraint: 'STABLE', collision: 'ACTIVE', combat: 'ACTIVE' };
+                const initialState = INITIAL_STATES[tx.e];
+                if ((trActual === undefined || trActual === null) && String(tx.d?.from || '').toUpperCase() !== initialState) {
+                    errors.push({
+                        lineNum: i,
+                        error: `TR from-state mismatch: claimed "${tx.d?.from}" but actual is ${initialState} (default)`,
+                        fix: `Use from=${initialState} to reflect the entity's actual current state.`,
+                        raw: `[tr ${tx.e}:${tx.id}]`,
+                        tx,
+                    });
+                    continue;
+                } else if (trActual !== undefined && trActual !== null && String(tx.d?.from || '').toUpperCase() !== trActual) {
+                    errors.push({
+                        lineNum: i,
+                        error: `TR from-state mismatch: claimed "${tx.d?.from}" but actual is "${trActual}"`,
+                        fix: `Use from=${trActual} to reflect the entity's actual current state.`,
+                        raw: `[tr ${tx.e}:${tx.id}]`,
+                        tx,
+                    });
+                    continue;
+                }
+            }
+        }
+
         const result = validateTransition(tx.e, tx.d?.f, tx.d?.from, tx.d?.to);
         if (result.valid) {
             valid.push(tx);

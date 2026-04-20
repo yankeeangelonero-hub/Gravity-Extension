@@ -241,6 +241,22 @@ function migrateFactionToPhase2(state) {
             delete faction[field];
         }
 
+        // Bug 1: flatten pre-existing nested buckets in faction.knowledge_asymmetry (same as char path).
+        const STRUCTURAL_KEYS = ['knows', 'unknown', 'hiding', 'misreading'];
+        for (const bucket of STRUCTURAL_KEYS) {
+            const sub = ka[bucket];
+            if (!sub || typeof sub !== 'object' || Array.isArray(sub)) {
+                delete ka[bucket];
+                continue;
+            }
+            for (const [k, v] of Object.entries(sub)) {
+                if (typeof v !== 'string' || !v.trim()) continue;
+                const flatKey = `${bucket}_${k}`;
+                if (ka[flatKey] === undefined) ka[flatKey] = v.trim();
+            }
+            delete ka[bucket];
+        }
+
         // Cap flat KA at 20 entries (L4 §2.3). Oldest keys win insertion order; drop excess.
         const kaKeys = Object.keys(ka);
         if (kaKeys.length > 20) {
@@ -382,7 +398,10 @@ function applyTransaction(state, tx) {
 
         case 'TR': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
-            if (target && tx.d.f) {
+            // Bug 5: log when target is missing so silent no-ops are observable.
+            // TODO: validation should reject missing-target TRs before commit.
+            if (!target) { if (tx.tx > 0) console.warn(`[state-compute] TR no-op: entity ${tx.e}:${tx.id} not found (tx ${tx.tx})`); break; }
+            if (tx.d.f) {
                 const oldVal = target[tx.d.f];
                 let toVal = tx.d.to;
                 if (tx.e === 'collision' && tx.d.f === 'status') {
@@ -393,6 +412,26 @@ function applyTransaction(state, tx) {
                 if (tx.e === 'collision' && tx.d.f === 'status' && toVal === 'CRASHED' && !target.outcome_type) {
                     target.outcome_type = 'CRASHED';
                 }
+                // Bug 2: on tier demotion, clear fields no longer allowed at the new tier.
+                if (tx.e === 'char' && tx.d.f === 'tier') {
+                    const TIER_ORDER = ['UNKNOWN', 'KNOWN', 'TRACKED', 'PRINCIPAL'];
+                    const oldTier = TIER_ORDER.indexOf(String(oldVal || '').toUpperCase());
+                    const newTier = TIER_ORDER.indexOf(String(toVal || '').toUpperCase());
+                    if (newTier < oldTier) {
+                        // Drop PRINCIPAL-only fields when demoting below PRINCIPAL
+                        if (newTier < TIER_ORDER.indexOf('PRINCIPAL')) {
+                            delete target.agenda;
+                            delete target.key_moments;
+                            // TODO: intimate_history and demonstrated_traits tier gating unclear — revisit
+                            // state-view.js renders them only under showIntimacy (mode flag, not tier);
+                            // leaving behavior unchanged until spec clarifies PRINCIPAL-only vs TRACKED+.
+                        }
+                        // Drop location when demoting to UNKNOWN
+                        if (newTier <= TIER_ORDER.indexOf('UNKNOWN')) {
+                            delete target.location;
+                        }
+                    }
+                }
                 recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, toVal, tx);
             }
             break;
@@ -400,12 +439,19 @@ function applyTransaction(state, tx) {
 
         case 'S': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
-            if (target && tx.d.f) {
+            // Bug 5: log when target is missing so silent no-ops are observable.
+            // TODO: validation should reject missing-target Ss before commit.
+            if (!target) { if (tx.tx > 0) console.warn(`[state-compute] S no-op: entity ${tx.e}:${tx.id} not found (tx ${tx.tx}, field ${tx.d.f})`); break; }
+            if (tx.d.f) {
                 const oldVal = target[tx.d.f];
                 let newVal = tx.d.v;
                 if (tx.e === 'collision' && tx.d.f === 'status') {
                     newVal = migrateCollisionStatus(newVal);
                 }
+                // Bug 4(b): coerce null writes to known map-backed fields to empty object.
+                // null on map-backed fields is interpreted as "reset to empty map" — distinguishing explicit-clear from never-had-it is not supported
+                const MAP_BACKED_FIELDS = ['knowledge_asymmetry', 'intimate_history', 'wounds'];
+                if (newVal === null && MAP_BACKED_FIELDS.includes(tx.d.f)) newVal = {};
                 target[tx.d.f] = newVal;
                 // Phase 2: when collision lands in CRASHED, default outcome_type if absent
                 if (tx.e === 'collision' && tx.d.f === 'status' && newVal === 'CRASHED' && !target.outcome_type) {
@@ -479,7 +525,9 @@ function applyTransaction(state, tx) {
                     break;
                 }
                 const dotted = tx.d.k && tx.d.k.includes('.');
-                const fieldVal = target[tx.d.f];
+                let fieldVal = target[tx.d.f];
+                // Bug 4(a): null is typeof 'object' but can't be subscripted — re-initialize to {}.
+                if (fieldVal === null) { target[tx.d.f] = {}; fieldVal = target[tx.d.f]; }
                 if (typeof fieldVal !== 'object' || Array.isArray(fieldVal)) {
                     if (dotted && typeof fieldVal === 'string' && fieldVal.trim()) {
                         target[tx.d.f] = { legacy: fieldVal.trim() };
@@ -518,6 +566,15 @@ function applyTransaction(state, tx) {
                     target[tx.d.f][tx.d.k] = tx.d.v;
                     if (oldVal !== tx.d.v) {
                         recordHistory(state, tx.e, tx.id, `${tx.d.f}.${tx.d.k}`, oldVal, tx.d.v, tx);
+                    }
+                }
+                // applies to both char and faction KA — target is whichever entity the MS targeted
+                // Bug 3: enforce 20-key cap on knowledge_asymmetry after every live MS write.
+                // Drop oldest (insertion-order) keys first; latest write always survives.
+                if (tx.d.f === 'knowledge_asymmetry' && typeof target.knowledge_asymmetry === 'object' && target.knowledge_asymmetry !== null) {
+                    const kaKeys = Object.keys(target.knowledge_asymmetry);
+                    if (kaKeys.length > 20) {
+                        for (const k of kaKeys.slice(0, kaKeys.length - 20)) delete target.knowledge_asymmetry[k];
                     }
                 }
             }
