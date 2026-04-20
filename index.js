@@ -798,13 +798,16 @@ function buildArrivalBlock(col, draw, involvedSummary, placeName, proximityLine)
     const immediateNote = col.distance_category === 'IMMEDIATE'
         ? '\nThis collision arrives immediately — brief, sharp, decisive. Resolve in this scene.'
         : '';
+    const costLine = col.cost ? `\nScenario: ${col.cost}` : '';
     return `[GRAVITY — COLLISION ARRIVED: "${col.name || col.id}"]
 Draw: ${draw.label} — ${draw.reading}
 
-Forces: ${col.forces || '(unspecified)'}
+Forces: ${col.forces || '(unspecified)'}${costLine}
 Involved: ${involvedSummary}
 Anchored at: ${placeName || 'unspecified'}
 ${proximityLine}${immediateNote}
+
+PRE-EMPTION CHECK: Has the player already addressed the scenario above? If so, DISSOLVE — do not force a scene the narrative has already handled.
 
 SANITY CHECK — commit one of these NOW:
 
@@ -892,10 +895,13 @@ function buildForeshadowBlock(col, level) {
         IMMINENT: "Someone moves differently. A name surfaces. The collision's forces are near.",
         CONVERGING: "The forces are visibly in motion. Every other beat should carry their weight.",
     }[level];
+    const costLine = col.cost ? `\nScenario: ${col.cost}` : '';
     return `[FORESHADOW — ${level}]
 "${col.name || col.id}" is drawing closer (${current} ticks remaining).
+Forces: ${col.forces || '(unspecified)'}${costLine}
 Anchored at: ${placeName} | Involved: ${involved}
 ${guidance}
+If the player has already addressed this scenario, DISSOLVE the collision instead of forcing its arrival.
 Weave its approach into the scene without making it the focus.`;
 }
 
@@ -1816,67 +1822,74 @@ async function onMessageReceived(messageId) {
             : challengeCorrection;
     }
 
-    // ── IMMEDIATE collision firing (§3.3) — fire on the turn they are created ──
-    if (_currentState) {
-        const immediateArrivals = Object.entries(_currentState.collisions || {})
-            .filter(([id, col]) => col.distance_category === 'IMMEDIATE'
-                && col.status === 'ACTIVE'
-                && !_firedCollisionArrivals.has(id))
-            .map(([id]) => id);
-        if (immediateArrivals.length > 0) {
-            buildAndInjectArrivals(immediateArrivals, _currentState);
-        }
-    }
-
-    // ── Advance tick pipeline (§3.7 steps 5–10) ────────────────────────────────
-    // Runs AFTER LLM transactions have committed so world.timeskip_scale reflects
-    // the current turn's declaration, not the previous one.
-    if (_lastCompletedMode === 'advance') {
-        await applyAdvanceTick();
-    }
-
-    // ── Pressure FIFO cap (§4.1) — auto-drop oldest when pool exceeds 5 ────────
-    if (_currentState) {
-        const pressureIds = Object.keys(_currentState.pressures || {});
-        if (pressureIds.length > MAX_PRESSURE_POINTS) {
-            const sorted = pressureIds
-                .map(id => ({ id, created_at_tx: _currentState.pressures[id].created_at_tx ?? 0 }))
-                .sort((a, b) => a.created_at_tx - b.created_at_tx);
-            const toDrop = sorted.slice(0, sorted.length - MAX_PRESSURE_POINTS);
-            const dropTxns = toDrop.map(p => ({
-                op: 'D', e: 'pressure', id: p.id,
-                r: 'system:pressure:fifo-overflow',
-            }));
-            if (dropTxns.length > 0) {
-                try {
-                    const dropped = await append(dropTxns);
-                    _currentState = computeState(_currentState, dropped);
-                } catch (_) { /* non-critical */ }
+    // ── Post-commit pipeline — wrapped so updatePanel always fires even on errors ──
+    try {
+        // ── IMMEDIATE collision firing (§3.3) — fire on the turn they are created ──
+        if (_currentState) {
+            const immediateArrivals = Object.entries(_currentState.collisions || {})
+                .filter(([id, col]) => col.distance_category === 'IMMEDIATE'
+                    && col.status === 'ACTIVE'
+                    && !_firedCollisionArrivals.has(id))
+                .map(([id]) => id);
+            if (immediateArrivals.length > 0) {
+                buildAndInjectArrivals(immediateArrivals, _currentState);
             }
         }
-    }
 
-    // ── Collision pool cap warning (§4.2) ───────────────────────────────────────
-    if (_currentState) {
-        const activeNonImmediate = Object.values(_currentState.collisions || {})
-            .filter(c => (c.status || '').toUpperCase() === 'ACTIVE'
-                && c.distance_category !== 'IMMEDIATE');
-        if (activeNonImmediate.length > MAX_COLLISIONS) {
-            _pendingCorrections.push({
-                text: `Collision pool has ${activeNonImmediate.length} active non-IMMEDIATE collisions (cap ${MAX_COLLISIONS}). Consolidate: merge two with the MERGE flow, or IMPLODE the least relevant one. IMMEDIATE collisions are exempt.`,
-                attempts: 0,
-            });
+        // ── Advance tick pipeline (§3.7 steps 5–10) ────────────────────────────────
+        // Runs AFTER LLM transactions have committed so world.timeskip_scale reflects
+        // the current turn's declaration, not the previous one.
+        if (_lastCompletedMode === 'advance') {
+            await applyAdvanceTick();
         }
-    }
 
-    // ── Rotating nudge (§4.4) — compute before inject so slot clears if not firing ──
-    // Preserve any nudge already queued by applyAdvanceTick (e.g. collision_health on advance turns).
-    if (!_pendingNudgeText) {
-        _pendingNudgeText = maybeComputeNudge(_currentState, _lastCompletedMode || 'regular');
-    }
+        // ── Pressure FIFO cap (§4.1) — auto-drop oldest when pool exceeds 5 ────────
+        if (_currentState) {
+            const pressureIds = Object.keys(_currentState.pressures || {});
+            if (pressureIds.length > MAX_PRESSURE_POINTS) {
+                const sorted = pressureIds
+                    .map(id => ({ id, created_at_tx: _currentState.pressures[id].created_at_tx ?? 0 }))
+                    .sort((a, b) => a.created_at_tx - b.created_at_tx);
+                const toDrop = sorted.slice(0, sorted.length - MAX_PRESSURE_POINTS);
+                const dropTxns = toDrop.map(p => ({
+                    op: 'D', e: 'pressure', id: p.id,
+                    r: 'system:pressure:fifo-overflow',
+                }));
+                if (dropTxns.length > 0) {
+                    try {
+                        const dropped = await append(dropTxns);
+                        _currentState = computeState(_currentState, dropped);
+                    } catch (_) { /* non-critical */ }
+                }
+            }
+        }
 
-    injectPrompt();
-    updatePanel(_currentState, _turnCounter, committedTxns.map(tx => tx.tx));
+        // ── Collision pool cap warning (§4.2) ───────────────────────────────────────
+        if (_currentState) {
+            const activeNonImmediate = Object.values(_currentState.collisions || {})
+                .filter(c => (c.status || '').toUpperCase() === 'ACTIVE'
+                    && c.distance_category !== 'IMMEDIATE');
+            if (activeNonImmediate.length > MAX_COLLISIONS) {
+                _pendingCorrections.push({
+                    text: `Collision pool has ${activeNonImmediate.length} active non-IMMEDIATE collisions (cap ${MAX_COLLISIONS}). Consolidate: merge two with the MERGE flow, or IMPLODE the least relevant one. IMMEDIATE collisions are exempt.`,
+                    attempts: 0,
+                });
+            }
+        }
+
+        // ── Rotating nudge (§4.4) — compute before inject so slot clears if not firing ──
+        // Preserve any nudge already queued by applyAdvanceTick (e.g. collision_health on advance turns).
+        if (!_pendingNudgeText) {
+            _pendingNudgeText = maybeComputeNudge(_currentState, _lastCompletedMode || 'regular');
+        }
+
+        injectPrompt();
+    } catch (err) {
+        console.error(`${LOG_PREFIX} Post-commit pipeline error (panel will still update):`, err);
+        try { injectPrompt(); } catch (_) { /* best-effort */ }
+    } finally {
+        updatePanel(_currentState, _turnCounter, committedTxns.map(tx => tx.tx));
+    }
 }
 
 async function onUserMessage(messageId) {

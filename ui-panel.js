@@ -92,6 +92,20 @@ function esc(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** Resolve {{user}} and {{char}} macros from SillyTavern context. */
+function resolveMacros(str) {
+    if (!str || typeof str !== 'string') return str;
+    if (!str.includes('{{')) return str;
+    try {
+        const ctx = SillyTavern.getContext();
+        const userName = ctx.name1 || 'User';
+        const charName = ctx.name2 || 'Character';
+        return str.replace(/\{\{user\}\}/gi, userName).replace(/\{\{char\}\}/gi, charName);
+    } catch (_) {
+        return str;
+    }
+}
+
 function toArr(v) {
     if (!v) return [];
     if (Array.isArray(v)) return v;
@@ -593,13 +607,14 @@ function setStaleWarning(stale) {
 
 function renderCharacters(state) {
     const pc = state.pc;
+    const pcName = resolveMacros(pc.name);
     const chars = Object.values(state.characters).filter(c => c.tier !== 'UNKNOWN');
 
-    if (!pc.name && chars.length === 0) return '<div class="gl-empty">No characters tracked</div>';
+    if (!pcName && chars.length === 0) return '<div class="gl-empty">No characters tracked</div>';
 
     // Build sub-tabs: PC first, then Principal, Tracked, Known
     const allChars = [];
-    if (pc.name) allChars.push({ _isPC: true, id: 'pc', name: pc.name, tier: 'PC', ...pc });
+    if (pcName) allChars.push({ _isPC: true, id: 'pc', name: pcName, tier: 'PC', ...pc, name: pcName });
     const principal = chars.filter(c => c.tier === 'PRINCIPAL');
     const tracked = chars.filter(c => c.tier === 'TRACKED');
     const known = chars.filter(c => c.tier === 'KNOWN');
@@ -623,8 +638,9 @@ function renderCharacters(state) {
 
 function renderPCDossier(state) {
     const pc = state.pc;
+    const pcName = resolveMacros(pc.name);
     const parts = [];
-    parts.push(`<div class="gl-dossier-header"><b>${esc(pc.name)}</b> ${badge('PC')}</div>`);
+    parts.push(`<div class="gl-dossier-header"><b>${esc(pcName)}</b> ${badge('PC')}</div>`);
 
     // Status fields
     if (pc.power != null || pc.power_base != null) {
