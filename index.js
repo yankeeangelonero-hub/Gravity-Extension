@@ -79,6 +79,12 @@ let _arrivalLastFiredTurn = -1;
 let _archiveCorrectionAttempts = new Map(); // collision id → attempt count for archive-presence corrections
 let _archiveInjectedVersion = null; // hash: `${archiveLength}:${thin|ok}` — see §4.3
 let _pendingNudgeText = null; // rotating nudge maintenance text for next injectPrompt call (§4.4)
+// Idempotency guard for injectPrompt — GENERATION_STARTED re-fires injectPrompt within the same
+// turn (and on swipes/regens, where onMessageReceived doesn't run). On the second call we replay
+// the snapshotted one-shot values instead of remutating consumption flags.
+let _injectFingerprint = 0;
+let _lastInjectFingerprint = -1;
+let _lastInjectSnapshot = null;
 
 // Phase 2: Rotating nudge system chatMetadata keys (§4.4)
 const NUDGE_COUNTER_KEY = 'gravity_nudge_counter';
@@ -572,12 +578,9 @@ function clearMatchedCorrections(committedTxns) {
     if (_pendingCorrections.length === 0) return;
 
     _pendingCorrections = _pendingCorrections.filter(corr => {
-        // Try to see if any committed tx matches this correction's entity
-        // Simple heuristic: if correction's raw text mentions the same entity id
-        // and a tx was committed for that entity, consider it fixed
+        // Engine-pushed corrections may lack `raw`; they fall through to attempt-count expiry.
         for (const tx of committedTxns) {
-            if (tx.id && corr.raw.includes(tx.id)) return false;
-            if (tx.e && corr.raw.toLowerCase().includes(tx.e)) return false;
+            if (tx.id && corr.raw?.includes(tx.id)) return false;
         }
         return true;
     });
@@ -658,6 +661,8 @@ function getStateTarget(state, entityType, entityId) {
         collision: state.collisions,
         combat: state.combats,
         faction: state.factions,
+        place: state.places,
+        pressure: state.pressures,
     };
     return collections[entityType]?.[entityId] || null;
 }
@@ -798,7 +803,7 @@ SANITY CHECK — commit one of these NOW:
       TR collision:${col.id} field=status from=ACTIVE to=RESOLVED
       S collision:${col.id} field=outcome_type value=DIRECT
       S collision:${col.id} field=aftermath value="<what permanently changed>"
-      A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] on-screen — <how> [hook] <handles> [aftermath] <change>"
+      A world field=collision_archive value="[collision] ${col.name || col.id} [id ${col.id}] [resolution] on-screen — <how> [hook] <handles> [aftermath] <change>"
 
   OFF-SCREEN — The forces resolved while characters were elsewhere. Choose:
     A) REFRAME — it mutated. Create a successor.
@@ -806,24 +811,24 @@ SANITY CHECK — commit one of these NOW:
       S collision:${col.id} field=outcome_type value=EVOLVED
       A collision:${col.id} field=successor_collision_ids value=<new-id>
       CR collision:<new-id> name="..." distance_category=SHORT forces="..." ...
-      A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] off-screen — mutated into <new-id> [hook] <handles> [aftermath] <change>"
+      A world field=collision_archive value="[collision] ${col.name || col.id} [id ${col.id}] [resolution] off-screen — mutated into <new-id> [hook] <handles> [aftermath] <change>"
     B) DISSOLVE — it ended quietly.
       TR collision:${col.id} field=status from=ACTIVE to=RESOLVED
       S collision:${col.id} field=outcome_type value=DISSOLVED
       S collision:${col.id} field=aftermath value="<one sentence: what changed off-screen>"
-      A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] off-screen — dissolved [hook] <any residue> [aftermath] <change>"
+      A world field=collision_archive value="[collision] ${col.name || col.id} [id ${col.id}] [resolution] off-screen — dissolved [hook] <any residue> [aftermath] <change>"
 
   IMPLODE — The narrative has moved completely past this.
       TR collision:${col.id} field=status from=ACTIVE to=RESOLVED
       S collision:${col.id} field=outcome_type value=IMPLODED
       S collision:${col.id} field=aftermath value="Imploded — narrative moved on."
-      A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] imploded — <why> [hook] none [aftermath] n/a"
+      A world field=collision_archive value="[collision] ${col.name || col.id} [id ${col.id}] [resolution] imploded — <why> [hook] none [aftermath] n/a"
 
 CRASHED status — if distance hits 0 and the scene does not engage:
       TR collision:${col.id} field=status from=ACTIVE to=CRASHED
       S collision:${col.id} field=outcome_type value=CRASHED
       S collision:${col.id} field=aftermath value="<consequence of being ignored>"
-      A world field=collision_archive value="[collision] ${col.name || col.id} [resolution] crashed — ignored [hook] <consequence threads> [aftermath] <change>"
+      A world field=collision_archive value="[collision] ${col.name || col.id} [id ${col.id}] [resolution] crashed — ignored [hook] <consequence threads> [aftermath] <change>"
 
 No multi-turn delay. This collision is decided this turn.
 Commit the decision in the ledger this turn. No waiting.`;
@@ -950,7 +955,7 @@ function buildNudge_pressureScan(state) {
 function buildNudge_consolidationCheck(state) {
     const pressureCount = Object.keys(state.pressures || {}).length;
     if (pressureCount === 0) return null;
-    return `[GRAVITY NUDGE — consolidation_check]\nReview active pressure points (${pressureCount} current). Can any be combined into an existing collision or fed to seed a new one?\nIf yes: A collision:<id> field=forces value="..." or CR collision:<id> — then D pressure:<id>.\nIf not ready, skip.`;
+    return `[GRAVITY NUDGE — consolidation_check]\nReview active pressure points (${pressureCount} current). Can any be combined into an existing collision or fed to seed a new one?\nIf yes: S collision:<id> field=forces value="..." or CR collision:<id> — then D pressure:<id>.\nIf not ready, skip.`;
 }
 
 function buildNudge_collisionHealth(state) {
@@ -973,7 +978,7 @@ function buildNudge_relationshipPulse(state, charId) {
     const isPrincipal = char.tier === 'PRINCIPAL';
     let prompt = `[GRAVITY NUDGE — relationship_pulse]\nHas this scene affected ${name}'s relationship with the PC?`;
     if (isPrincipal) {
-        prompt += `\nIf significant: A char:${charId} field=key_moments value="[moment] <what happened> [hook] <open thread> [weight] <1-5>"`;
+        prompt += `\nIf significant: A char:${charId} field=key_moments value="[moment] <what happened> [hook] <open thread> [weight] <why this matters in one phrase>"`;
     }
     prompt += `\nIf no meaningful shift, skip.`;
     return prompt;
@@ -984,7 +989,7 @@ function buildNudge_collisionValidity(state) {
         .filter(([, c]) => (c.status || '').toUpperCase() === 'ACTIVE');
     if (!active.length) return null;
     const names = active.map(([id, c]) => `${c.name || id} (${id})`).join(', ');
-    return `[GRAVITY NUDGE — collision_validity]\nReview active collisions: ${names}.\nHas the narrative made any irrelevant, redundant, or impossible?\nIf yes, IMPLODE: TR collision:<id> field=status from=ACTIVE to=RESOLVED + S outcome_type=IMPLODED + S aftermath="..." + A world field=collision_archive value="...".\nIf all still valid, skip.`;
+    return `[GRAVITY NUDGE — collision_validity]\nReview active collisions: ${names}.\nHas the narrative made any irrelevant, redundant, or impossible?\nIf yes, IMPLODE: TR collision:<id> field=status from=ACTIVE to=RESOLVED + S outcome_type=IMPLODED + S aftermath="..." + A world field=collision_archive value="[collision] ... [id <id>] [resolution] ... [hook] ... [aftermath] ...".\nIf all still valid, skip.`;
 }
 
 function buildNudge_destroyedCleanup(state) {
@@ -1043,15 +1048,46 @@ function maybeComputeNudge(state, mode) {
  *   integration — timeskip/setup (full state, full readme)
  */
 function injectPrompt(mode) {
-    // If no mode specified, reuse the current mode (prevents GENERATION_STARTED from downgrading)
+    // If no mode specified, reuse the current mode (prevents GENERATION_STARTED from downgrading).
+    // An explicit mode (or any caller that sets a fresh one-shot before calling) bumps the
+    // fingerprint so the snapshot replay path doesn't fire — see _lastInjectFingerprint below.
     if (mode) {
         _currentInjectMode = mode;
+        _injectFingerprint++;
     }
     const activeMode = _currentInjectMode;
 
     const context = SillyTavern.getContext();
     const { setExtensionPrompt } = context;
     if (!setExtensionPrompt) return;
+
+    // Idempotency: if we've already injected for this fingerprint (e.g. GENERATION_STARTED
+    // firing right after onMessageReceived), replay the snapshot without re-consuming
+    // _archiveInjectedVersion / _pendingNudgeText / _foreshadowedCollisions / _pendingOOCInjection.
+    if (_lastInjectFingerprint === _injectFingerprint && _lastInjectSnapshot) {
+        try {
+            for (const [slot, payload] of Object.entries(_lastInjectSnapshot.slots)) {
+                if (payload && payload.text) {
+                    setExtensionPrompt(slot, payload.text, PROMPT_IN_CHAT, 0);
+                } else {
+                    setExtensionPrompt(slot, '', PROMPT_NONE, 0);
+                }
+            }
+        } catch (err) {
+            console.error(`${LOG_PREFIX} Inject replay failed:`, err);
+        }
+        return;
+    }
+
+    const _injectSnapshot = { slots: {} };
+    const _setPrompt = (slot, text) => {
+        _injectSnapshot.slots[slot] = text ? { text } : null;
+        if (text) {
+            setExtensionPrompt(slot, text, PROMPT_IN_CHAT, 0);
+        } else {
+            setExtensionPrompt(slot, '', PROMPT_NONE, 0);
+        }
+    };
 
     const isRegular = activeMode === 'regular';
     const isAdvance = activeMode === 'advance';
@@ -1080,47 +1116,41 @@ function injectPrompt(mode) {
             const includeArchive = archiveVersion !== _archiveInjectedVersion;
             const stateViewMode = getStateViewMode(isRegular, isAdvance, isIntegration, challengeRuntimeActive, nextReasonMode);
             const stateView = formatStateView(_currentState, stateViewMode, includeArchive);
-            setExtensionPrompt(`${MODULE_NAME}_state`, stateView, PROMPT_IN_CHAT, 0);
+            _setPrompt(`${MODULE_NAME}_state`, stateView);
             if (includeArchive) _archiveInjectedVersion = archiveVersion;
         }
 
         // Format readme — core on regular/advance, full on integration
         const readme = formatReadme(isIntegration ? 'full' : 'core');
-        setExtensionPrompt(`${MODULE_NAME}_readme`, readme, PROMPT_IN_CHAT, 0);
+        _setPrompt(`${MODULE_NAME}_readme`, readme);
 
         // Setup wizard phase prompt (overrides corrections when active)
         const setupPrompt = getPhasePrompt();
-        if (setupPrompt) {
-            setExtensionPrompt(`${MODULE_NAME}_setup`, setupPrompt, PROMPT_IN_CHAT, 0);
-        } else {
-            setExtensionPrompt(`${MODULE_NAME}_setup`, '', PROMPT_NONE, 0);
-        }
+        _setPrompt(`${MODULE_NAME}_setup`, setupPrompt || '');
 
         // OOC command injection (from buttons)
         // Only update when there's a new injection — don't clear on re-inject
         // (GENERATION_STARTED re-calls injectPrompt, which would wipe the OOC prompt)
         if (_pendingOOCInjection) {
-            setExtensionPrompt(`${MODULE_NAME}_ooc`, _pendingOOCInjection, PROMPT_IN_CHAT, 0);
+            _setPrompt(`${MODULE_NAME}_ooc`, _pendingOOCInjection);
             _pendingOOCInjection = null;
         }
 
         const challengePromptBody = _currentState ? buildChallengePrompt(_currentState) : '';
         if (challengePromptBody && activeProfile) {
-            setExtensionPrompt(
+            _setPrompt(
                 `${MODULE_NAME}_challenge`,
                 buildModeInjection(
                     `GRAVITY CHALLENGE — Active ${activeProfile.displayName} Session`,
                     challengePromptBody,
                     Object.values(activeProfile.lorebookKeys).filter(Boolean),
                 ),
-                PROMPT_IN_CHAT,
-                0,
             );
         } else {
-            setExtensionPrompt(`${MODULE_NAME}_challenge`, '', PROMPT_NONE, 0);
+            _setPrompt(`${MODULE_NAME}_challenge`, '');
         }
         // Clear legacy combat slot if it was previously set
-        setExtensionPrompt(`${MODULE_NAME}_combat`, '', PROMPT_NONE, 0);
+        _setPrompt(`${MODULE_NAME}_combat`, '');
 
         // Corrections + reinforcement
         let injection = '';
@@ -1131,11 +1161,7 @@ function injectPrompt(mode) {
             injection = injection ? injection + '\n' + _pendingReinforcement : _pendingReinforcement;
         }
 
-        if (injection) {
-            setExtensionPrompt(`${MODULE_NAME}_inject`, injection, PROMPT_IN_CHAT, 0);
-        } else {
-            setExtensionPrompt(`${MODULE_NAME}_inject`, '', PROMPT_NONE, 0);
-        }
+        _setPrompt(`${MODULE_NAME}_inject`, injection || '');
 
         // Style exemplars — inject mode-matched good paragraphs (skip on integration turns — no prose)
         const { chatMetadata } = SillyTavern.getContext();
@@ -1143,11 +1169,10 @@ function injectPrompt(mode) {
         if (exemplars.length > 0) {
             const selected = selectExemplarsForPrompt(exemplars, activeMode, nextReasonMode, 3);
             const exLines = selected.map(formatExemplarForPrompt).join('\n');
-            setExtensionPrompt(`${MODULE_NAME}_exemplars`,
-                `[STYLE EXEMPLARS — the player flagged these as strong prose. Match the structural strengths that fit this turn's mode. Do not copy exact wording, imagery, or house voice.\n${exLines}]`,
-                PROMPT_IN_CHAT, 0);
+            _setPrompt(`${MODULE_NAME}_exemplars`,
+                `[STYLE EXEMPLARS — the player flagged these as strong prose. Match the structural strengths that fit this turn's mode. Do not copy exact wording, imagery, or house voice.\n${exLines}]`);
         } else {
-            setExtensionPrompt(`${MODULE_NAME}_exemplars`, '', PROMPT_NONE, 0);
+            _setPrompt(`${MODULE_NAME}_exemplars`, '');
         }
 
         // Faction heartbeat — every 10 turns on regular turns only (advance/integration handle factions directly)
@@ -1159,14 +1184,13 @@ function injectPrompt(mode) {
                     if (f.state) detail += ` [${f.state}]`;
                     return detail;
                 }).join('\n  ');
-                setExtensionPrompt(`${MODULE_NAME}_faction`,
-                    `[FACTION HEARTBEAT — Turn ${_turnCounter}.\n  ${factionDetails}\nFactions execute operations independently, driven by their AGENDA. Leaders command subordinates — show the chain of command. Check faction knowledge_asymmetry to keep intel consistent. You may CUT to a faction scene before cutting back. If no faction has visibly acted in recent turns, one MUST advance NOW — pick the faction whose AGENDA most threatens the current scene.]`,
-                    PROMPT_IN_CHAT, 0);
+                _setPrompt(`${MODULE_NAME}_faction`,
+                    `[FACTION HEARTBEAT — Turn ${_turnCounter}.\n  ${factionDetails}\nFactions execute operations independently, driven by their AGENDA. Leaders command subordinates — show the chain of command. Check faction knowledge_asymmetry to keep intel consistent. You may CUT to a faction scene before cutting back. If no faction has visibly acted in recent turns, one MUST advance NOW — pick the faction whose AGENDA most threatens the current scene.]`);
             } else {
-                setExtensionPrompt(`${MODULE_NAME}_faction`, '', PROMPT_NONE, 0);
+                _setPrompt(`${MODULE_NAME}_faction`, '');
             }
         } else {
-            setExtensionPrompt(`${MODULE_NAME}_faction`, '', PROMPT_NONE, 0);
+            _setPrompt(`${MODULE_NAME}_faction`, '');
         }
 
         // Dormant character check — every 15 turns on regular turns only
@@ -1185,14 +1209,13 @@ function injectPrompt(mode) {
                 }
             }
             if (dormant.length > 0) {
-                setExtensionPrompt(`${MODULE_NAME}_dormant`,
-                    `[DORMANT CHARACTERS — gravity still pulls these characters toward collision:\n${dormant.map(d => '  • ' + d).join('\n')}\nGravity is constant — however weak, it pulls toward collision. Their AGENDA is a force. Their actions have consequences. Advance them toward the nearest collision — or spawn a new one from their AGENDA intersecting the current situation.]`,
-                    PROMPT_IN_CHAT, 0);
+                _setPrompt(`${MODULE_NAME}_dormant`,
+                    `[DORMANT CHARACTERS — gravity still pulls these characters toward collision:\n${dormant.map(d => '  • ' + d).join('\n')}\nGravity is constant — however weak, it pulls toward collision. Their AGENDA is a force. Their actions have consequences. Advance them toward the nearest collision — or spawn a new one from their AGENDA intersecting the current situation.]`);
             } else {
-                setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
+                _setPrompt(`${MODULE_NAME}_dormant`, '');
             }
         } else {
-            setExtensionPrompt(`${MODULE_NAME}_dormant`, '', PROMPT_NONE, 0);
+            _setPrompt(`${MODULE_NAME}_dormant`, '');
         }
 
         // ── Collision Audit (warnings + closure checks) ───────────────────────
@@ -1245,26 +1268,25 @@ function injectPrompt(mode) {
 
             if (_arrivalLastFiredTurn !== _turnCounter) {
                 // Only clear if buildAndInjectArrivals did not already set the slot this turn
-                setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
+                _setPrompt(`${MODULE_NAME}_arrival`, '');
             }
 
             if (collisionWarnings.length > 0) {
-                setExtensionPrompt(`${MODULE_NAME}_dist_warn`,
-                    `[COLLISION AUDIT:\n${collisionWarnings.map(w => '  • ' + w).join('\n')}]`,
-                    PROMPT_IN_CHAT, 0);
+                _setPrompt(`${MODULE_NAME}_dist_warn`,
+                    `[COLLISION AUDIT:\n${collisionWarnings.map(w => '  • ' + w).join('\n')}]`);
             } else {
-                setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
+                _setPrompt(`${MODULE_NAME}_dist_warn`, '');
             }
         } else {
             if (_arrivalLastFiredTurn !== _turnCounter) {
-                setExtensionPrompt(`${MODULE_NAME}_arrival`, '', PROMPT_NONE, 0);
+                _setPrompt(`${MODULE_NAME}_arrival`, '');
             }
-            setExtensionPrompt(`${MODULE_NAME}_dist_warn`, '', PROMPT_NONE, 0);
+            _setPrompt(`${MODULE_NAME}_dist_warn`, '');
         }
 
         // Intimacy boundary enforcement is now Phase 2: carried in prose + knowledge_asymmetry
         // (hiding/misreading buckets). No runtime slot injection needed.
-        setExtensionPrompt(`${MODULE_NAME}_intimacy`, '', PROMPT_NONE, 0);
+        _setPrompt(`${MODULE_NAME}_intimacy`, '');
 
         // Nudge now only signals the active deduction mode; the preset owns the actual protocol.
         const reasonMode = nextReasonMode || 'regular';
@@ -1289,27 +1311,26 @@ Gravity tracks what prose can't: asymmetries, pressures, distances, reads-over-t
             nudgeText += `\n\n[WORLD INFO TRIGGERS - DO NOT ECHO:\n${MODE_LOREBOOK_KEYS.proseRegular}\n]`;
         }
 
-        setExtensionPrompt(`${MODULE_NAME}_nudge`, nudgeText, PROMPT_IN_CHAT, 0);
+        _setPrompt(`${MODULE_NAME}_nudge`, nudgeText);
 
         // ── Nudge maintenance slot (§4.4) — rotating per-turn ledger tasks ─────
         if (_pendingNudgeText) {
-            setExtensionPrompt(`${MODULE_NAME}_nudge_maintenance`, _pendingNudgeText, PROMPT_IN_CHAT, 0);
+            _setPrompt(`${MODULE_NAME}_nudge_maintenance`, _pendingNudgeText);
             _pendingNudgeText = null;
         } else {
-            setExtensionPrompt(`${MODULE_NAME}_nudge_maintenance`, '', PROMPT_NONE, 0);
+            _setPrompt(`${MODULE_NAME}_nudge_maintenance`, '');
         }
 
         // ── Foreshadowing — pre-arrival threshold cues (§3.4) ─────────────────
         if ((isRegular || isAdvance) && _currentState) {
             const foreshadow = buildForeshadowingInjection(_currentState);
-            if (foreshadow) {
-                setExtensionPrompt(`${MODULE_NAME}_foreshadow`, foreshadow, PROMPT_IN_CHAT, 0);
-            } else {
-                setExtensionPrompt(`${MODULE_NAME}_foreshadow`, '', PROMPT_NONE, 0);
-            }
+            _setPrompt(`${MODULE_NAME}_foreshadow`, foreshadow || '');
         } else {
-            setExtensionPrompt(`${MODULE_NAME}_foreshadow`, '', PROMPT_NONE, 0);
+            _setPrompt(`${MODULE_NAME}_foreshadow`, '');
         }
+
+        _lastInjectFingerprint = _injectFingerprint;
+        _lastInjectSnapshot = _injectSnapshot;
     } catch (err) {
         console.error(`${LOG_PREFIX} Inject failed:`, err);
     }
@@ -1362,6 +1383,9 @@ async function initialize(force = false) {
     _foreshadowedCollisions = new Map();
     _arrivalLastFiredTurn = -1;
     _archiveCorrectionAttempts = new Map();
+    _lastInjectFingerprint = -1;
+    _lastInjectSnapshot = null;
+    _injectFingerprint = 0;
 
     if (!chatId) {
         console.log(`${LOG_PREFIX} No active chat.`);
@@ -1398,6 +1422,8 @@ async function onChatChanged() {
 
 async function onMessageReceived(messageId) {
     if (!_initialized) await initialize();
+    // New turn boundary — invalidate the injectPrompt snapshot so one-shot flags are reconsumed.
+    _injectFingerprint++;
     // Snapshot the mode before resetting so exemplar flagging preserves the real turn mode
     _lastCompletedMode = _currentInjectMode;
     // Reset inject mode and clear OOC injection — the special turn is over
@@ -1484,10 +1510,13 @@ async function onMessageReceived(messageId) {
     }
     _uncappedTurn = false;
 
-    // Validate each transaction individually
+    // Validate each transaction individually.
+    // pendingState mirrors _currentState plus prior same-batch tier/integrity/status TRs so
+    // a same-turn promotion-then-location batch isn't rejected against pre-promotion tier.
     let validTxns = [];
     const validationErrors = [];
     let committedTxns = [];
+    const pendingState = _currentState ? structuredClone(_currentState) : createEmptyState();
     for (let i = 0; i < extractedTransactions.length; i++) {
         const tx = extractedTransactions[i];
         const result = validateBatch([tx]);
@@ -1502,7 +1531,7 @@ async function onMessageReceived(messageId) {
 
         // ── Travel plausibility + tier gate (§2.1, §2.4) ───────────────────
         if (tx.op === 'S' && tx.e === 'char' && tx.d?.f === 'location') {
-            const charBefore = _currentState.characters?.[tx.id];
+            const charBefore = pendingState.characters?.[tx.id];
             const tier = String(charBefore?.tier || 'UNKNOWN').toUpperCase();
             if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') {
                 validationErrors.push({
@@ -1514,7 +1543,7 @@ async function onMessageReceived(messageId) {
                 continue;
             }
             const fromPlaceId = charBefore?.location;
-            const travel = validateTravel(tx.id, fromPlaceId, tx.d.v, _currentState, _currentInjectMode);
+            const travel = validateTravel(tx.id, fromPlaceId, tx.d.v, pendingState, _lastCompletedMode || _currentInjectMode);
             if (!travel.valid) {
                 validationErrors.push({
                     lineNum: i,
@@ -1531,10 +1560,29 @@ async function onMessageReceived(messageId) {
         // document intent at the per-tx site.
 
         validTxns.push(tx);
+
+        // Apply state-machine TRs (tier/integrity/status) to pendingState so subsequent same-batch
+        // ops see the post-transition snapshot. Only state-machine fields need replay here.
+        if (tx.op === 'TR' && (tx.d?.f === 'tier' || tx.d?.f === 'integrity' || tx.d?.f === 'status')) {
+            try {
+                applyTransaction(pendingState, {
+                    tx: -(i + 1),
+                    t: tx.t || '',
+                    _ts: '',
+                    op: tx.op,
+                    e: tx.e,
+                    id: tx.id || '',
+                    d: tx.d || {},
+                    r: tx.r || '',
+                });
+            } catch (_) { /* validation-only mirror, ignore replay failures */ }
+        }
     }
 
     // ── State-machine TR validation (§6.1, wired in consistency.js) ────────────
-    const trResult = validateTransitions(validTxns);
+    // Pass _currentState so validateTransitions can derive `from` for S ops on
+    // state-machine fields (tier/integrity/status) — the LLM only writes `to`.
+    const trResult = validateTransitions(validTxns, _currentState);
     validTxns = trResult.valid;
     for (const e of trResult.errors) validationErrors.push(e);
 
@@ -1572,14 +1620,13 @@ async function onMessageReceived(messageId) {
         }
     }
 
-    // ── Engine-owned field audit — warn if LLM sets engine-managed fields ──
+    // ── Engine-owned field audit — CR-side only ───────────────────────────────
+    // S writes to engine-owned fields (collision.distance, pressure.created_at_tx)
+    // are now rejected upstream by consistency.js::validateTransitions and never
+    // reach committedTxns, so post-hoc S-warning loops were dead and removed.
+    // CR ops are not gated by validateTransitions in the same way (state-compute
+    // applies its own defaults), so the CR-side hygiene warnings stay.
     for (const tx of committedTxns) {
-        if (tx.op === 'S' && tx.e === 'collision' && tx.d?.f === 'distance') {
-            _pendingCorrections.push({
-                text: `Collision distances are engine-owned. Do not SET collision:${tx.id}.distance directly — set distance_category on creation and let the engine tick it.`,
-                attempts: 0,
-            });
-        }
         if (tx.op === 'CR' && tx.e === 'collision' && !tx.d?.distance_category) {
             _pendingCorrections.push({
                 text: `Collision ${tx.id} was created without distance_category. Add distance_category=IMMEDIATE|SHORT|MEDIUM|LONG on CR — the engine resolves the numeric distance.`,
@@ -1616,14 +1663,13 @@ async function onMessageReceived(messageId) {
     // the auto-fallback path (§2.2.1) actually fires after MAX_CORRECTION_ATTEMPTS.
     if (_currentState) {
         const archive = Array.isArray(_currentState.world?.collision_archive) ? _currentState.world.collision_archive : [];
-        const archiveText = archive.map(e => String(e || '')).join('\n');
 
         for (const [colId, col] of Object.entries(_currentState.collisions || {})) {
             const status = (col?.status || '').toUpperCase();
             if (status !== 'RESOLVED' && status !== 'CRASHED') continue;
 
-            const nameToken = col?.name ? String(col.name) : '';
-            const matched = archiveText.includes(colId) || (nameToken && archiveText.includes(nameToken));
+            const idToken = `[id ${colId}]`;
+            const matched = archive.some(entry => typeof entry === 'string' && entry.includes(idToken));
 
             if (matched) {
                 _archiveCorrectionAttempts.delete(colId);
@@ -1632,7 +1678,7 @@ async function onMessageReceived(messageId) {
 
             const attempts = (_archiveCorrectionAttempts.get(colId) || 0) + 1;
             if (attempts > MAX_CORRECTION_ATTEMPTS) {
-                const fallback = `[collision] ${col.name || colId} [resolution] ${col.outcome_type || col.status} — auto-generated (archive missing after ${MAX_CORRECTION_ATTEMPTS} attempts) [hook] none [aftermath] ${col.aftermath || 'unknown'}`;
+                const fallback = `[collision] ${col.name || colId} [id ${colId}] [resolution] ${col.outcome_type || col.status} — auto-generated (archive missing after ${MAX_CORRECTION_ATTEMPTS} attempts) [hook] none [aftermath] ${col.aftermath || 'unknown'}`;
                 try {
                     const autoTxns = await append([{ op: 'A', e: 'world', id: '_', d: { f: 'collision_archive', v: fallback }, r: 'system:archive:auto-fallback' }]);
                     _currentState = computeState(_currentState, autoTxns);
@@ -1642,7 +1688,7 @@ async function onMessageReceived(messageId) {
                 _archiveCorrectionAttempts.set(colId, attempts);
                 queueCorrections([{
                     raw: `[collision:${colId} archive]`,
-                    error: `Missing archive entry for resolved collision ${colId}. Add: A world field=collision_archive value="[collision] ${col.name || colId} ... [resolution] ... [hook] ... [aftermath] ..."`,
+                    error: `Missing archive entry for resolved collision ${colId}. Add: A world field=collision_archive value="[collision] ${col.name || colId} [id ${colId}] [resolution] ... [hook] ... [aftermath] ..."`,
                 }]);
             }
         }
@@ -1750,7 +1796,10 @@ async function onMessageReceived(messageId) {
     }
 
     // ── Rotating nudge (§4.4) — compute before inject so slot clears if not firing ──
-    _pendingNudgeText = maybeComputeNudge(_currentState, _lastCompletedMode || 'regular');
+    // Preserve any nudge already queued by applyAdvanceTick (e.g. collision_health on advance turns).
+    if (!_pendingNudgeText) {
+        _pendingNudgeText = maybeComputeNudge(_currentState, _lastCompletedMode || 'regular');
+    }
 
     injectPrompt();
     updatePanel(_currentState, _turnCounter, committedTxns.map(tx => tx.tx));
@@ -1758,6 +1807,7 @@ async function onMessageReceived(messageId) {
 
 async function onUserMessage(messageId) {
     if (!_initialized) await initialize();
+    _injectFingerprint++;
 
     const context = SillyTavern.getContext();
     const message = context.chat?.[messageId];
@@ -2064,6 +2114,7 @@ async function handleGoodTurnButton() {
     }
     await saveMetadata();
 
+    _injectFingerprint++;
     injectPrompt();
     toastr.success('Exemplar saved');
 }
@@ -2222,6 +2273,8 @@ async function handleImportData(data) {
         _arrivalLastFiredTurn = -1;
         _archiveCorrectionAttempts = new Map();
         _archiveInjectedVersion = null;
+        _lastInjectFingerprint = -1;
+        _lastInjectSnapshot = null;
     });
 
     setCallbacks({

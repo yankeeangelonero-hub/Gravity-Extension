@@ -70,7 +70,7 @@ All code samples and implementation notes use these exact key names. Do not subs
 | `key_moments` | array | **PRINCIPAL only.** Up to 100 self-contained moment entries tracking significant beats with the PC. TRACKED/KNOWN/UNKNOWN chars omit this. |
 | `power` | number | Combat power rating |
 | `abilities` | array | Named abilities (used in combat) |
-| `wounds` | array | Active wounds affecting capability |
+| `wounds` | map (location → descriptor) | Current medical state — keyed by body location, valued by descriptor. Not a chronological log. |
 | `relationships` | map | Keyed by entity ID (PC, other chars, factions) — brief relational descriptor. **Narrative color only — not queried by engine logic.** |
 | `location` | place ID | Points to a `place` entity. **Only tracked for TRACKED, PRINCIPAL, and the PC.** KNOWN and UNKNOWN chars omit this. |
 
@@ -162,7 +162,7 @@ When a collision reaches a terminal status (RESOLVED or CRASHED), the **LLM writ
 
 **Cap: 20 entries.** Engine auto-trims to `MAX_COLLISION_ARCHIVE = 20` after each append — oldest entry dropped. This is engine-side; the LLM does not need to manage the cap.
 
-**Validation:** The engine checks for a `world.collision_archive` append when processing a terminal collision `TR`. If missing, it queues a correction: `"Missing archive entry for resolved collision ${id}. Add: A world field=collision_archive value=\"...\""`. Cleared when the append is received.
+**Validation:** The engine checks for a `world.collision_archive` append when processing a terminal collision `TR`. Matching is **strict and id-anchored** — the engine looks for the literal token `[id <collision-id>]` inside an archive entry; substring/name fallback is intentionally not supported, so two collisions sharing a name cannot mask each other. If missing, it queues a correction: `"Missing archive entry for resolved collision ${id}. Add: A world field=collision_archive value=\"[collision] ... [id ${id}] [resolution] ... [hook] ... [aftermath] ...\""`. Cleared when the append is received.
 
 **Dropped correction fallback:** If the archive correction is dropped after `MAX_CORRECTION_ATTEMPTS` (3), the engine auto-generates a minimal archive entry from the collision entity's existing fields (`name`, `forces`, `involved_chars`, `outcome_type`) and appends it. The entry lacks narrative hooks but preserves pointer continuity for archive-based seeding.
 
@@ -170,14 +170,17 @@ When a collision reaches a terminal status (RESOLVED or CRASHED), the **LLM writ
 
 ```
 [collision] <name — what the collision was about>
+[id <collision-id>]
 [resolution] <how it resolved — on-screen event, off-screen mutation, void, or merged>
 [hook] <concrete handles for future use — consequences still rippling, relationships changed, new tensions seeded>
 [aftermath] <what changed in the world because of this collision>
 ```
 
+The `[id <collision-id>]` segment is **required** and must appear immediately after `[collision] <name>` and before `[resolution]`. The id token is required even when `name` and `id` are the same string. The engine's missing-archive detector matches on `[id <collision-id>]` exactly — name-substring matching has been removed so collisions sharing names cannot mask each other.
+
 Example:
 ```
-[collision] Syndicate's evidence purge
+[collision] Syndicate's evidence purge [id syndicate-evidence-purge]
 [resolution] on-screen — PC interrupted the burn, partial files recovered
 [hook] physical — the half-burned dossier; relational — Syndicate now knows PC's face; tension — incomplete evidence still dangerous
 [aftermath] Syndicate shifted from suppression to active elimination; PC holds leverage but can't use it safely
@@ -185,7 +188,7 @@ Example:
 
 **LLM writes the entry as part of resolution** — in the same ledger block as the terminal `TR`:
 ```
-A world field=collision_archive value="[collision] ... [resolution] ... [hook] ... [aftermath] ..."
+A world field=collision_archive value="[collision] ... [id <collision-id>] [resolution] ... [hook] ... [aftermath] ..."
 ```
 
 **State view injection:** When the active collision pool drops to 2 or fewer, the last 5 archive entries are appended to the `_state` slot by `state-view.js`. This surfaces dormant consequence threads for reactivation without cluttering the view when the collision pool is healthy. The engine tracks `_archiveInjectedVersion` (hash of last injected archive + pool count) to re-inject only when the archive gains a new entry or the pool count crosses the ≤2 threshold — preventing redundant injection on consecutive turns. `_archiveInjectedVersion` is **in-memory only** — it is not persisted in `chatMetadata`. It resets on page reload, which may cause one redundant injection on the first turn after reload.
@@ -703,7 +706,7 @@ SANITY CHECK — commit one of these NOW:
       TR collision:${col.id} field=status from=ACTIVE to=RESOLVED
       S collision:${col.id} field=outcome_type value=DIRECT
       S collision:${col.id} field=aftermath value="<what permanently changed>"
-      A world field=collision_archive value="[collision] ${col.name} [resolution] on-screen — <how> [hook] <handles> [aftermath] <change>"
+      A world field=collision_archive value="[collision] ${col.name} [id ${col.id}] [resolution] on-screen — <how> [hook] <handles> [aftermath] <change>"
 
   OFF-SCREEN — The forces resolved while characters were elsewhere.
     Choose:
@@ -712,19 +715,19 @@ SANITY CHECK — commit one of these NOW:
       S collision:${col.id} field=outcome_type value=EVOLVED
       A collision:${col.id} field=successor_collision_ids value=<new-id>
       CR collision:<new-id> name="..." distance_category=SHORT forces="..." ...
-      A world field=collision_archive value="[collision] ${col.name} [resolution] off-screen — mutated into <new-id> [hook] <handles> [aftermath] <change>"
+      A world field=collision_archive value="[collision] ${col.name} [id ${col.id}] [resolution] off-screen — mutated into <new-id> [hook] <handles> [aftermath] <change>"
     B) DISSOLVE — It ended quietly.
       TR collision:${col.id} field=status from=ACTIVE to=RESOLVED
       S collision:${col.id} field=outcome_type value=DISSOLVED
       S collision:${col.id} field=aftermath value="<one sentence: what changed off-screen>"
-      A world field=collision_archive value="[collision] ${col.name} [resolution] off-screen — dissolved [hook] <any residue> [aftermath] <change>"
+      A world field=collision_archive value="[collision] ${col.name} [id ${col.id}] [resolution] off-screen — dissolved [hook] <any residue> [aftermath] <change>"
 
   IMPLODE — The narrative has moved completely past this. It no longer makes sense.
     Kill it without ceremony:
       TR collision:${col.id} field=status from=ACTIVE to=RESOLVED
       S collision:${col.id} field=outcome_type value=IMPLODED
       S collision:${col.id} field=aftermath value="Imploded — narrative moved on."
-      A world field=collision_archive value="[collision] ${col.name} [resolution] imploded — <why> [hook] none [aftermath] n/a"
+      A world field=collision_archive value="[collision] ${col.name} [id ${col.id}] [resolution] imploded — <why> [hook] none [aftermath] n/a"
 
 No multi-turn delay. This collision is decided this turn.
 
@@ -732,7 +735,7 @@ No multi-turn delay. This collision is decided this turn.
     TR collision:${col.id} field=status from=ACTIVE to=CRASHED
     S collision:${col.id} field=outcome_type value=CRASHED
     S collision:${col.id} field=aftermath value="<consequence of being ignored>"
-    A world field=collision_archive value="[collision] ${col.name} [resolution] crashed — ignored [hook] <consequence threads> [aftermath] <change>"
+    A world field=collision_archive value="[collision] ${col.name} [id ${col.id}] [resolution] crashed — ignored [hook] <consequence threads> [aftermath] <change>"
 `CRASHED` as `status` marks the lifecycle state. `CRASHED` as `outcome_type` confirms how it ended. Both are set on a crash.
 ```
 
@@ -858,7 +861,7 @@ S collision:ada_betrayal field=outcome_type value=MERGED
 A collision:umbrella_leak field=parent_collision_ids value=ada_betrayal
 S collision:umbrella_leak field=forces value="Ada's cover is blown AND Umbrella's internal documents are surfacing — the two threads are now one"
 S collision:umbrella_leak field=involved_chars value=[ada, leon, wesker]
-A world field=collision_archive value="[collision] ada_betrayal [resolution] MERGED into umbrella_leak — both threads involved Ada's cover [hook] physical — the stolen flash drive; emotional — Leon's reaction when both truths surfaced at once [aftermath] Ada's operational cover now fully compromised from two independent sources"
+A world field=collision_archive value="[collision] ada_betrayal [id ada_betrayal] [resolution] MERGED into umbrella_leak — both threads involved Ada's cover [hook] physical — the stolen flash drive; emotional — Leon's reaction when both truths surfaced at once [aftermath] Ada's operational cover now fully compromised from two independent sources"
 ```
 
 **[EVOLUTION EXAMPLE]** A collision absorbs related pressure points and expands in scope. Update `forces` and `involved_chars`, then destroy the consumed pressure points:
@@ -1003,8 +1006,11 @@ Combat is a **thin entity** (`combat.exchange`, `combat.status`, `combat.primary
 Lasting effects write back to character entities in the ledger:
 
 - Power changes: `S char:<id> field=power value=<n>`
-- New wounds: `A char:<id> field=wounds value="..."`
+- New wounds: `MS char:<id> field=wounds key=<location> value="<descriptor>"` (e.g. `MS char:cloud field=wounds key=left_arm value="deep gash"`)
+- Healed wounds: `MR char:<id> field=wounds key=<location>` (e.g. `MR char:cloud field=wounds key=left_arm`)
 - Ability changes: `S char:<id> field=abilities value=[...]`
+
+Wounds are a `map<location, descriptor>` — not an append log — because the engine, prompt injectors, and UI all need keyed access ("does this character have a leg wound?") and current-state semantics ("what wounds are active right now?"). Healing is a key delete, not a "healed" entry. Distinct from log fields like `key_moments` which preserve history.
 
 The combat entity (`combat:<id>`) records the final outcome (`outcome`, `aftermath`) and transitions to `RESOLVED`. Only the durable facts survive in the ledger — the blow-by-blow is ephemeral.
 

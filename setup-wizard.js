@@ -219,7 +219,8 @@ ${answers.power_scale ? '> SET world field=power_scale value="[power ladder summ
 > CREATE place:[slug] name="[Display name]" reach=LOCAL state="[safe/contested/hostile/unknown]" description="[one or two sentences — what this place is and what makes it notable]"
 
 7. PRESSURE POINTS (2-3 seams where the world is about to break; raw narrative seeds, capped at 5 FIFO):
-> CREATE pressure:[slug] name="[seam that could later tighten into a collision]" source="[PC|char:id|faction:id|place:id]" related_to="[collision-id, if it echoes an existing thread]"
+> CREATE pressure:[slug] name="[seam that could later tighten into a collision]" source="[PC|char:id|faction:id|place:id]" related_to=[collision-id]
+(related_to is an array of collision ids; omit the field or use related_to=[] when there is no echoing thread.)
 
 8. Any scenario NPCs as KNOWN:
 > CREATE char:npc-slug name="[NPC Name]" tier=KNOWN

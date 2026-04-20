@@ -93,7 +93,7 @@ async function handleEval() {
         lines.push(`  ${char.name || id} [${char.tier}] - ${constraints || 'no constraints'}`);
     }
     for (const col of Object.values(state.collisions)) {
-        if (col.status === 'RESOLVED') continue;
+        if (col.status === 'RESOLVED' || col.status === 'CRASHED') continue;
         lines.push(`  + ${col.name || col.id} [${col.status}] dist:${col.distance || '?'}`);
     }
     lines.push('');
@@ -103,7 +103,7 @@ async function handleEval() {
     lines.push('3. KNOWLEDGE GAPS: Verify pc.knowledge_gaps is accurate - add missing gaps, remove discovered ones.');
     lines.push('4. POWER: Audit power_base, power, power_basis, and abilities. Lower power only for real impairment. Raise power_base only when growth is earned.');
     lines.push('5. PRESSURE POINTS: For each pressure point, decide KEEP / REMOVE / ESCALATE. REMOVE fired or stale seams; if one now has actors, cost, and a looming forced choice, CREATE a collision from it and REMOVE the pressure point.');
-    lines.push('6. PRUNE: REMOVE stale key_moments (consolidate first), resolved entries, duplicate fields.');
+    lines.push('6. PRUNE: TRIM key_moments via full-array SET when over the cap; never partial REMOVE. REMOVE resolved entries and duplicate fields.');
     lines.push('7. FIX: emit AMEND for any continuity errors found.');
     lines.push('This turn is UNCAPPED - emit as many ledger lines as needed for a thorough cleanup.');
     lines.push('=== END EVALUATION ===');

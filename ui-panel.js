@@ -689,26 +689,44 @@ function renderPCDossier(state) {
         parts.push(collapsibleList(traitItems, 5, 'older traits'));
     }
 
-    // How others see PC — sourced from each character's knowledge_asymmetry / relationships entry that names the PC
+    // How others see PC — sourced from each character's knowledge_asymmetry flat keys that mention the PC.
+    // Falls back to all flat KA leaves when no PC-specific subset is detectable (Phase 2: KA is the source of truth).
+    const pcNameLowerKA = (pc.name || '').toLowerCase();
     const pcReads = [];
     for (const char of Object.values(state.characters)) {
         if (char.tier === 'UNKNOWN') continue;
-        const rel = char.relationships?.pc || char.relationships?.[pc.name];
-        if (rel) pcReads.push({ who: char.name || char.id, read: String(rel), id: char.id });
+        const ka = char.knowledge_asymmetry;
+        if (!ka || typeof ka !== 'object' || Array.isArray(ka)) continue;
+        const pcEntries = [];
+        const allEntries = [];
+        for (const [k, v] of Object.entries(ka)) {
+            if (typeof v !== 'string' || !v) continue;
+            if (k === 'legacy') continue;
+            allEntries.push({ k, v });
+            if (k.endsWith('_pc') || k.includes('_pc_') || (pcNameLowerKA && k.toLowerCase().includes(pcNameLowerKA))) {
+                pcEntries.push({ k, v });
+            }
+        }
+        const entries = pcEntries.length ? pcEntries : allEntries;
+        if (entries.length) pcReads.push({ who: char.name || char.id, entries, id: char.id });
     }
     if (pcReads.length) {
         parts.push(`<div class="gl-d-section"><b>How Others See PC:</b></div>`);
-        for (const { who, read, id } of pcReads) {
-            const hist = getFieldHistory(state, 'char', id, 'relationships.pc');
+        for (const { who, entries, id } of pcReads) {
             parts.push(`<div class="gl-read-block">`);
             parts.push(`<div class="gl-read-target">${esc(who)}:</div>`);
-            parts.push(`<div class="gl-read-text">${esc(read)}</div>`);
-            if (hist && hist.length > 1) {
-                parts.push(`<div class="gl-history-toggle">History (${hist.length})</div>`);
-                parts.push(`<div class="gl-history-list" style="display:none">${hist.map(historyLine).join('<br>')}</div>`);
+            for (const { k, v } of entries) {
+                const hist = getFieldHistory(state, 'char', id, `knowledge_asymmetry.${k}`);
+                parts.push(`<div class="gl-read-text"><b>${esc(k)}:</b> ${esc(v)}</div>`);
+                if (hist && hist.length > 1) {
+                    parts.push(`<div class="gl-history-toggle">History (${hist.length})</div>`);
+                    parts.push(`<div class="gl-history-list" style="display:none">${hist.map(historyLine).join('<br>')}</div>`);
+                }
             }
             parts.push(`</div>`);
         }
+    } else {
+        parts.push(`<div class="gl-d-section"><b>How Others See PC:</b> <span class="gl-d-empty">—</span></div>`);
     }
 
     // Intimate history

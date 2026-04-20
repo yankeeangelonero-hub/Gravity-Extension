@@ -14,14 +14,6 @@ function normalizeText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
-// reads.<target> is an append-log array capped at 5; string values are legacy
-function getLatestRead(readsObj, key) {
-    const val = readsObj?.[key];
-    if (!val) return null;
-    if (Array.isArray(val)) return val.length ? val[val.length - 1] : null;
-    return val;
-}
-
 function getCollisionForcesText(col) {
     if (Array.isArray(col?.forces)) {
         return col.forces
@@ -98,7 +90,8 @@ function computeArchiveVersion(state) {
     const activeCollisionCount = Object.values(state?.collisions || {})
         .filter(c => (c.status || '').toUpperCase() === 'ACTIVE').length;
     const thin = activeCollisionCount <= 2 ? 'thin' : 'ok';
-    return `${archiveEntries.length}:${thin}`;
+    const fingerprint = archiveEntries.slice(-5).map(e => String(e || '').slice(0, 20)).join('|');
+    return `${archiveEntries.length}:${thin}:${fingerprint}`;
 }
 
 /**
@@ -179,13 +172,13 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         charLine += ` → id: ${char.id}`;
         lines.push(charLine);
 
-        // Location — all tiers
-        if (char.location) lines.push(`    Location: ${char.location}`);
-
-        // KNOWN tier: name + location only (knowledge proxied by faction intel)
+        // KNOWN tier: name only (knowledge proxied by faction intel; location not tracked)
         if (isKnown) continue;
 
-        // TRACKED+ fields: knowledge_asymmetry (flat keys: knows_/unknown_/hiding_/misreading_/legacy), last_seen_at
+        // Location — TRACKED/PRINCIPAL only
+        if (char.location) lines.push(`    Location: ${char.location}`);
+
+        // TRACKED+ fields: knowledge_asymmetry (flat semantic keys; `legacy` shown last), last_seen_at
         const ka = char.knowledge_asymmetry;
         if (ka !== undefined && ka !== null) {
             if (typeof ka === 'object' && !Array.isArray(ka)) {
@@ -265,7 +258,7 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
     }
 
     // Collisions — registry listing
-    const allCollisions = Object.values(state.collisions).filter(c => c.status !== 'RESOLVED');
+    const allCollisions = Object.values(state.collisions).filter(c => c.status !== 'RESOLVED' && c.status !== 'CRASHED');
     if (allCollisions.length) {
         lines.push('');
         lines.push('Collisions:');
@@ -331,7 +324,8 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         lines.push('');
         lines.push('Factions:');
         for (const f of factionEntities) {
-            const territory = f.territory ? ` @ ${f.territory}` : '';
+            const territoryStr = Array.isArray(f.territory) ? f.territory.join(', ') : f.territory;
+            const territory = territoryStr ? ` @ ${territoryStr}` : '';
             const fState = f.state ? ` [${f.state}]` : '';
             lines.push(`  ${f.name || f.id}${territory}${fState} → id: ${f.id}`);
         }
@@ -410,7 +404,10 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         lines.push('FACTIONS');
         for (const f of factionEntities) {
             const header = [`  ${f.name || f.id}`];
-            if (f.territory) header.push(`territory: ${f.territory}`);
+            if (f.territory) {
+                const territoryStr = Array.isArray(f.territory) ? f.territory.join(', ') : f.territory;
+                header.push(`territory: ${territoryStr}`);
+            }
             if (f.state) header.push(`state: ${f.state}`);
             lines.push(header.join(' | '));
             if (f.agenda) lines.push(`    Agenda: ${normalizeText(f.agenda)}`);
@@ -529,18 +526,18 @@ STANDARD SHAPE:
 at: [Day N - HH:MM]
 scene: "Where. Who's present. What's happening. Emotional atmosphere."
 pc.location: "where the PC is now"
-char:elena.knowledge_asymmetry.knows.weapon: "PC is armed"
-char:elena.knowledge_asymmetry.unknown.sender: "does not know who sent them"
-char:elena.knowledge_asymmetry.hiding.owner-warn: "already warned the owner"
+char:elena.knowledge_asymmetry.weapon_concealed: "PC is armed but hiding it under coat"
+char:elena.knowledge_asymmetry.sender_unknown: "does not know who sent them"
+char:elena.knowledge_asymmetry.owner_already_warned: "already warned the owner — hiding this from PC"
 char:elena.last_seen_at: "[Day 2 - 19:10]"
-faction:zaft.knowledge_asymmetry.knows_archangel_status: "ship escaped damaged"
-faction:zaft.knowledge_asymmetry.unknown_archangel_pilot: "Strike pilot identity unknown"
-faction:zaft.knowledge_asymmetry.misreading_archangel-identity: "Assumes pilot still unconfirmed"
+faction:zaft.knowledge_asymmetry.archangel_status: "ship escaped damaged"
+faction:zaft.knowledge_asymmetry.archangel_pilot_unknown: "Strike pilot identity unknown"
+faction:zaft.knowledge_asymmetry.misreads_pilot_as_unconfirmed: "Assumes pilot still unconfirmed"
 faction:zaft.agenda: "Recover the N-Jammer cores before the Alliance regroups"
 collision:trust-vs-duty.distance_category: SHORT
 constraint:c1.integrity: STRESSED
-char:elena.knowledge_asymmetry.hiding_trust: "Reads PC as a cautious ally but will not say so"
-world.collision_archive+: "[collision] ... [resolution] ... [hook] ... [aftermath] ..."
+char:elena.knowledge_asymmetry.misreads_pc_as_cautious_ally: "Reads PC as a cautious ally but will not say so"
+world.collision_archive+: "[collision] ... [id <collision-id>] [resolution] ... [hook] ... [aftermath] ..."
 ---END STATE---
 
 PATH RULES:
@@ -557,21 +554,15 @@ COMMON PATHS:
   pc.current_scene (or scene)
   pc.equipment
   char:id.location
-  char:id.knowledge_asymmetry.knows_<subject>
-  char:id.knowledge_asymmetry.unknown_<subject>
-  char:id.knowledge_asymmetry.hiding_<subject>
-  char:id.knowledge_asymmetry.misreading_<subject>
+  char:id.knowledge_asymmetry.<flat_semantic_key>   (e.g., weapon_concealed, lying_about_alibi, misreads_intent_as_friendly)
   char:id.last_seen_at
   char:id.agenda
   faction:id.name
-  faction:id.territory
+  faction:id.territory                              (array of place ids: [place:warehouse, place:docks])
   faction:id.state
   faction:id.agenda
   faction:id.members+
-  faction:id.knowledge_asymmetry.knows_<subject>
-  faction:id.knowledge_asymmetry.unknown_<subject>
-  faction:id.knowledge_asymmetry.hiding_<subject>
-  faction:id.knowledge_asymmetry.misreading_<subject>
+  faction:id.knowledge_asymmetry.<flat_semantic_key>   (e.g., archangel_status, pilot_identity_unknown, misreads_pilot_as_unconfirmed)
   place:id.name
   place:id.state
   place:id.reach
@@ -609,7 +600,7 @@ STATE MACHINES:
 For these fields, write the NEW state only. The extension will compile the transition.
 
 RARE OPS INSIDE STATE BLOCK:
-  create char:dak name="Dak" tier=KNOWN location="The Stray Dog"
+  create char:dak name="Dak" tier=KNOWN
   create place:warehouse-district name="Warehouse District" state=contested reach=DISTRICT description="Industrial sprawl south of the river."
   create pressure:border-tension name="Border tension" source="faction:vela" related_to=[char:pc,faction:vela]
   destroy pressure:border-tension
@@ -618,11 +609,11 @@ If a turn gets structurally complicated, switch to a full ---LEDGER--- block ins
 
 DISCIPLINE:
   Only write what changed materially.
-  Keep knowledge_asymmetry current on TRACKED/PRINCIPAL characters when they are active or scene-relevant. Use the four buckets: knows (facts they hold), unknown (gaps you want to track), hiding (facts they are actively concealing), misreading (false beliefs they hold). Add or remove individual keys; never overwrite the whole field.
+  Keep knowledge_asymmetry current on TRACKED/PRINCIPAL characters when they are active or scene-relevant. knowledge_asymmetry is a FLAT map of semantic keys — pick a short, meaningful key per fact (e.g., weapon_concealed, lying_about_alibi, misreads_pc_as_friendly, owner_already_warned). Add or remove individual keys; never overwrite the whole field.
   KNOWN characters inherit knowledge from their faction's knowledge_asymmetry. Only set individual knowledge_asymmetry keys on a KNOWN character when they learn something their faction does not know yet.
   If the protagonist also exists as char:<pc-id>, treat pc and char:<pc-id> as separate surfaces: pc carries immediate scene/body state, while char:<pc-id> carries the social/knowledge dossier. Updating pc.* does not update the mirrored char dossier.
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.
-  Use faction knowledge_asymmetry for remote awareness — flat-key shape: knows_<subject>, unknown_<subject>, hiding_<subject>, misreading_<subject> (cap 20 across all four). Update after plausible intel events; do not globally synchronize.
+  Use faction knowledge_asymmetry for remote awareness — flat map of semantic keys (e.g., archangel_status, pilot_identity_unknown, hiding_supply_route, misreads_alliance_intent), cap 20 keys total. Update after plausible intel events; do not globally synchronize.
   No provenance, no knowledge: distant factions and characters do not know live scene truth unless it plausibly reached them.
   NESCIENCE discipline (Theory of Mind — each character/faction knows only what they realistically observed, heard, deduced from evidence they have access to, or were told via a plausible channel). Avoid "Sherlock Holmes" leaps — explore obliviousness as much as insight. News and rumors travel on channels with latency and distortion; absence from a scene means absence of knowledge until a plausible report arrives. Communication-media rule: only the originator or recipient of a message knows its contents. Before updating knowledge_asymmetry, check past turns — do not contradict established knowledge states without explicit revelation.
   Combat is a thin container. Scene prose carries terrain and tactical narrative; the spawning collision carries cost and forces. Combat tracks only: who's fighting whom (primary_enemy), and what ended where (outcome + aftermath on RESOLVED).
@@ -695,15 +686,15 @@ SET — overwrite a field
   > SET combat:alley-fight field=aftermath value="One sweep operative wounded; runner bleeding; cover compromised" -- What remains
 
 APPEND — add to an array field
-  > APPEND char:tifa field=key_moments value="[Day 1 — 22:00] Confronted Cloud about memories at the well." -- Pivotal scene
-  > APPEND world field=collision_archive value="[collision] Ada betrayal [resolution] on-screen — PC caught her at the handoff [hook] the flash drive she dropped; eye contact [aftermath] trust cracked" -- Resolved collision
+  > APPEND char:tifa field=key_moments value="[moment] Confronted Cloud about the well memories, voice cracking on his name [hook] He still hasn't asked her about Sephiroth [weight] First time she's seen the cracks in his composure — the persona is starting to slip" -- Pivotal scene
+  > APPEND world field=collision_archive value="[collision] Ada betrayal [id ada-betrayal] [resolution] on-screen — PC caught her at the handoff [hook] the flash drive she dropped; eye contact [aftermath] trust cracked" -- Resolved collision
 
 REMOVE — remove from an array field
   > REMOVE faction:shinra field=members value="char:tseng" -- Member departed
   (key_moments are only trimmed via full-array SET at the 100-cap boundary; no partial REMOVE.)
 
 MAP_SET — set a key in a map field
-  > MAP_SET char:elena field=knowledge_asymmetry key=hiding_pc value="Reads PC as cautious but will not say so" -- Flat-key KA
+  > MAP_SET char:elena field=knowledge_asymmetry key=misreads_pc_as_cautious_ally value="Reads PC as cautious but will not say so" -- Flat semantic key
   > SET world field=power_scale value="1=trained but ordinary, 3=elite specialist, 5=setting-defining monster" -- Set combat power ladder
   > SET world field=power_ceiling value=5 -- Highest credible direct-combat level in this setting
   > SET pc field=power_base value=3 -- Earned combat level when healthy
@@ -786,23 +777,22 @@ UPDATING THE DOSSIER:
 ═══ END INTIMACY GUIDE ═══
 
 MAP_DEL — remove a key from a map field
-  > MAP_DEL char:tifa field=knowledge_asymmetry key=hiding_barret -- Reveal no longer relevant
+  > MAP_DEL char:tifa field=knowledge_asymmetry key=hiding_secret_from_barret -- Reveal no longer relevant
 
 DESTROY — remove an entity permanently
   > DESTROY char:minor-npc -- Left the story
 
 FACTIONS — create and manage factions as organizations with territory, agenda, and asymmetric knowledge
-  > CREATE faction:shinra name="Shinra Corp" territory="Midgar plate" state="dominant" agenda="Consolidate reactor control before the Wutai investigation lands" -- Phase 2 shape
+  > CREATE faction:shinra name="Shinra Corp" territory=[place:midgar-plate] state="dominant" agenda="Consolidate reactor control before the Wutai investigation lands" -- Phase 2 shape
   > SET faction:shinra field=state value="declining" -- Lost reactor control
   > SET faction:shinra field=agenda value="Recover reactor control before the board meets" -- Agenda shifts with story
   > APPEND faction:shinra field=members value="char:tseng" -- Named member
-  > MAP_SET faction:zaft field=knowledge_asymmetry key=knows_archangel_status value="Ship escaped damaged" -- Confirmed intel
-  > MAP_SET faction:zaft field=knowledge_asymmetry key=unknown_archangel_pilot value="Strike pilot identity" -- Known gap
-  > MAP_SET faction:zaft field=knowledge_asymmetry key=misreading_archangel-identity value="Assumes pilot still unconfirmed" -- False belief
+  > MAP_SET faction:zaft field=knowledge_asymmetry key=archangel_status value="Ship escaped damaged" -- Confirmed intel
+  > MAP_SET faction:zaft field=knowledge_asymmetry key=archangel_pilot_unknown value="Strike pilot identity unknown" -- Known gap
+  > MAP_SET faction:zaft field=knowledge_asymmetry key=misreads_pilot_as_unconfirmed value="Assumes pilot still unconfirmed" -- False belief
 
-  Faction fields (Phase 2): name, members (array of char: ids or string names), territory, state,
-  agenda, knowledge_asymmetry (flat map; keys: knows_<subject> / unknown_<subject> / hiding_<subject> /
-  misreading_<subject>; cap 20 across all four categories).
+  Faction fields (Phase 2): name, members (array of char: ids or string names), territory (array of place: ids), state,
+  agenda, knowledge_asymmetry (flat map of semantic keys, cap 20 total).
   Pressure points (pressure:<id> entities) are collision fuel — small tensions not yet collisions.
   Cap is 5; oldest auto-drops on overflow. Destroy when consumed into a collision.
   > CREATE pressure:perimeter-tension name="Demon scouts testing church perimeter" source="faction:demon-vanguard" related_to=[char:pc,place:church] -- New seam
@@ -850,12 +840,11 @@ COLLISION CLOSURE (required on every RESOLVED transition):
   > MOVE collision:shadow-activity field=status ACTIVE->RESOLVED
   > SET collision:shadow-activity field=outcome_type value=EVOLVED
   > SET collision:shadow-activity field=aftermath value="The watcher was neutralized, but not before transmitting. Someone now knows Arcueid is in the district."
-  > SET collision:shadow-activity field=successor_collision_ids+ value=handler-convergence
-  > CREATE collision:handler-convergence name="Handler Convergence" distance_category=SHORT forces="handler network advancing on Arcueid; if they move first extraction becomes impossible" location=district-safehouse involved_chars=[pc,arcueid] parent_collision_ids=shadow-activity
+  > APPEND collision:shadow-activity field=successor_collision_ids value=handler-convergence
+  > CREATE collision:handler-convergence name="Handler Convergence" distance_category=SHORT forces="handler network advancing on Arcueid; if they move first extraction becomes impossible" location=district-safehouse involved_chars=[pc,arcueid] parent_collision_ids=[shadow-activity]
 
 HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):
   - Pressure points: REMOVE when activated (converted into collision fuel) or no longer relevant. These are seeds, not history.
-  - Noticed details: REMOVE when fired (used in scene) or no longer relevant.
   - Before APPEND: check if a similar entry already exists. Update or skip, don't duplicate.
 
 VOLUME PER TURN (HARD CAP: 20 lines — excess lines are DROPPED):

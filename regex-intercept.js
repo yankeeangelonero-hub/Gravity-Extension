@@ -6,8 +6,8 @@
  *   > SET char:ada-wong field=agenda value="Investigate the warehouse fire and find the witness" -- Updated agenda
  *   > MOVE constraint:c1 field=integrity from=STABLE to=STRESSED -- Pressure
  *   > APPEND char:ada-wong field=noticed_details value="Carries a katana" -- Observed
- *   > READ char:ada-wong target=autumn "Unknown variable" -- Initial read
- *   > MAP_DEL char:ada-wong field=reads key=barret -- No longer relevant
+ *   > MAP_SET char:ada-wong field=knowledge_asymmetry key=lying_about_alibi value="Claims she was alone" -- New asymmetry
+ *   > MAP_DEL char:ada-wong field=knowledge_asymmetry key=lying_about_alibi -- No longer relevant
  *   > DESTROY char:minor-npc -- Left permanently
  *
  * Each line is independent — partial parsing works naturally.
@@ -210,8 +210,83 @@ function parseLine(line, lineNum) {
 }
 
 /**
+ * Walk a bracketed array literal starting at str[start] (must be '[').
+ * Tracks quote state and bracket depth so quoted/nested commas don't split.
+ * Returns { elements, end } where end is the index AFTER the matching ']'.
+ * Returns null if no matching ']' is found.
+ */
+function scanBracketArray(str, start) {
+    if (str[start] !== '[') return null;
+    let depth = 1;
+    let quote = null;
+    const elements = [];
+    let buf = '';
+    let i = start + 1;
+    for (; i < str.length; i++) {
+        const ch = str[i];
+        if (quote) {
+            if (ch === '\\' && i + 1 < str.length) {
+                buf += ch + str[i + 1];
+                i++;
+                continue;
+            }
+            if (ch === quote) quote = null;
+            buf += ch;
+            continue;
+        }
+        if (ch === '"' || ch === '\'') {
+            quote = ch;
+            buf += ch;
+            continue;
+        }
+        if (ch === '[') {
+            depth++;
+            buf += ch;
+            continue;
+        }
+        if (ch === ']') {
+            depth--;
+            if (depth === 0) {
+                const trimmed = buf.trim();
+                if (trimmed.length > 0 || elements.length > 0) elements.push(trimmed);
+                return { elements, end: i + 1 };
+            }
+            buf += ch;
+            continue;
+        }
+        if (ch === ',' && depth === 1) {
+            elements.push(buf.trim());
+            buf = '';
+            continue;
+        }
+        buf += ch;
+    }
+    return null;
+}
+
+function unwrapElement(elem) {
+    const t = elem.trim();
+    if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith('\'') && t.endsWith('\'')))) {
+        return t.substring(1, t.length - 1);
+    }
+    return t;
+}
+
+function parseArrayLiteral(str, start) {
+    const scan = scanBracketArray(str, start);
+    if (!scan) return null;
+    // Tolerate trailing comma: ["a", "b",] → ["a", "b"]
+    const cleaned = scan.elements.length > 0 && scan.elements[scan.elements.length - 1] === ''
+        ? scan.elements.slice(0, -1)
+        : scan.elements;
+    return { value: cleaned.map(unwrapElement), end: scan.end };
+}
+
+/**
  * Parse key=value and key="multi word value" pairs from a string.
- * Also handles a bare quoted string at the end (for READ shorthand).
+ * Also handles a bare quoted string at the end (for READ shorthand) and
+ * bracket-array literals (e.g. key=[a, "b, c", char:x]) via a quote/depth-aware
+ * scanner — naive split(',') would mangle quoted commas.
  *
  * @param {string} str
  * @returns {Object} Key-value map
@@ -220,20 +295,62 @@ function parseKeyValues(str) {
     const result = {};
     if (!str) return result;
 
-    // Match key=value or key="value with spaces"
-    const pattern = /(\w+)\s*=\s*(?:"([^"]*?)"|'([^']*?)'|(\S+))/g;
-    let match;
-    let lastMatchEnd = 0;
+    let i = 0;
+    let lastEnd = 0;
+    while (i < str.length) {
+        // Skip whitespace
+        while (i < str.length && /\s/.test(str[i])) i++;
+        if (i >= str.length) break;
 
-    while ((match = pattern.exec(str)) !== null) {
-        const key = match[1].toLowerCase();
-        const value = match[2] ?? match[3] ?? match[4] ?? '';
-        result[key] = value;
-        lastMatchEnd = match.index + match[0].length;
+        // Try to match a key= prefix
+        const keyMatch = str.slice(i).match(/^(\w+)\s*=\s*/);
+        if (!keyMatch) break;
+
+        const key = keyMatch[1].toLowerCase();
+        i += keyMatch[0].length;
+
+        if (i >= str.length) {
+            result[key] = '';
+            lastEnd = i;
+            break;
+        }
+
+        // Bracket array literal
+        if (str[i] === '[') {
+            const arr = parseArrayLiteral(str, i);
+            if (arr) {
+                result[key] = arr.value;
+                i = arr.end;
+                lastEnd = i;
+                continue;
+            }
+            // Unterminated — fall through to bare-token path
+        }
+
+        // Quoted string
+        if (str[i] === '"' || str[i] === '\'') {
+            const q = str[i];
+            let j = i + 1;
+            while (j < str.length && str[j] !== q) {
+                if (str[j] === '\\' && j + 1 < str.length) j += 2;
+                else j++;
+            }
+            result[key] = str.substring(i + 1, j);
+            i = j < str.length ? j + 1 : j;
+            lastEnd = i;
+            continue;
+        }
+
+        // Bare token (whitespace-terminated)
+        let j = i;
+        while (j < str.length && !/\s/.test(str[j])) j++;
+        result[key] = str.substring(i, j);
+        i = j;
+        lastEnd = i;
     }
 
     // Check for bare quoted string after all key=value pairs (READ shorthand)
-    const remaining = str.substring(lastMatchEnd).trim();
+    const remaining = str.substring(lastEnd).trim();
     const bareQuote = remaining.match(/^"([^"]*?)"|^'([^']*?)'/);
     if (bareQuote) {
         result._bareValue = bareQuote[1] ?? bareQuote[2] ?? '';
@@ -252,6 +369,10 @@ function parseKeyValues(str) {
 function parseStateScalar(raw) {
     const trimmed = String(raw || '').trim();
     if (!trimmed) return '';
+    if (trimmed.startsWith('[')) {
+        const arr = parseArrayLiteral(trimmed, 0);
+        if (arr && arr.end === trimmed.length) return arr.value;
+    }
     if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith('\'') && trimmed.endsWith('\''))) {
         return trimmed.substring(1, trimmed.length - 1);
     }
@@ -284,9 +405,12 @@ function parseStateLine(line, lineNum) {
     if (!cleaned) return { entry: null, error: null, raw };
 
     if (DIRECT_TX_VERB_REGEX.test(cleaned)) {
-        const { tx, error } = parseLine(cleaned, lineNum);
-        if (tx) return { entry: { kind: 'directTx', tx, raw }, error: null, raw };
-        return { entry: null, error, raw };
+        const verb = cleaned.match(/^(\w+)/)?.[1] || '';
+        return {
+            entry: null,
+            error: `Line ${lineNum}: Verb syntax ("${verb} ...") is not allowed inside ---STATE--- blocks. STATE blocks are compact-only — use dotted-path form (e.g. "collision:id.status: RESOLVED"). Verb syntax (CR/S/TR/A/MS/...) belongs in ---LEDGER--- blocks.`,
+            raw,
+        };
     }
 
     const timestampMatch = cleaned.match(/^at\s*:\s*(.+)$/i);

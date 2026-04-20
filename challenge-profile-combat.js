@@ -6,7 +6,7 @@
  * The generic engine delegates to these hooks at every domain-specific decision point.
  */
 
-import { coerceNumber, normalizeText, toList } from './challenge-shared.js';
+import { coerceNumber, toList } from './challenge-shared.js';
 
 // ─── Private Helpers ──────────────────────────────────────────────────────────
 
@@ -90,51 +90,12 @@ function resolveCombatantReference(state, ref) {
     };
 }
 
-function getCombatHostiles(combat) {
-    if (!combat) return [];
-    if (Array.isArray(combat.hostiles)) return combat.hostiles;
-    if (Array.isArray(combat.participants)) return combat.participants;
-    if (typeof combat.hostiles === 'string') {
-        return combat.hostiles.split(',').map(part => normalizeText(part)).filter(Boolean);
-    }
-    if (typeof combat.participants === 'string') {
-        return combat.participants.split(',').map(part => normalizeText(part)).filter(Boolean);
-    }
-    return [];
-}
-
 function getPrimaryOpponent(state, combat) {
     if (!combat) return null;
     if (combat.primary_enemy) {
         const resolved = resolveCombatantReference(state, combat.primary_enemy);
         if (resolved) return resolved;
     }
-
-    const hostiles = getCombatHostiles(combat)
-        .map(hostile => resolveCombatantReference(state, hostile))
-        .filter(Boolean);
-
-    if (hostiles.length > 0) {
-        return hostiles
-            .slice()
-            .sort((a, b) => (coerceNumber(b.power) ?? -999) - (coerceNumber(a.power) ?? -999))[0];
-    }
-
-    const threatPower = coerceNumber(combat.threat_power ?? combat.enemy_power ?? combat.power);
-    if (threatPower != null) {
-        return {
-            entity_type: 'adhoc',
-            id: normalizeText(combat.primary_enemy || combat.name || 'hostiles'),
-            name: normalizeText(combat.primary_enemy || combat.name || 'Hostile force'),
-            power: threatPower,
-            power_base: coerceNumber(combat.threat_power_base ?? combat.power_base),
-            power_basis: combat.threat || combat.power_basis || '',
-            abilities: toList(combat.abilities),
-            wounds: {},
-            equipment: '',
-        };
-    }
-
     return null;
 }
 
@@ -199,7 +160,7 @@ const combatProfile = Object.freeze({
     optionPrefix: 'combat',
 
     seedFields: Object.freeze({ kind: 'combat', status: 'ACTIVE' }),
-    modelFields: ['participants', 'hostiles', 'primary_enemy', 'terrain', 'situation', 'threat'],
+    modelFields: ['primary_enemy', 'outcome', 'aftermath'],
     resolutionFields: ['outcome', 'aftermath'],
 
     lorebookKeys: Object.freeze({
@@ -240,11 +201,8 @@ const combatProfile = Object.freeze({
 
     resolveParticipants(state, entity) {
         const pc = resolveStateCharacter(state, 'pc');
-        const hostileRefs = getCombatHostiles(entity);
-        const opponents = hostileRefs
-            .map(ref => resolveCombatantReference(state, ref))
-            .filter(Boolean);
-        return { pc, opponents, allies: [] };
+        const primary = getPrimaryOpponent(state, entity);
+        return { pc, opponents: primary ? [primary] : [], allies: [] };
     },
 
     describeActor,
@@ -256,9 +214,6 @@ const combatProfile = Object.freeze({
 
         const pcActor = resolveStateCharacter(state, 'pc');
         const primaryEnemy = baseline.primary_enemy;
-        const hostiles = getCombatHostiles(entity)
-            .map(ref => resolveCombatantReference(state, ref))
-            .filter(Boolean);
 
         lines.push(`Challenge runtime is active for combat:${runtime.entity_id}.`);
         lines.push(`Challenge lock: ${runtime.locked ? 'engaged' : 'released'}`);
@@ -282,12 +237,9 @@ const combatProfile = Object.freeze({
             lines.push(`COMBAT ENTITY (${entity.id || runtime.entity_id})`);
             lines.push('  This combat container already exists. Do not create it again; only set or update its fields.');
             if (entity.status) lines.push(`  Status: ${entity.status}`);
-            if (entity.situation) lines.push(`  Situation: ${entity.situation}`);
-            if (entity.terrain) lines.push(`  Terrain: ${entity.terrain}`);
-            if (entity.threat) lines.push(`  Threat: ${entity.threat}`);
-            if (entity.participants) lines.push(`  Participants: ${Array.isArray(entity.participants) ? entity.participants.join(', ') : entity.participants}`);
-            if (entity.hostiles) lines.push(`  Hostiles: ${Array.isArray(entity.hostiles) ? entity.hostiles.join(', ') : entity.hostiles}`);
             if (entity.primary_enemy) lines.push(`  Primary enemy field: ${typeof entity.primary_enemy === 'object' ? JSON.stringify(entity.primary_enemy) : entity.primary_enemy}`);
+            if (entity.outcome) lines.push(`  Outcome: ${entity.outcome}`);
+            if (entity.aftermath) lines.push(`  Aftermath: ${entity.aftermath}`);
         } else {
             lines.push('');
             lines.push('The extension auto-seeded the combat entity. Do not create it again. Fill its fields this turn.');
@@ -296,12 +248,6 @@ const combatProfile = Object.freeze({
         lines.push('');
         lines.push(`BASELINE: ${baseline.category}${baseline.gap != null ? ` | power gap ${baseline.gap} (PC ${baseline.pc_power} vs enemy ${baseline.enemy_power})` : ''}${baseline.category === 'Highly likely' || baseline.category === 'Average' || baseline.category === 'Highly unlikely' ? ` | threshold ${describeSuccessThreshold(baseline.category, dcTable[baseline.category])}` : ''}`);
         lines.push(`PRIMARY OPPONENT: ${describeActor(primaryEnemy)}`);
-        if (hostiles.length) {
-            lines.push('HOSTILES:');
-            for (const hostile of hostiles) {
-                lines.push(`  - ${describeActor(hostile)}`);
-            }
-        }
 
         lines.push('');
         lines.push('STORED OPTIONS');
@@ -347,7 +293,7 @@ const combatProfile = Object.freeze({
                 if (runtime.phase === 'setup_buffered') {
                     lines.push('Setup is incomplete, but the player already committed to an action while setup had not advanced.');
                     lines.push(`combat:${runtime.entity_id} already exists. Do not create it again.`);
-                    lines.push(`Fill combat:${runtime.entity_id} fields: participants, hostiles, primary_enemy, terrain, situation, threat.`);
+                    lines.push(`Fill combat:${runtime.entity_id} field: primary_enemy. Carry tactical detail (terrain, spacing, threat shape) in scene prose, not in persisted fields.`);
                     lines.push('Then immediately resolve the buffered player action this same turn.');
                     if (runtime.pending_action.assessment_only) {
                         lines.push('Because the buffered action had no declared category, assess it honestly after setup and then output 3-4 clickable options instead of silently ignoring it.');
@@ -360,7 +306,7 @@ const combatProfile = Object.freeze({
                     }
                 } else {
                     lines.push(`The extension auto-seeded combat:${runtime.entity_id}. Do not create it again.`);
-                    lines.push('Establish participants, hostiles, primary_enemy, terrain, situation, threat.');
+                    lines.push('Set primary_enemy on the combat container. Carry terrain, spacing, threat shape, and tactical detail in scene prose, not in persisted fields.');
                     lines.push('Assign justified power_base, power, power_basis, and abilities to important new enemies.');
                     lines.push('Use the scene draw to reveal encounter circumstance and leverage: who sees clearly, who is exposed, how the terrain is really working, and why the opening options fall where they do.');
                     lines.push('Do not resolve the first clash yet. Stop on the opening situation and output 3-4 clickable options.');
@@ -427,7 +373,7 @@ const combatProfile = Object.freeze({
     },
 
     setupGuidance() {
-        return 'The extension already seeded the combat entity. Do not create it again. Fill entity fields: participants, hostiles, primary_enemy, terrain, situation, threat. Assign justified power_base, power, power_basis, and abilities to important new enemies.';
+        return 'The extension already seeded the combat entity. Do not create it again. Set primary_enemy on it. Carry terrain, spacing, threat shape, and tactical detail in scene prose, not in persisted fields. Assign justified power_base, power, power_basis, and abilities to important new enemies.';
     },
 
     cleanupGuidance() {
@@ -446,14 +392,8 @@ const combatProfile = Object.freeze({
         if (!postSetup) return null;
 
         const missing = [];
-        if (!entity.hostiles || (Array.isArray(entity.hostiles) && entity.hostiles.length === 0)) {
-            missing.push('hostiles');
-        }
         if (!entity.primary_enemy) {
             missing.push('primary_enemy');
-        }
-        if (!entity.situation) {
-            missing.push('situation');
         }
 
         if (!missing.length) return null;

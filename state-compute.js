@@ -77,37 +77,97 @@ function createEmptyState() {
     };
 }
 
+function coerceStringifiedArray(value) {
+    if (Array.isArray(value)) return value;
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    const m = trimmed.match(/^\[(.*)\]$/s);
+    if (m) {
+        const inner = m[1].trim();
+        if (!inner) return [];
+        return inner.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    if (trimmed) return [trimmed];
+    return [];
+}
+
+function normalizeArrayFields(state) {
+    for (const c of Object.values(state.collisions || {})) {
+        for (const f of ['involved_chars', 'parent_collision_ids', 'successor_collision_ids']) {
+            if (c[f] !== undefined && c[f] !== null) {
+                const coerced = coerceStringifiedArray(c[f]);
+                if (coerced !== null) c[f] = coerced;
+            }
+        }
+    }
+    for (const p of Object.values(state.pressures || {})) {
+        if (p.related_to !== undefined && p.related_to !== null) {
+            const coerced = coerceStringifiedArray(p.related_to);
+            if (coerced !== null) p.related_to = coerced;
+        }
+    }
+    for (const f of Object.values(state.factions || {})) {
+        for (const fld of ['members', 'territory']) {
+            if (f[fld] !== undefined && f[fld] !== null) {
+                const coerced = coerceStringifiedArray(f[fld]);
+                if (coerced !== null) f[fld] = coerced;
+            }
+        }
+    }
+}
+
 function normalizeCharacterKnowledgeAsymmetry(state) {
-    // Nested containers exist for back-compat with legacy writes; they do not
-    // count toward the §2.1 "20 entries across all four categories combined" cap.
-    const STRUCTURAL_KEYS = new Set(['knows', 'unknown', 'hiding', 'misreading']);
+    const STRUCTURAL_KEYS = ['knows', 'unknown', 'hiding', 'misreading'];
     for (const char of Object.values(state.characters || {})) {
         const tier = String(char?.tier || '').toUpperCase();
         if (!['KNOWN', 'TRACKED', 'PRINCIPAL'].includes(tier)) continue;
-        const ka = char.knowledge_asymmetry;
+        let ka = char.knowledge_asymmetry;
         if (ka === undefined || ka === null || ka === '') {
-            char.knowledge_asymmetry = { knows: {}, unknown: {}, hiding: {}, misreading: {} };
+            char.knowledge_asymmetry = {};
+            ka = char.knowledge_asymmetry;
         } else if (typeof ka === 'string') {
-            char.knowledge_asymmetry = { knows: {}, unknown: {}, hiding: {}, misreading: {}, legacy: ka };
-        } else if (typeof ka === 'object' && !Array.isArray(ka)) {
-            if (!ka.knows || typeof ka.knows !== 'object') ka.knows = {};
-            if (!ka.unknown || typeof ka.unknown !== 'object') ka.unknown = {};
-            if (!ka.hiding || typeof ka.hiding !== 'object') ka.hiding = {};
-            if (!ka.misreading || typeof ka.misreading !== 'object') ka.misreading = {};
+            char.knowledge_asymmetry = { legacy: ka };
+            ka = char.knowledge_asymmetry;
+        } else if (typeof ka !== 'object' || Array.isArray(ka)) {
+            char.knowledge_asymmetry = {};
+            ka = char.knowledge_asymmetry;
         }
         if (char.last_seen_at === undefined || char.last_seen_at === null) {
             char.last_seen_at = '';
         }
 
-        // Cap flat KA at 20 entries across all four categories combined (§2.1).
-        // Structural containers (knows/unknown/hiding/misreading) and `legacy`
-        // do not count. Oldest keys win insertion order; drop excess from the tail.
-        const kaObj = char.knowledge_asymmetry;
-        if (kaObj && typeof kaObj === 'object' && !Array.isArray(kaObj)) {
-            const flatKeys = Object.keys(kaObj).filter(k => k !== 'legacy' && !STRUCTURAL_KEYS.has(k));
-            if (flatKeys.length > 20) {
-                for (const k of flatKeys.slice(20)) delete kaObj[k];
+        for (const bucket of STRUCTURAL_KEYS) {
+            const sub = ka[bucket];
+            if (!sub || typeof sub !== 'object' || Array.isArray(sub)) {
+                delete ka[bucket];
+                continue;
             }
+            for (const [k, v] of Object.entries(sub)) {
+                if (typeof v !== 'string' || !v.trim()) continue;
+                const flatKey = `${bucket}_${k}`;
+                if (ka[flatKey] === undefined) ka[flatKey] = v.trim();
+            }
+            delete ka[bucket];
+        }
+
+        if (char.reads && typeof char.reads === 'object' && !Array.isArray(char.reads)) {
+            for (const [k, v] of Object.entries(char.reads)) {
+                let str = '';
+                if (typeof v === 'string') {
+                    str = v.trim();
+                } else if (Array.isArray(v) && v.length) {
+                    str = String(v[v.length - 1]).trim();
+                }
+                if (!str) continue;
+                const flatKey = `reads_${k}`;
+                if (ka[flatKey] === undefined) ka[flatKey] = str;
+            }
+        }
+        delete char.reads;
+
+        const flatKeys = Object.keys(ka).filter(k => k !== 'legacy' && typeof ka[k] === 'string');
+        if (flatKeys.length > 20) {
+            for (const k of flatKeys.slice(20)) delete ka[k];
         }
     }
 }
@@ -362,16 +422,21 @@ function applyTransaction(state, tx) {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
                 if (!Array.isArray(target[tx.d.f])) target[tx.d.f] = [];
-                // Duplicate detection — reject appends >80% similar to existing entry
                 const newVal = typeof tx.d.v === 'string' ? tx.d.v : JSON.stringify(tx.d.v);
+                // Fields where intentional near-duplicate digests are valid — only block exact repeats.
+                const exemptFromFuzzy = (
+                    (tx.e === 'world' && tx.d.f === 'collision_archive') ||
+                    (tx.e === 'char' && (tx.d.f === 'key_moments' || tx.d.f === 'intimate_history' || tx.d.f === 'demonstrated_traits')) ||
+                    (tx.e === 'pc' && tx.d.f === 'demonstrated_traits')
+                );
                 const isDuplicate = target[tx.d.f].some(existing => {
                     const existingStr = typeof existing === 'string' ? existing : JSON.stringify(existing);
+                    if (exemptFromFuzzy) return existingStr === newVal;
                     return stringSimilarity(existingStr, newVal) > 0.8;
                 });
                 if (!isDuplicate) {
                     target[tx.d.f].push(tx.d.v);
                     recordHistory(state, tx.e, tx.id, `${tx.d.f}[]`, undefined, tx.d.v, tx);
-                    // Auto-trim collision_archive to MAX_COLLISION_ARCHIVE entries
                     if (tx.e === 'world' && tx.d.f === 'collision_archive') {
                         const arr = state.world.collision_archive;
                         if (Array.isArray(arr) && arr.length > MAX_COLLISION_ARCHIVE) {
@@ -400,24 +465,42 @@ function applyTransaction(state, tx) {
         case 'MS': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
+                // Reject legacy reads writes by routing into KA as flat keys.
+                if (tx.d.f === 'reads' && tx.e === 'char') {
+                    if (!target.knowledge_asymmetry || typeof target.knowledge_asymmetry !== 'object' || Array.isArray(target.knowledge_asymmetry)) {
+                        target.knowledge_asymmetry = {};
+                    }
+                    const flatKey = `reads_${String(tx.d.k || '').replace(/\./g, '_')}`;
+                    const oldVal = target.knowledge_asymmetry[flatKey];
+                    target.knowledge_asymmetry[flatKey] = tx.d.v;
+                    if (oldVal !== tx.d.v) {
+                        recordHistory(state, tx.e, tx.id, `knowledge_asymmetry.${flatKey}`, oldVal, tx.d.v, tx);
+                    }
+                    break;
+                }
                 const dotted = tx.d.k && tx.d.k.includes('.');
                 const fieldVal = target[tx.d.f];
                 if (typeof fieldVal !== 'object' || Array.isArray(fieldVal)) {
-                    // Preserve any legacy string at the field level before coercing to a map.
                     if (dotted && typeof fieldVal === 'string' && fieldVal.trim()) {
                         target[tx.d.f] = { legacy: fieldVal.trim() };
                     } else {
                         target[tx.d.f] = {};
                     }
                 }
-                if (dotted) {
-                    // Dotted key: navigate into nested sub-maps (e.g. knows.apostle or archangel.knows.status)
+                // Flatten dotted KA writes (e.g. knows.weapon → knows_weapon) into the top-level KA map.
+                if (dotted && tx.d.f === 'knowledge_asymmetry') {
+                    const flatKey = tx.d.k.replace(/\./g, '_');
+                    const oldVal = target[tx.d.f][flatKey];
+                    target[tx.d.f][flatKey] = tx.d.v;
+                    if (oldVal !== tx.d.v) {
+                        recordHistory(state, tx.e, tx.id, `${tx.d.f}.${flatKey}`, oldVal, tx.d.v, tx);
+                    }
+                } else if (dotted) {
                     const keyParts = tx.d.k.split('.');
                     let obj = target[tx.d.f];
                     for (let i = 0; i < keyParts.length - 1; i++) {
                         const k = keyParts[i];
                         if (typeof obj[k] === 'string' && obj[k].trim()) {
-                            // Preserve legacy string at intermediate key as .legacy slot.
                             obj[k] = { legacy: obj[k].trim() };
                         } else if (typeof obj[k] !== 'object' || Array.isArray(obj[k])) {
                             obj[k] = {};
@@ -429,18 +512,6 @@ function applyTransaction(state, tx) {
                     obj[leafKey] = tx.d.v;
                     if (oldVal !== tx.d.v) {
                         recordHistory(state, tx.e, tx.id, `${tx.d.f}.${tx.d.k}`, oldVal, tx.d.v, tx);
-                    }
-                } else if (tx.d.f === 'reads') {
-                    // Reads are an append log capped at 5 — never overwrite
-                    const existing = target[tx.d.f][tx.d.k];
-                    const log = Array.isArray(existing) ? [...existing] : (existing ? [String(existing)] : []);
-                    const entry = tx.t ? `[${tx.t}] ${tx.d.v}` : String(tx.d.v);
-                    if (log[log.length - 1] !== entry) {
-                        const prev = log[log.length - 1];
-                        log.push(entry);
-                        if (log.length > 5) log.splice(0, log.length - 5);
-                        target[tx.d.f][tx.d.k] = log;
-                        recordHistory(state, tx.e, tx.id, `reads.${tx.d.k}`, prev, entry, tx);
                     }
                 } else {
                     const oldVal = target[tx.d.f][tx.d.k];
@@ -527,6 +598,7 @@ function computeState(snapshot, transactions) {
         }
     }
 
+    normalizeArrayFields(state);
     normalizeCharacterKnowledgeAsymmetry(state);
     migrateFactionToPhase2(state);
 

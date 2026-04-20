@@ -15,7 +15,28 @@
  * OOC: eval.
  */
 
-import { validateTransition } from './state-machine.js';
+import { validateTransition, getStateMachineField } from './state-machine.js';
+
+const ENTITY_TO_COLLECTION = {
+    char: 'characters',
+    constraint: 'constraints',
+    collision: 'collisions',
+    combat: 'combats',
+    faction: 'factions',
+    place: 'places',
+    pressure: 'pressures',
+    world: 'world',
+    pc: 'pc',
+    divination: 'divination',
+};
+
+// LLM-rejected fields owned by the engine. SET writes here are dropped at
+// validation time so state-compute never sees them. distance is decremented
+// by the timeskip engine; pressure.created_at_tx is stamped from tx.tx in CR.
+const ENGINE_OWNED_FIELDS = {
+    collision: new Set(['distance']),
+    pressure: new Set(['created_at_tx']),
+};
 
 // ─── Valid Values ──────────────────────────────────────────────────────────────
 
@@ -232,10 +253,8 @@ function findMissingArchiveEntries(committedTxns, state) {
     for (const { id: colId } of terminals) {
         const col = state.collisions?.[colId];
         const nameToken = col?.name ? String(col.name) : '';
-        const matched = archive.some(entry => {
-            const s = String(entry || '');
-            return s.includes(colId) || (nameToken && s.includes(nameToken));
-        });
+        const idToken = `[id ${colId}]`;
+        const matched = archive.some(entry => typeof entry === 'string' && entry.includes(idToken));
         if (!matched) missing.push({ id: colId, name: nameToken });
     }
     return missing;
@@ -243,21 +262,73 @@ function findMissingArchiveEntries(committedTxns, state) {
 
 /**
  * Validate state-machine transitions for a batch of transactions (§6.1).
- * Only `TR` ops are checked; all others pass through untouched.
- * Invalid TRs are pulled out of the `valid` stream and returned as structured
- * errors for the caller's correction queue. Other TXs in the batch still
- * commit (per-tx filtering, not batch abort).
+ * Gates `TR` ops, `S` ops on machine-governed fields (tier/integrity/status),
+ * and engine-owned field writes (collision.distance, pressure.created_at_tx).
+ * Rejected TXs are pulled out of `valid` and returned as structured errors.
+ * Other TXs in the batch still commit (per-tx filtering, not batch abort).
+ *
+ * `state` is the post-replay computed state; needed to derive `from` for `S`
+ * ops since the LLM only writes `to`. Caller passes _currentState.
  *
  * @param {Array} transactions
+ * @param {Object} [state] - current computed state (optional; required for S-on-machine-field gating)
  * @returns {{ valid: Array, errors: Array<{ lineNum: number, error: string, fix: string, raw: string, tx: any }> }}
  */
-function validateTransitions(transactions) {
+function validateTransitions(transactions, state) {
     const valid = [];
     const errors = [];
     if (!Array.isArray(transactions)) return { valid: [], errors: [] };
 
     for (let i = 0; i < transactions.length; i++) {
         const tx = transactions[i];
+
+        if (tx?.op === 'S') {
+            const engineFields = ENGINE_OWNED_FIELDS[tx.e];
+            if (engineFields && engineFields.has(tx.d?.f)) {
+                errors.push({
+                    lineNum: i,
+                    error: `${tx.e}:${tx.id}.${tx.d.f} is engine-owned — SET is rejected`,
+                    fix: tx.e === 'collision' && tx.d.f === 'distance'
+                        ? `Set distance_category=IMMEDIATE|SHORT|MEDIUM|LONG on CR; the engine resolves and ticks the numeric distance.`
+                        : `Do not write ${tx.e}.${tx.d.f} directly — the engine manages this field.`,
+                    raw: `[s ${tx.e}:${tx.id} ${tx.d.f}]`,
+                    tx,
+                });
+                continue;
+            }
+
+            const machineField = getStateMachineField(tx.e, tx.d?.f);
+            if (machineField) {
+                const collection = ENTITY_TO_COLLECTION[tx.e];
+                const entity = state?.[collection]?.[tx.id];
+                const fromVal = entity?.[machineField];
+                if (fromVal === undefined || fromVal === null) {
+                    errors.push({
+                        lineNum: i,
+                        error: `Cannot SET ${tx.e}:${tx.id}.${machineField} — entity not found or has no current ${machineField}; use TR instead`,
+                        fix: `Use TR ${tx.e}:${tx.id} field=${machineField} from=<current> to=${tx.d?.v} so the state machine can validate the move.`,
+                        raw: `[s ${tx.e}:${tx.id} ${machineField}]`,
+                        tx,
+                    });
+                    continue;
+                }
+                const result = validateTransition(tx.e, machineField, fromVal, tx.d?.v);
+                if (!result.valid) {
+                    errors.push({
+                        lineNum: i,
+                        error: result.error,
+                        fix: `${result.fix} (Use TR, not S, for state-machine fields.)`,
+                        raw: `[s ${tx.e}:${tx.id} ${machineField}]`,
+                        tx,
+                    });
+                    continue;
+                }
+            }
+
+            valid.push(tx);
+            continue;
+        }
+
         if (tx?.op !== 'TR') {
             valid.push(tx);
             continue;
