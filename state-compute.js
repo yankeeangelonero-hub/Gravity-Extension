@@ -486,6 +486,9 @@ function applyTransaction(state, tx) {
                     if (!('last_shift' in data)) data.last_shift = null;
                     if (!data.status) data.status = 'active';
                 }
+                if (tx.e === 'faction') {
+                    if (!data.tier) data.tier = 'KNOWN';
+                }
                 // Phase 2: distance_category → canonical starting distance
                 if (tx.e === 'collision') {
                     if (data.distance_category) {

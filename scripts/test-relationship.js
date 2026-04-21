@@ -104,6 +104,33 @@ group('relationship entity — CR + S', () => {
     });
 });
 
+group('faction.tier', () => {
+    test('CR faction with tier=TRACKED stores tier', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'faction', id: 'zaft', d: { name: 'ZAFT', tier: 'TRACKED' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.factions.zaft.tier, 'TRACKED', 'tier stored');
+    });
+
+    test('CR faction without tier defaults to KNOWN', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'faction', id: 'shinra', d: { name: 'Shinra' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.factions.shinra.tier, 'KNOWN', 'default tier');
+    });
+
+    test('S faction field=tier updates tier', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'faction', id: 'zaft', d: { name: 'ZAFT', tier: 'TRACKED' } },
+            { tx: 2, op: 'S', e: 'faction', id: 'zaft', d: { f: 'tier', v: 'PRINCIPAL' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.factions.zaft.tier, 'PRINCIPAL', 'tier updated');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
