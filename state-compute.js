@@ -447,6 +447,7 @@ function adjustRelationshipStatus(state, entityType, entityId, newStatus) {
     const rel = state.relationships?.[relId];
     if (!rel) return;
     if (rel.status === newStatus) return;
+    if (rel.status === 'archived') return; // terminal — no transitions out
     rel.status = newStatus;
 }
 

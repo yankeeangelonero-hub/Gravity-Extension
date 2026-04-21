@@ -361,7 +361,7 @@ function validateTransitions(transactions, state) {
             if (trEntity !== undefined) {
                 const trActual = trEntity?.[trMachineField];
                 // If entity exists but field not yet set, allow only if claimed from == initial state.
-                const INITIAL_STATES = { char: 'UNKNOWN', constraint: 'STABLE', collision: 'ACTIVE', combat: 'ACTIVE' };
+                const INITIAL_STATES = { char: 'UNKNOWN', constraint: 'STABLE', collision: 'ACTIVE', combat: 'ACTIVE', faction: 'KNOWN', relationship: 'active' };
                 const initialState = INITIAL_STATES[tx.e];
                 if ((trActual === undefined || trActual === null) && String(tx.d?.from || '').toUpperCase() !== initialState) {
                     errors.push({
@@ -649,10 +649,19 @@ function validateTransaction(tx, state) {
  */
 function validateBlock(txs, baseState) {
     const shadow = {
-        characters: { ...(baseState?.characters || {}) },
-        factions:   { ...(baseState?.factions   || {}) },
+        characters:    { ...(baseState?.characters    || {}) },
+        factions:      { ...(baseState?.factions      || {}) },
         relationships: { ...(baseState?.relationships || {}) },
-        pc: baseState?.pc ? { ...baseState.pc } : {},
+        constraints:   { ...(baseState?.constraints   || {}) },
+        collisions:    { ...(baseState?.collisions     || {}) },
+        combats:       { ...(baseState?.combats        || {}) },
+        places:        { ...(baseState?.places         || {}) },
+        pressures:     { ...(baseState?.pressures      || {}) },
+        world:         { ...(baseState?.world          || {}) },
+        divination:    { ...(baseState?.divination     || {}) },
+        pc:            baseState?.pc ? { ...baseState.pc } : {},
+        lastTxId:      baseState?.lastTxId ?? -1,
+        _history:      {},
     };
     const violations = [];
     const applyTransaction = _applyTransactionFromCompute;

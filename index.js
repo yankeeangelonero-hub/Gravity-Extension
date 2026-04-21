@@ -2073,21 +2073,19 @@ async function onMessageReceived(messageId) {
             // 5d — scene cast overflow (soft cap)
             const SCENE_CAST_SOFT_CAP = 6;
             const castNow = Array.isArray(_currentState.pc?.scene_cast) ? _currentState.pc.scene_cast : [];
+            const CAST_OVERFLOW_KEY = 'cast-overflow';
             if (castNow.length > SCENE_CAST_SOFT_CAP) {
-                const key = `cast-overflow:${castNow.length}`;
-                if (!_firedRelationshipCorrections.has(key)) {
-                    _firedRelationshipCorrections.add(key);
+                if (!_firedRelationshipCorrections.has(CAST_OVERFLOW_KEY)) {
+                    _firedRelationshipCorrections.add(CAST_OVERFLOW_KEY);
                     const preview = castNow.slice(0, 4).join(', ')
                         + (castNow.length > 4 ? `, +${castNow.length - 4} more` : '');
                     queueCorrections([{
-                        raw: `[${key}]`,
+                        raw: `[${CAST_OVERFLOW_KEY}]`,
                         error: `Scene cast has ${castNow.length} members (soft cap ${SCENE_CAST_SOFT_CAP}): ${preview}. Either prune with SET pc field=scene_cast v=[<reduced list>] or advance the turn to replace the cast.`,
                     }]);
                 }
             } else {
-                for (const k of Array.from(_firedRelationshipCorrections)) {
-                    if (k.startsWith('cast-overflow:')) _firedRelationshipCorrections.delete(k);
-                }
+                _firedRelationshipCorrections.delete(CAST_OVERFLOW_KEY);
             }
         }
 

@@ -248,6 +248,8 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
     // Bucket assignment
     const castSet = new Set(state.pc?.scene_cast || []);
     const currentPlace = state.pc?.current_place_id || '';
+    // current_place_id is stored as "place:<bareId>"; char.location is stored as "<bareId>"
+    const currentPlaceBare = currentPlace.startsWith('place:') ? currentPlace.slice('place:'.length) : currentPlace;
 
     const inCast = [];
     const inCastKnown = [];
@@ -264,7 +266,7 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
         const rel = state.relationships?.[`pc-${id}`];
         const isDormantOnStage = (
             rel && rel.status === 'dormant' &&
-            currentPlace && char.location === currentPlace
+            currentPlaceBare && (char.location === currentPlaceBare || char.location === currentPlace)
         );
 
         if (onStage && (tier === 'TRACKED' || tier === 'PRINCIPAL')) {
@@ -503,9 +505,9 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
             const rel = state.relationships?.[`pc-${id}`];
             const isDormantFactionOnStage = (
                 rel && rel.status === 'dormant' &&
-                currentPlace &&
+                currentPlaceBare &&
                 Array.isArray(faction.territory) &&
-                faction.territory.includes(currentPlace)
+                (faction.territory.includes(currentPlaceBare) || faction.territory.includes(currentPlace))
             );
             if (onStage && (tier === 'TRACKED' || tier === 'PRINCIPAL')) {
                 inCastFaction.push([id, faction]);
