@@ -331,6 +331,360 @@ group('state-machine: faction.tier transitions', () => {
     });
 });
 
+const consistency = require('../consistency.js');
+
+group('consistency: relationship shape', () => {
+    test('CR relationship with invalid card slug rejects', () => {
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'made-up-card', orientation: 'upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'invalid card should reject');
+    });
+
+    test('CR relationship with invalid orientation rejects', () => {
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-fool', orientation: 'sideways', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'invalid orientation should reject');
+    });
+
+    test('CR relationship with valid fields passes', () => {
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'reversed', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'valid CR should pass');
+    });
+
+    test('CR relationship with bad id format rejects', () => {
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'lacus-kira', d: {
+            card: 'the-fool', orientation: 'upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'non-pc-prefixed id should reject');
+    });
+
+    test('S relationship last_shift with missing fields rejects', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'last_shift', v: { tx: 5, collision_id: 'x' }
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'incomplete last_shift should reject');
+    });
+
+    test('S relationship last_shift=null REJECTS (audit trail protection)', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'last_shift', v: null
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'S last_shift=null would wipe audit trail — must reject');
+    });
+
+    test('CR relationship last_shift=null passes (birth state)', () => {
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'null last_shift at birth is legitimate');
+    });
+
+    test('S relationship status REJECTS unconditionally (engine-owned)', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'status', v: 'active'
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'S status must reject regardless of value — engine-only field');
+    });
+
+    test('CR relationship with omitted status passes (defaults to active)', () => {
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'CR without status should pass (defaulted by engine)');
+    });
+
+    test('S relationship nuance="" rejects (empty nuance loophole)', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'nuance', v: ''
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'empty string nuance must reject');
+    });
+
+    test('S relationship nuance=42 rejects (type coercion loophole)', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'nuance', v: 42
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'non-string nuance must reject');
+    });
+
+    test('S relationship nuance with valid string passes', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'nuance', v: 'The hermit archetype deepens after the Jachin encounter.'
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'valid nuance string passes');
+    });
+
+    test('S relationship missing pc- prefix rejects (id prefix bypass)', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'lacus', d: {
+            f: 'card', v: 'the-hermit'
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'missing pc- prefix on S must reject');
+    });
+
+    test('CR orientation "Upright" (title-case) passes after normalization', () => {
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'Upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'title-cased orientation should pass after normalization');
+    });
+
+    test('S orientation "Reversed" (title-case) passes after normalization', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'orientation', v: 'Reversed'
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'title-cased S orientation normalizes to reversed');
+    });
+
+    test('S last_shift with string from/to rejects (sub-object validation)', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'last_shift', v: {
+                tx: 5, collision_id: 'col:duel',
+                from: 'the-hermit-upright', to: 'the-tower-reversed',
+                reason: 'betrayal',
+            }
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'string from/to must reject');
+    });
+
+    test('S last_shift with valid card-obj from/to passes', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'last_shift', v: {
+                tx: 5, collision_id: 'col:duel',
+                from: { card: 'the-hermit', orientation: 'upright' },
+                to: { card: 'the-tower', orientation: 'reversed' },
+                reason: 'betrayal at the hangar',
+            }
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'valid last_shift with card-obj from/to passes');
+    });
+
+    test('S last_shift with reason > 200 chars rejects (token bloat cap)', () => {
+        const longReason = 'x'.repeat(201);
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'last_shift', v: {
+                tx: 5, collision_id: 'col:duel',
+                from: { card: 'the-hermit', orientation: 'upright' },
+                to: { card: 'the-tower', orientation: 'reversed' },
+                reason: longReason,
+            }
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'reason > 200 chars must reject');
+        assert(result.violations.some(v => /too long/i.test(v.message)), 'specific too-long message');
+    });
+
+    test('S last_shift with reason exactly 200 chars passes', () => {
+        const maxReason = 'x'.repeat(200);
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'last_shift', v: {
+                tx: 5, collision_id: 'col:duel',
+                from: { card: 'the-hermit', orientation: 'upright' },
+                to: { card: 'the-tower', orientation: 'reversed' },
+                reason: maxReason,
+            }
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'reason at exactly 200 chars passes');
+    });
+});
+
+group('consistency: scene_cast entity-ref validation', () => {
+    test('S pc scene_cast with non-existent char rejects', () => {
+        const state = { characters: {}, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:ghost'] } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'hallucinated char id in scene_cast must reject');
+        assert(result.violations.some(v => v.field === 'scene_cast'), 'violation on scene_cast field');
+    });
+
+    test('A pc scene_cast with non-existent faction rejects', () => {
+        const state = { characters: {}, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'A', e: 'pc', id: '', d: { f: 'scene_cast', v: 'faction:phantom' } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'hallucinated faction id in scene_cast A must reject');
+    });
+
+    test('S pc scene_cast with unsupported type rejects', () => {
+        const state = { characters: {}, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['collision:x'] } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'non-char/faction entity type in scene_cast must reject');
+    });
+
+    test('S pc scene_cast with existing char passes', () => {
+        const state = { characters: { lacus: { tier: 'TRACKED' } }, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:lacus'] } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(result.valid, 'existing char in scene_cast passes');
+    });
+
+    test('S pc scene_cast with existing faction passes', () => {
+        const state = { characters: {}, factions: { zaft: { tier: 'PRINCIPAL' } }, relationships: {} };
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['faction:zaft'] } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(result.valid, 'existing faction in scene_cast passes');
+    });
+
+    test('S pc scene_cast with malformed ref (no colon) rejects', () => {
+        const state = { characters: {}, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['lacus'] } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'bare id without type prefix must reject');
+    });
+
+    test('S pc current_place_id without place: prefix rejects', () => {
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'current_place_id', v: 'bridge' } };
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'bare place id without "place:" prefix must reject');
+    });
+
+    test('S pc current_place_id with place: prefix passes', () => {
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'current_place_id', v: 'place:bridge' } };
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'well-formed place id passes');
+    });
+
+    test('S pc current_place_id null clears field (passes)', () => {
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'current_place_id', v: null } };
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'null clears place id — allowed');
+    });
+
+    test('CR char with >5 tags rejects', () => {
+        const tx = { tx: 1, op: 'CR', e: 'char', id: 'dak', d: {
+            name: 'Dak', tier: 'KNOWN', tags: ['a','b','c','d','e','f']
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'too many tags should reject');
+    });
+
+    test('S char tags with >5 entries rejects (S exploit closed)', () => {
+        const tx = { tx: 1, op: 'S', e: 'char', id: 'dak', d: {
+            f: 'tags', v: ['a','b','c','d','e','f']
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'S with >5 tags must reject');
+    });
+
+    test('S char tags with non-array rejects', () => {
+        const tx = { tx: 1, op: 'S', e: 'char', id: 'dak', d: { f: 'tags', v: 'rebel' } };
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'S tags with string value (not array) must reject');
+    });
+
+    test('S char tags with valid array passes', () => {
+        const tx = { tx: 1, op: 'S', e: 'char', id: 'dak', d: { f: 'tags', v: ['rebel', 'pilot'] } };
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'S tags with valid ≤5-entry array passes');
+    });
+
+    test('CR faction with invalid tier rejects', () => {
+        const tx = { tx: 1, op: 'CR', e: 'faction', id: 'zaft', d: {
+            name: 'ZAFT', tier: 'SUPREME'
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'invalid tier should reject');
+    });
+
+    test('second PRINCIPAL char rejects via central validator', () => {
+        const state = {
+            characters: { kira: { tier: 'PRINCIPAL' } },
+            factions: {},
+        };
+        const tx = { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'second PRINCIPAL char rejected');
+    });
+
+    test('TR faction tier to PRINCIPAL when one already exists rejects', () => {
+        const state = {
+            characters: {},
+            factions: { zaft: { tier: 'PRINCIPAL' }, alliance: { tier: 'TRACKED' } },
+        };
+        const tx = { tx: 1, op: 'TR', e: 'faction', id: 'alliance', d: { f: 'tier', from: 'TRACKED', to: 'PRINCIPAL' } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'second PRINCIPAL faction via TR rejected');
+    });
+
+    test('same-block double-PRINCIPAL rejects via validateBlock (shadow-state walk)', () => {
+        const baseState = { characters: {}, factions: {}, relationships: {} };
+        const block = [
+            { tx: 1, op: 'CR', e: 'char', id: 'ally', d: { name: 'Ally', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'char', id: 'enemy', d: { name: 'Enemy', tier: 'PRINCIPAL' } },
+        ];
+        const result = consistency.validateBlock(block, baseState);
+        assert(!result.valid, 'same-block duplicate PRINCIPAL must reject');
+        assert(result.violations.some(v => /PRINCIPAL/i.test(v.message)), 'reason cites PRINCIPAL');
+    });
+
+    test('same-block CR + TR pushing two PRINCIPALs rejects', () => {
+        const baseState = { characters: {}, factions: {}, relationships: {} };
+        const block = [
+            { tx: 1, op: 'CR', e: 'char', id: 'enemy', d: { name: 'Enemy', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'char', id: 'ally', d: { name: 'Ally', tier: 'TRACKED' } },
+            { tx: 3, op: 'TR', e: 'char', id: 'ally', d: { f: 'tier', from: 'TRACKED', to: 'PRINCIPAL' } },
+        ];
+        const result = consistency.validateBlock(block, baseState);
+        assert(!result.valid, 'CR + TR producing two PRINCIPALs must reject');
+    });
+
+    test('CR relationship for KNOWN-tier char rejects', () => {
+        const state = {
+            characters: { flay: { tier: 'KNOWN' } },
+            factions: {},
+            relationships: {},
+        };
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-flay', d: {
+            card: 'the-fool', orientation: 'upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'CR relationship for KNOWN target must reject');
+    });
+
+    test('CR relationship for missing target rejects', () => {
+        const state = { characters: {}, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-ghost', d: {
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'CR relationship for nonexistent target rejects');
+    });
+
+    test('CR relationship for TRACKED+ target passes', () => {
+        const state = {
+            characters: { lacus: { tier: 'PRINCIPAL' } },
+            factions: {},
+            relationships: {},
+        };
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, state);
+        assert(result.valid, 'TRACKED+ target should pass');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
