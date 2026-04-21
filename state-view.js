@@ -28,6 +28,13 @@ function getCollisionNarrativeLines(col) {
     const lines = [];
     if (col.forces) lines.push(`Forces: ${getCollisionForcesText(col)}`);
     if (col.cost) lines.push(`Scenario: ${normalizeText(col.cost)}`);
+    if (col.ignition_class || col.fires_when) {
+        const cls = col.ignition_class ? String(col.ignition_class).toLowerCase() : '';
+        const trigger = col.fires_when ? normalizeText(col.fires_when) : '';
+        if (cls && trigger) lines.push(`Ignition: ${cls} — fires when ${trigger}`);
+        else if (cls) lines.push(`Ignition: ${cls}`);
+        else lines.push(`Fires when: ${trigger}`);
+    }
     if (col.location) lines.push(`Location: ${col.location}`);
     const involved = toList(col.involved_chars);
     if (involved.length) lines.push(`Involved: ${involved.join(', ')}`);
@@ -597,6 +604,8 @@ COMMON PATHS:
   collision:id.forces
   collision:id.distance_category   (set on creation: IMMEDIATE|SHORT|MEDIUM|LONG)
   collision:id.distance             (engine-owned — read only; do not SET)
+  collision:id.ignition_class      (set on creation: clock|tripwire|revelation|decision|accumulator — how it fires)
+  collision:id.fires_when           (set on creation: one sentence — the concrete scene condition that counts as this firing)
   collision:id.location
   collision:id.involved_chars
   collision:id.status
@@ -645,6 +654,12 @@ DISCIPLINE:
   NESCIENCE discipline (Theory of Mind — each character/faction knows only what they realistically observed, heard, deduced from evidence they have access to, or were told via a plausible channel). Avoid "Sherlock Holmes" leaps — explore obliviousness as much as insight. News and rumors travel on channels with latency and distortion; absence from a scene means absence of knowledge until a plausible report arrives. Communication-media rule: only the originator or recipient of a message knows its contents. Before updating knowledge_asymmetry, check past turns — do not contradict established knowledge states without explicit revelation.
   Combat is a thin container. Scene prose carries terrain and tactical narrative; the spawning collision carries cost and forces. Combat tracks only: who's fighting whom (primary_enemy), and what ended where (outcome + aftermath on RESOLVED).
   Every live collision needs a story capsule: what is converging (forces), who is caught in it (involved_chars), what it costs and what will concretely happen when it lands (cost). The \`cost\` field is the success condition — if the player addresses the scenario it describes, the collision is pre-empted and should be DISSOLVED or RESOLVED immediately, even if distance > 0.
+  Every collision needs an ignition spec on creation: ignition_class (clock|tripwire|revelation|decision|accumulator) and fires_when (one sentence naming the concrete scene condition that counts as this firing). If you cannot name a concrete trigger, the thing is a constraint, not a collision — file it as a constraint instead. Defaults to clock if omitted, but state it explicitly so the arrival check has something to test against.
+    - clock: fires when distance ticks to 0 (default — for time-pressured convergences)
+    - tripwire: fires when named characters meet a specific scene condition (e.g., "Flay and Lacus in the same unsupervised corridor")
+    - revelation: fires when a specific piece of information becomes known (e.g., "Mu names the Resonance aloud to Autumn")
+    - decision: fires when a named character commits to a pending choice (e.g., "Ramius signs the POW custodial order")
+    - accumulator: fires when repeated small beats cross a threshold (e.g., "third Flay incident that the crew can no longer explain away")
   Pressure points (pressure:<id>) are seeds — small tensions not yet a collision. Cap is 5; oldest auto-drops on overflow. Destroy when consumed: D pressure:<id>.
   If 3+ related pressure points accumulate, combine them into a collision (CR collision) and destroy the consumed pressures.
   WEEKS or MONTHS timeskips automatically clear all pressure points — the engine handles this.
@@ -691,7 +706,7 @@ OPERATIONS:
 CREATE — new entity
   > CREATE char:tifa name="Tifa Lockhart" tier=KNOWN -- First encounter
   > CREATE constraint:c1-steady name="The Steady One" owner_id=tifa integrity=STABLE prevents="Showing vulnerability or exhaustion" threshold="Sustained pressure from someone trusted" replacement="Regression — stillness without purpose" replacement_type=regression shedding_order=2 -- Core constraint
-  > CREATE collision:trust-vs-duty name="Trust vs Duty" distance_category=MEDIUM forces="Trust and duty converging — loyalty demands truth, mission demands silence." cost="Tifa will corner Kenji about Cloud's location. If he lies she will know; if he tells the truth the mission is blown. One conversation, forced choice." involved_chars=[tifa,kenji] location=7th-heaven -- Central tension
+  > CREATE collision:trust-vs-duty name="Trust vs Duty" distance_category=MEDIUM ignition_class=tripwire fires_when="Tifa and Kenji are alone in a room where she can ask about Cloud without interruption" forces="Trust and duty converging — loyalty demands truth, mission demands silence." cost="Tifa will corner Kenji about Cloud's location. If he lies she will know; if he tells the truth the mission is blown. One conversation, forced choice." involved_chars=[tifa,kenji] location=7th-heaven -- Central tension
   > CREATE combat:alley-fight status=ACTIVE primary_enemy="shinra-sweep" opened_from=ambush-trap -- Thin combat container; scene + collision carry the tactical narrative
   > CREATE place:warehouse-district name="Warehouse District" state=contested reach=DISTRICT description="Industrial sprawl south of the river. Quiet during daylight." -- New anchor
 
@@ -823,7 +838,7 @@ FACTIONS — create and manage factions as organizations with territory, agenda,
   Pressure points (pressure:<id> entities) are collision fuel — small tensions not yet collisions.
   Cap is 5; oldest auto-drops on overflow. Destroy when consumed into a collision.
   > CREATE pressure:perimeter-tension name="Demon scouts testing church perimeter" source="faction:demon-vanguard" related_to=[char:pc,place:church] -- New seam
-  > CREATE collision:closing-perimeter name="The Closing Perimeter" distance_category=SHORT forces="demon advance, trapped survivors" cost="The demon scouts will breach the church perimeter. If PC hasn't evacuated or fortified by then, survivors die in the crossfire." involved_chars=[pc] location=church -- Seam graduates
+  > CREATE collision:closing-perimeter name="The Closing Perimeter" distance_category=SHORT ignition_class=clock fires_when="demon scouts reach the perimeter and PC has not evacuated or fortified" forces="demon advance, trapped survivors" cost="The demon scouts will breach the church perimeter. If PC hasn't evacuated or fortified by then, survivors die in the crossfire." involved_chars=[pc] location=church -- Seam graduates
   > DESTROY pressure:perimeter-tension -- Consumed into collision
 
 DIVINATION — record current draw only (no history accumulation)
@@ -839,10 +854,11 @@ COLLISIONS ARE STORY ENGINES, NOT LABELS:
   Every live collision should tell you, cold:
   1. what is converging (forces — the named tensions)
   2. what the scenario IS (cost — the concrete thing that will happen when it lands)
-  3. who is in the line of fire (involved_chars)
-  4. where it is landing (location)
-  5. how close it is (distance_category → distance)
-  6. what status it sits in (ACTIVE → RESOLVED or CRASHED)
+  3. how it fires (ignition_class + fires_when — the trigger that counts as arrival)
+  4. who is in the line of fire (involved_chars)
+  5. where it is landing (location)
+  6. how close it is (distance_category → distance)
+  7. what status it sits in (ACTIVE → RESOLVED or CRASHED)
 
   The \`cost\` field is the scenario contract. It must describe, in concrete terms:
   - What event or confrontation will occur when this collision arrives
@@ -852,7 +868,18 @@ COLLISIONS ARE STORY ENGINES, NOT LABELS:
   is pre-empted — DISSOLVE or RESOLVE it immediately. Do not let a collision arrive mechanically
   when its scenario has already been handled narratively.
 
-  \`forces\` names the tensions. \`cost\` describes the scene that will happen. Both are required on creation.
+  The \`ignition_class\` + \`fires_when\` pair is the firing contract. Pick one class on creation:
+  - clock: time-pressured. Fires when distance ticks to 0. Use for convergences that need time to arrive.
+  - tripwire: condition-pressured. Fires when a specific scene condition is met (named characters colocated, a line crossed, a door opened). Distance is advisory only.
+  - revelation: information-pressured. Fires when a specific piece of information becomes known (someone names the secret, evidence surfaces, the mask slips).
+  - decision: agency-pressured. Fires when a named character commits to a pending choice (an order signed, a line spoken, a deal accepted).
+  - accumulator: pressure-pressured. Fires when repeated small beats cross a threshold (Nth incident, sustained hostility reaches breaking point).
+
+  \`fires_when\` is a one-sentence concrete trigger. It is the test you apply at arrival: if the current scene satisfies it, the collision fires ON-SCREEN; if not, prefer DISSOLVE or IMPLODE over forcing a scene the trigger hasn't actually earned.
+
+  If you cannot name a concrete \`fires_when\`, the thing is an ongoing condition, not a collision — file it as a constraint (constraint:<id> with integrity STABLE→STRESSED→CRITICAL→BREACHED) instead. Constraints model ongoing fields; collisions model events that arrive.
+
+  \`forces\` names the tensions. \`cost\` describes the scene that will happen. \`ignition_class\` + \`fires_when\` describe how it fires. All four are required on creation.
 
 COLLISION CLOSURE (required on every RESOLVED transition):
   Every collision that reaches RESOLVED must record three fields:
@@ -877,7 +904,7 @@ COLLISION CLOSURE (required on every RESOLVED transition):
   > SET collision:shadow-activity field=outcome_type value=EVOLVED
   > SET collision:shadow-activity field=aftermath value="The watcher was neutralized, but not before transmitting. Someone now knows Arcueid is in the district."
   > APPEND collision:shadow-activity field=successor_collision_ids value=handler-convergence
-  > CREATE collision:handler-convergence name="Handler Convergence" distance_category=SHORT forces="handler network advancing on Arcueid; if they move first extraction becomes impossible" cost="Handlers will arrive at the safehouse. If PC hasn't moved Arcueid or prepared an exit by then, extraction becomes a fight instead of a disappearance." location=district-safehouse involved_chars=[pc,arcueid] parent_collision_ids=[shadow-activity]
+  > CREATE collision:handler-convergence name="Handler Convergence" distance_category=SHORT ignition_class=clock fires_when="handlers reach the safehouse before PC has moved Arcueid or prepared an exit" forces="handler network advancing on Arcueid; if they move first extraction becomes impossible" cost="Handlers will arrive at the safehouse. If PC hasn't moved Arcueid or prepared an exit by then, extraction becomes a fight instead of a disappearance." location=district-safehouse involved_chars=[pc,arcueid] parent_collision_ids=[shadow-activity]
 
 HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):
   - Pressure points: REMOVE when activated (converted into collision fuel) or no longer relevant. These are seeds, not history.

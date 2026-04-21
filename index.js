@@ -813,15 +813,21 @@ function buildArrivalBlock(col, draw, involvedSummary, placeName, proximityLine)
         ? '\nThis collision arrives immediately — brief, sharp, decisive. Resolve in this scene.'
         : '';
     const costLine = col.cost ? `\nScenario: ${col.cost}` : '';
+    const ignitionLine = (col.ignition_class || col.fires_when)
+        ? `\nIgnition: ${(col.ignition_class || 'clock').toLowerCase()}${col.fires_when ? ` — fires when ${col.fires_when}` : ''}`
+        : '';
+    const triggerCheck = col.fires_when
+        ? `\nTRIGGER CHECK: Does the current scene satisfy "${col.fires_when}"? If not, prefer DISSOLVE or IMPLODE — do not force a scene the declared trigger has not earned.`
+        : '';
     return `[GRAVITY — COLLISION ARRIVED: "${col.name || col.id}"]
 Draw: ${draw.label} — ${draw.reading}
 
-Forces: ${col.forces || '(unspecified)'}${costLine}
+Forces: ${col.forces || '(unspecified)'}${costLine}${ignitionLine}
 Involved: ${involvedSummary}
 Anchored at: ${placeName || 'unspecified'}
 ${proximityLine}${immediateNote}
 
-PRE-EMPTION CHECK: Has the player already addressed the scenario above? If so, DISSOLVE — do not force a scene the narrative has already handled.
+PRE-EMPTION CHECK: Has the player already addressed the scenario above? If so, DISSOLVE — do not force a scene the narrative has already handled.${triggerCheck}
 
 SANITY CHECK — commit one of these NOW:
 
