@@ -295,6 +295,42 @@ group('engine-driven relationship.status', () => {
     });
 });
 
+const { validateTransition } = require('../state-machine.js');
+
+group('state-machine: relationship.status transitions', () => {
+    test('active -> dormant allowed', () => {
+        const r = validateTransition('relationship', 'status', 'active', 'dormant');
+        assertEqual(r.valid, true, 'active->dormant allowed');
+    });
+    test('dormant -> active allowed', () => {
+        const r = validateTransition('relationship', 'status', 'dormant', 'active');
+        assertEqual(r.valid, true, 'dormant->active allowed');
+    });
+    test('active -> archived allowed', () => {
+        const r = validateTransition('relationship', 'status', 'active', 'archived');
+        assertEqual(r.valid, true, 'active->archived allowed');
+    });
+    test('archived -> active REJECTED (terminal)', () => {
+        const r = validateTransition('relationship', 'status', 'archived', 'active');
+        assertEqual(r.valid, false, 'archived is terminal');
+    });
+});
+
+group('state-machine: faction.tier transitions', () => {
+    test('KNOWN -> TRACKED allowed', () => {
+        const r = validateTransition('faction', 'tier', 'KNOWN', 'TRACKED');
+        assertEqual(r.valid, true, 'promote allowed');
+    });
+    test('TRACKED -> PRINCIPAL allowed', () => {
+        const r = validateTransition('faction', 'tier', 'TRACKED', 'PRINCIPAL');
+        assertEqual(r.valid, true, 'promote allowed');
+    });
+    test('PRINCIPAL -> KNOWN allowed (demotion)', () => {
+        const r = validateTransition('faction', 'tier', 'PRINCIPAL', 'KNOWN');
+        assertEqual(r.valid, true, 'demote allowed');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
