@@ -248,6 +248,37 @@ Edit `state-compute.js` around line 690 (inside computeState, after the `if (!st
 
 Matches the existing pattern for optional collections.
 
+- [ ] **Step 5b: Default `last_shift: null` on relationship CR**
+
+Edit `state-compute.js` inside the CR switch case, alongside place/faction/char defaults (the block added in later tasks):
+
+```javascript
+                // Default last_shift=null at birth for relationship entities.
+                // Spec says last_shift is null until the first relational collision
+                // resolves. LLMs may omit the field; make it explicit in state.
+                if (tx.e === 'relationship') {
+                    if (!('last_shift' in data)) data.last_shift = null;
+                    if (!data.status) data.status = 'active';
+                }
+```
+
+Add a test for this to the existing group:
+
+```javascript
+    test('CR relationship without last_shift defaults to null', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-fool', orientation: 'upright', nuance: 'x',
+                // last_shift omitted intentionally
+            }},
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.relationships['pc-lacus'].last_shift, null, 'last_shift defaulted to null');
+        assertEqual(state.relationships['pc-lacus'].status, 'active', 'status defaulted to active');
+    });
+```
+
 - [ ] **Step 6: Also add `relationship` to `consistency.js` entity map**
 
 Edit `consistency.js` — both `ENTITY_TO_COLLECTION` (line 20) and `VALID_ENTITIES` (line 44):
@@ -419,6 +450,16 @@ group('char.tags', () => {
         const state = computeState(null, txs);
         assertEqual(state.characters.dak.tags, ['a', 'b', 'c', 'd', 'e'], 'append respects cap');
     });
+
+    test('CR char with duplicate tags dedupes BEFORE capping', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'dak', d: { name: 'Dak', tier: 'KNOWN',
+              tags: ['smuggler', 'smuggler', 'smuggler', 'smuggler', 'smuggler', 'rebel'] } },
+        ];
+        const state = computeState(null, txs);
+        // Dedup keeps unique "smuggler" + "rebel" — secondary trait NOT lost to duplicate flood
+        assertEqual(state.characters.dak.tags, ['smuggler', 'rebel'], 'dedup preserves unique traits');
+    });
 });
 ```
 
@@ -443,8 +484,12 @@ Edit `state-compute.js` inside the CR switch case, after the faction defaults:
                 if (tx.e === 'faction') {
                     if (!data.tier) data.tier = 'KNOWN';
                 }
-                // Enforce char.tags cap — new field in relationship module
+                // Dedupe + enforce char.tags cap — new field in relationship module.
+                // Dedup BEFORE slicing: LLMs sometimes repeat tags ("smuggler, smuggler,
+                // smuggler, smuggler, smuggler, rebel") — a naive slice would discard
+                // the actual secondary trait. Order-preserving dedup via Set.
                 if (tx.e === 'char' && Array.isArray(data.tags)) {
+                    data.tags = Array.from(new Set(data.tags));
                     if (data.tags.length > CHARACTER_TAGS_MAX) {
                         data.tags = data.tags.slice(0, CHARACTER_TAGS_MAX);
                     }
@@ -465,9 +510,15 @@ Edit `state-compute.js` in the A (append) switch case, inside the `if (!isDuplic
                             state.world.collision_archive = arr.slice(-MAX_COLLISION_ARCHIVE);
                         }
                     }
-                    // Enforce char.tags cap on append — new field in relationship module
-                    if (tx.e === 'char' && tx.d.f === 'tags' && Array.isArray(target.tags) && target.tags.length > CHARACTER_TAGS_MAX) {
-                        target.tags = target.tags.slice(0, CHARACTER_TAGS_MAX);
+                    // Dedup + enforce char.tags cap on append — note: the A-op
+                    // duplicate check above uses stringSimilarity > 0.8, which
+                    // already catches exact repeats. This is belt-and-suspenders
+                    // for deterministic cleanup.
+                    if (tx.e === 'char' && tx.d.f === 'tags' && Array.isArray(target.tags)) {
+                        target.tags = Array.from(new Set(target.tags));
+                        if (target.tags.length > CHARACTER_TAGS_MAX) {
+                            target.tags = target.tags.slice(0, CHARACTER_TAGS_MAX);
+                        }
                     }
                 }
 ```
@@ -964,7 +1015,7 @@ group('consistency: relationship shape', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
             card: 'made-up-card', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
         }};
-        const result = consistency.validateTransaction(tx);
+        const result = consistency.validateTransaction(tx, null);
         assert(!result.valid, 'invalid card should reject');
     });
 
@@ -972,7 +1023,7 @@ group('consistency: relationship shape', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
             card: 'the-fool', orientation: 'sideways', nuance: 'x', status: 'active', last_shift: null,
         }};
-        const result = consistency.validateTransaction(tx);
+        const result = consistency.validateTransaction(tx, null);
         assert(!result.valid, 'invalid orientation should reject');
     });
 
@@ -980,7 +1031,7 @@ group('consistency: relationship shape', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
             card: 'the-hermit', orientation: 'reversed', nuance: 'x', status: 'active', last_shift: null,
         }};
-        const result = consistency.validateTransaction(tx);
+        const result = consistency.validateTransaction(tx, null);
         assert(result.valid, 'valid CR should pass');
     });
 
@@ -988,7 +1039,7 @@ group('consistency: relationship shape', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'lacus-kira', d: {
             card: 'the-fool', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
         }};
-        const result = consistency.validateTransaction(tx);
+        const result = consistency.validateTransaction(tx, null);
         assert(!result.valid, 'non-pc-prefixed id should reject');
     });
 
@@ -996,7 +1047,7 @@ group('consistency: relationship shape', () => {
         const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
             f: 'last_shift', v: { tx: 5, collision_id: 'x' }  // missing from/to/reason
         }};
-        const result = consistency.validateTransaction(tx);
+        const result = consistency.validateTransaction(tx, null);
         assert(!result.valid, 'incomplete last_shift should reject');
     });
 
@@ -1004,7 +1055,7 @@ group('consistency: relationship shape', () => {
         const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
             f: 'last_shift', v: null
         }};
-        const result = consistency.validateTransaction(tx);
+        const result = consistency.validateTransaction(tx, null);
         assert(result.valid, 'null last_shift should pass');
     });
 
@@ -1012,7 +1063,7 @@ group('consistency: relationship shape', () => {
         const tx = { tx: 1, op: 'CR', e: 'char', id: 'dak', d: {
             name: 'Dak', tier: 'KNOWN', tags: ['a','b','c','d','e','f']
         }};
-        const result = consistency.validateTransaction(tx);
+        const result = consistency.validateTransaction(tx, null);
         assert(!result.valid, 'too many tags should reject');
     });
 
@@ -1020,8 +1071,63 @@ group('consistency: relationship shape', () => {
         const tx = { tx: 1, op: 'CR', e: 'faction', id: 'zaft', d: {
             name: 'ZAFT', tier: 'SUPREME'
         }};
-        const result = consistency.validateTransaction(tx);
+        const result = consistency.validateTransaction(tx, null);
         assert(!result.valid, 'invalid tier should reject');
+    });
+
+    test('second PRINCIPAL char rejects via central validator', () => {
+        const state = {
+            characters: { kira: { tier: 'PRINCIPAL' } },
+            factions: {},
+        };
+        const tx = { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'second PRINCIPAL char rejected');
+    });
+
+    test('TR faction tier to PRINCIPAL when one already exists rejects', () => {
+        const state = {
+            characters: {},
+            factions: { zaft: { tier: 'PRINCIPAL' }, alliance: { tier: 'TRACKED' } },
+        };
+        const tx = { tx: 1, op: 'TR', e: 'faction', id: 'alliance', d: { f: 'tier', from: 'TRACKED', to: 'PRINCIPAL' } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'second PRINCIPAL faction via TR rejected');
+    });
+
+    test('CR relationship for KNOWN-tier char rejects', () => {
+        const state = {
+            characters: { flay: { tier: 'KNOWN' } },
+            factions: {},
+            relationships: {},
+        };
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-flay', d: {
+            card: 'three-of-swords', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'CR relationship for KNOWN target must reject');
+    });
+
+    test('CR relationship for missing target rejects', () => {
+        const state = { characters: {}, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-ghost', d: {
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'CR relationship for nonexistent target rejects');
+    });
+
+    test('CR relationship for TRACKED+ target passes', () => {
+        const state = {
+            characters: { lacus: { tier: 'PRINCIPAL' } },
+            factions: {},
+            relationships: {},
+        };
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, state);
+        assert(result.valid, 'TRACKED+ target should pass');
     });
 });
 ```
@@ -1189,9 +1295,9 @@ function validateFactionTierTx(tx) {
 }
 ```
 
-- [ ] **Step 5: Wire the new validators into the main validator**
+- [ ] **Step 5: Wire the new validators into the main validator (including PRINCIPAL uniqueness)**
 
-Find the main per-tx validator function in `consistency.js` (likely named `validateTransaction` or `validateFormat` — read the file). Inside it, after existing per-entity validation, add:
+Find the main per-tx validator function in `consistency.js`. Extend it to accept the current state as a second parameter (needed for state-dependent checks like PRINCIPAL uniqueness). Inside it, after existing per-entity validation, add:
 
 ```javascript
     // Relationship-specific shape validation
@@ -1207,7 +1313,57 @@ Find the main per-tx validator function in `consistency.js` (likely named `valid
     if (tx.e === 'faction' && (tx.op === 'CR' || tx.op === 'S')) {
         violations.push(...validateFactionTierTx(tx));
     }
+    // PRINCIPAL uniqueness — state-dependent, lives in consistency for centralized hard-reject
+    if (state && (tx.e === 'char' || tx.e === 'faction')) {
+        let newTier = null;
+        if (tx.op === 'CR' && tx.d?.tier) newTier = tx.d.tier;
+        else if (tx.op === 'TR' && tx.d?.f === 'tier') newTier = tx.d?.to;
+        else if (tx.op === 'S' && tx.d?.f === 'tier') newTier = tx.d?.v;
+        if (newTier === 'PRINCIPAL') {
+            const uniq = checkPrincipalUniqueness(state, tx.e, tx.id, newTier);
+            if (!uniq.valid) {
+                violations.push({ field: 'tier', message: uniq.error, fix: uniq.fix });
+            }
+        }
+    }
+
+    // Cross-entity check: CR relationship:pc-<id> requires target (char or faction)
+    // to exist and be TRACKED+ tier. Prevents KNOWN-birth contraband (relationship
+    // for a character who should not have one per spec).
+    if (state && tx.e === 'relationship' && tx.op === 'CR') {
+        const id = tx.id || '';
+        if (id.startsWith('pc-') && id.length > 3) {
+            const otherId = id.slice('pc-'.length);
+            const char = state.characters?.[otherId];
+            const faction = state.factions?.[otherId];
+            const target = char || faction;
+            if (!target) {
+                violations.push({
+                    field: 'id',
+                    message: `relationship target "${otherId}" does not exist as char or faction`,
+                    fix: `Create the char or faction at TRACKED+ tier first, or correct the id.`,
+                });
+            } else {
+                const tier = String(target.tier || '').toUpperCase();
+                if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') {
+                    violations.push({
+                        field: 'id',
+                        message: `relationship:pc-${otherId} requires target tier ≥ TRACKED (current: "${tier}")`,
+                        fix: `Promote the target to TRACKED first (TR ${char ? 'char' : 'faction'}:${otherId} field=tier from=${tier} to=TRACKED), THEN create the relationship in the same ledger block.`,
+                    });
+                }
+            }
+        }
+    }
 ```
+
+Also import `checkPrincipalUniqueness` at the top of `consistency.js`:
+
+```javascript
+import { validateTransition, checkPrincipalUniqueness, getStateMachineField } from './state-machine.js';
+```
+
+Update the main validator's signature from `validateTransaction(tx)` to `validateTransaction(tx, state)`. Callers in `index.js` that call this function will need to pass `_currentState` as the second arg — update the call site.
 
 **Note:** if the existing function does not expose `validateTransaction` as a single-tx entry point, add a thin exported wrapper that applies these checks. Read the file's public API first and adapt.
 
@@ -1237,17 +1393,19 @@ node -c consistency.js
 
 ```
 git add consistency.js scripts/test-relationship.js
-git commit -m "feat(relationship): consistency shape validation
+git commit -m "feat(relationship): consistency shape validation + PRINCIPAL uniqueness
 
 Adds shape validators for:
 - relationship CR/S (id format, card whitelist, orientation enum,
   nuance non-empty, status enum, last_shift null|complete-object)
 - char.tags (array-of-strings, ≤5 entries, ≤40 chars each)
 - faction.tier (KNOWN|TRACKED|PRINCIPAL enum)
+- PRINCIPAL uniqueness (centralized in consistency — one hard-reject
+  path for both shape and state-dependent checks; validateTransaction
+  now accepts state as a second argument)
 
-Hard-rejects malformed transactions at commit time. PRINCIPAL
-uniqueness guard lives in state-machine (checkPrincipalUniqueness)
-and needs separate index.js wiring in the commit pipeline task."
+Hard-rejects malformed transactions at commit time. Index.js call
+sites updated to pass _currentState as second arg."
 ```
 
 ---
@@ -1560,28 +1718,89 @@ vs. rendering every TRACKED+ dossier every turn."
 ## Task 11: State-View — KNOWN Roll-Up With Tags
 
 **Files:**
-- Modify: `state-view.js`
+- Modify: `state-compute.js` — stamp `char.last_active_tx` on every char-touching tx
+- Modify: `state-view.js` — KNOWN render using that field
+- Test: `scripts/test-relationship.js`
 
-- [ ] **Step 1: Render KNOWN with top-15 + older roll-up**
+- [ ] **Step 1: Add failing test for last_active_tx stamping**
+
+Append to `scripts/test-relationship.js`:
+
+```javascript
+group('char.last_active_tx stamping', () => {
+    test('CR stamps last_active_tx = tx.tx', () => {
+        const txs = [
+            { tx: 5, op: 'CR', e: 'char', id: 'a', d: { name: 'A', tier: 'KNOWN' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.a.last_active_tx, 5, 'stamp on CR');
+    });
+
+    test('S updates last_active_tx to latest tx', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'a', d: { name: 'A', tier: 'KNOWN' } },
+            { tx: 42, op: 'S', e: 'char', id: 'a', d: { f: 'location', v: 'place:x' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.a.last_active_tx, 42, 'S updates stamp');
+    });
+
+    test('TR on char also updates last_active_tx', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'a', d: { name: 'A', tier: 'KNOWN' } },
+            { tx: 17, op: 'TR', e: 'char', id: 'a', d: { f: 'tier', from: 'KNOWN', to: 'TRACKED' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.a.last_active_tx, 17, 'TR updates stamp');
+    });
+});
+```
+
+- [ ] **Step 2: Run tests — expect failure**
+
+```
+node scripts/test-relationship.js
+```
+
+Expected: all three fail — field not stamped.
+
+- [ ] **Step 3: Stamp `last_active_tx` in `applyTransaction`**
+
+Edit `state-compute.js`. At the very end of `applyTransaction`, right before `state.lastTxId = tx.tx;`, add:
+
+```javascript
+    // Stamp char.last_active_tx on any tx that touches a specific character.
+    // Used by state-view KNOWN roll-up to sort by recency in O(n log n).
+    if (tx.e === 'char' && tx.id) {
+        const ch = state.characters?.[tx.id];
+        if (ch) ch.last_active_tx = tx.tx;
+    }
+
+    state.lastTxId = tx.tx;
+    return state;
+}
+```
+
+- [ ] **Step 4: Run tests — expect pass**
+
+```
+node scripts/test-relationship.js
+node -c state-compute.js
+```
+
+- [ ] **Step 5: Render KNOWN with top-15 + older roll-up**
 
 In `state-view.js`, replace the `// KNOWN — handled in the next task` placeholder from Task 10 with:
 
 ```javascript
     // KNOWN — tag-driven roll-up, top 15 most-recently-active
+    // Sort is O(n log n) on an integer field (char.last_active_tx) — stamped
+    // by state-compute on every tx touching the char. Do NOT scan _history
+    // here; that's O(chars × history_size) and will tank perf on long chats.
     if (knownList.length > 0) {
-        // Sort by the most recent tx that touched each char (approximate via _history)
-        const activity = (id) => {
-            const hist = state._history || {};
-            let maxTx = 0;
-            for (const key of Object.keys(hist)) {
-                if (key.startsWith(`char:${id}:`)) {
-                    const entries = hist[key];
-                    for (const e of entries) if ((e.tx || 0) > maxTx) maxTx = e.tx;
-                }
-            }
-            return maxTx;
-        };
-        const sorted = knownList.slice().sort(([aId], [bId]) => activity(bId) - activity(aId));
+        const sorted = knownList.slice().sort(([, a], [, b]) => {
+            return (b.last_active_tx || 0) - (a.last_active_tx || 0);
+        });
         const TOP_N = 15;
         const top = sorted.slice(0, TOP_N);
         const older = sorted.slice(TOP_N);
@@ -1675,11 +1894,32 @@ ballooning injection on long chats."
 
 - [ ] **Step 1: Find the dossier render in ui-panel.js**
 
-Read `ui-panel.js` around line 740-800 (where `char.agenda` is currently rendered). The existing code builds DOM strings with classes like `gl-d-row`.
+Read `ui-panel.js` around line 740-800 (where `char.agenda` is currently rendered). The existing code builds DOM strings with classes like `gl-d-row`. Note the existing structure — if the string-building is inline inside a DOM-manipulating function, extract a pure string-building helper in the next step so we can unit-test it.
 
-- [ ] **Step 2: Add the relationship render**
+- [ ] **Step 2: Extract a pure string-building helper**
 
-In the character dossier builder, right before the `agenda` line, add:
+Refactor the dossier render so the HTML-string assembly lives in a pure function that can be imported and tested under Node. Example structure:
+
+```javascript
+// Pure — builds and returns the HTML string for a single character's dossier.
+// Importable/testable without DOM globals.
+function buildCharacterDossierHtml(id, char, state) {
+    const parts = [];
+    // ...existing build logic...
+    return parts.join('');
+}
+
+// DOM-binding wrapper — uses the helper and mutates the panel.
+function renderCharacterDossier(id, char, state, panelEl) {
+    panelEl.innerHTML = buildCharacterDossierHtml(id, char, state);
+}
+
+export { buildCharacterDossierHtml, renderCharacterDossier };
+```
+
+- [ ] **Step 3: Add the relationship render inside the pure helper**
+
+Inside `buildCharacterDossierHtml`, right before the `agenda` line, add:
 
 ```javascript
     // Relationship block — rendered when relationship:pc-<id> exists and is active
@@ -1735,25 +1975,101 @@ Edit `style.css`. Add:
 node -c ui-panel.js
 ```
 
-- [ ] **Step 6: Manual verification note**
+- [ ] **Step 6: Add string-builder unit tests**
 
-The UI panel renders in a live SillyTavern browser session. Automated testing is not feasible for DOM output. Load the extension in SillyTavern with a test chat that has an active relationship and verify:
-- The ♥ bond line appears in the character dossier
-- Upright cards render in muted gold
-- Reversed cards render in muted red
-- Archived relationships appear at the bottom in a collapsed `<details>` block
+Since `buildCharacterDossierHtml` is now a pure function returning a string, we can test it under Node. Append to `scripts/test-relationship.js`:
 
-- [ ] **Step 7: Commit**
+```javascript
+const { buildCharacterDossierHtml } = require('../ui-panel.js');
+
+group('ui-panel — HTML string builder', () => {
+    test('active relationship renders gl-relationship div with upright class', () => {
+        const state = {
+            characters: { lacus: { name: 'Lacus', tier: 'PRINCIPAL' } },
+            factions: {},
+            relationships: { 'pc-lacus': {
+                card: 'the-lovers', orientation: 'upright', nuance: 'genuine alignment', status: 'active', last_shift: null,
+            }},
+            pc: {},
+            _history: {},
+        };
+        const html = buildCharacterDossierHtml('lacus', state.characters.lacus, state);
+        assert(html.includes('class="gl-d-row gl-relationship gl-tarot-upright"'), 'upright class emitted');
+        assert(html.includes('The Lovers'), 'card name in display form');
+        assert(html.includes('"genuine alignment"'), 'nuance rendered');
+    });
+
+    test('reversed orientation emits gl-tarot-reversed class', () => {
+        const state = {
+            characters: { lacus: { name: 'Lacus', tier: 'PRINCIPAL' } },
+            factions: {},
+            relationships: { 'pc-lacus': {
+                card: 'the-tower', orientation: 'reversed', nuance: 'x', status: 'active', last_shift: null,
+            }},
+            pc: {},
+            _history: {},
+        };
+        const html = buildCharacterDossierHtml('lacus', state.characters.lacus, state);
+        assert(html.includes('gl-tarot-reversed'), 'reversed class emitted');
+    });
+
+    test('dormant relationship does NOT emit the bond div', () => {
+        const state = {
+            characters: { lacus: { name: 'Lacus', tier: 'KNOWN' } },
+            factions: {},
+            relationships: { 'pc-lacus': {
+                card: 'the-hermit', orientation: 'upright', nuance: 'x', status: 'dormant', last_shift: null,
+            }},
+            pc: {},
+            _history: {},
+        };
+        const html = buildCharacterDossierHtml('lacus', state.characters.lacus, state);
+        assert(!html.includes('gl-relationship'), 'dormant suppresses bond div');
+    });
+
+    test('archived relationship renders in memorial section', () => {
+        const state = {
+            characters: { lacus: { name: 'Lacus', tier: 'KNOWN' } },
+            factions: {},
+            relationships: { 'pc-kira': {
+                card: 'the-fool', orientation: 'reversed', nuance: 'x', status: 'archived',
+                last_shift: { tx: 412, collision_id: 'c', from: null, to: null, reason: 'died at JOSH-A' },
+            }},
+            pc: {},
+            _history: {},
+        };
+        const html = buildCharacterDossierHtml('lacus', state.characters.lacus, state);
+        assert(html.includes('gl-memorials'), 'memorial section rendered');
+        assert(html.includes('kira'), 'archived pair id in memorial');
+        assert(html.includes('The Fool'), 'memorial card name');
+    });
+});
+```
+
+**Import note:** if `ui-panel.js` uses `document.createElement` or jQuery at module load time, the `require('../ui-panel.js')` call will throw under Node. In that case, restructure `ui-panel.js` to keep the module top-level free of DOM access — move any DOM bootstrapping into functions that only run when called. The pure `buildCharacterDossierHtml` helper must work in a pure-Node import.
+
+- [ ] **Step 7: Run tests**
 
 ```
-git add ui-panel.js style.css
+node scripts/test-relationship.js
+```
+
+All 4 new HTML-builder tests should pass. Plus a live-browser manual verification pass is still worth doing for color/style — CSS can't be tested this way.
+
+- [ ] **Step 8: Commit**
+
+```
+git add ui-panel.js style.css scripts/test-relationship.js
 git commit -m "feat(relationship): UI panel dossier block + memorials
 
 Adds a heart-glyph bond line in each character's dossier (only when
 relationship is active), with muted-gold/red color coding for
 orientation. Archived relationships collapse into a <details>
-memorial section at the bottom of the panel. Requires manual
-verification in a live ST session — no DOM test infrastructure."
+memorial section at the bottom of the panel.
+
+Pure string-builder helper (buildCharacterDossierHtml) extracted
+from DOM-mutation wrapper so the HTML output is unit-testable under
+Node. CSS styling still needs a live-browser spot check."
 ```
 
 ---
@@ -1832,41 +2148,84 @@ Find the correction-queue mechanism in `index.js` (the `_inject` slot / `MAX_COR
 1. TRACKED+ chars/factions without a paired `relationship:pc-<id>`
 2. RESOLVED relational collisions whose relationship wasn't updated in the same tx group
 
-For each, queue a correction prompt:
+For each, queue a correction prompt. Two design notes:
+
+- **Correction dedup.** Maintain a Set of `(violation_kind, entity_id)` pairs for corrections we've already fired this chat. Don't re-fire for the same pair. This prevents the multi-resolution race (two relational collisions resolve in one block, second one wins `last_shift`, first one would otherwise nag forever).
+- **History lookup, not just current value.** Instead of checking `rel.last_shift.collision_id === cid`, scan `state._history[\`relationship:${relId}:last_shift\`]` for any entry whose `to.collision_id` equals `cid`. If found at any point, treat the collision as correctly paired — even if a later resolution overwrote it.
 
 ```javascript
+    // Module-level dedup set (initialize alongside other correction state)
+    if (!_firedRelationshipCorrections) _firedRelationshipCorrections = new Set();
+
+    // Helper: has any past last_shift update referenced this collision?
+    function relationshipEverPairedWithCollision(state, relId, collisionId) {
+        const historyKey = `relationship:${relId}:last_shift`;
+        const entries = state._history?.[historyKey] || [];
+        for (const e of entries) {
+            if (e.to && typeof e.to === 'object' && e.to.collision_id === collisionId) return true;
+        }
+        // Current value also counts (first-time write hasn't entered history yet in the same tx)
+        const cur = state.relationships?.[relId]?.last_shift;
+        if (cur && cur.collision_id === collisionId) return true;
+        return false;
+    }
+
     // Correction: missing relationship entity after tier promotion
     for (const [id, char] of Object.entries(state.characters)) {
         const tier = String(char.tier || '').toUpperCase();
-        if ((tier === 'TRACKED' || tier === 'PRINCIPAL') && !state.relationships?.[`pc-${id}`]) {
-            queueCorrection({
-                kind: 'missing-relationship',
-                entity: `char:${id}`,
-                prompt: `You promoted char:${id} to ${tier}, but relationship:pc-${id} was not created. Draw the card now:\n  CR relationship:pc-${id} card="<slug>" orientation="upright|reversed" nuance="<1-sentence expression of the archetype for this pair>"`,
-            });
-        }
+        if ((tier !== 'TRACKED' && tier !== 'PRINCIPAL') || state.relationships?.[`pc-${id}`]) continue;
+        const dedupKey = `missing-relationship:char:${id}`;
+        if (_firedRelationshipCorrections.has(dedupKey)) continue;
+        _firedRelationshipCorrections.add(dedupKey);
+        queueCorrection({
+            kind: 'missing-relationship',
+            entity: `char:${id}`,
+            prompt: `You promoted char:${id} to ${tier}, but relationship:pc-${id} was not created. Draw the card now:\n  CR relationship:pc-${id} card="<slug>" orientation="upright|reversed" nuance="<1-sentence expression of the archetype for this pair>" last_shift=null\n(Major Arcana slugs only. last_shift must be null at birth — required for consistency validation.)`,
+        });
     }
-    // (mirror for faction)
+    // Mirror for factions:
+    for (const [id, f] of Object.entries(state.factions)) {
+        const tier = String(f.tier || '').toUpperCase();
+        if ((tier !== 'TRACKED' && tier !== 'PRINCIPAL') || state.relationships?.[`pc-${id}`]) continue;
+        const dedupKey = `missing-relationship:faction:${id}`;
+        if (_firedRelationshipCorrections.has(dedupKey)) continue;
+        _firedRelationshipCorrections.add(dedupKey);
+        queueCorrection({
+            kind: 'missing-relationship',
+            entity: `faction:${id}`,
+            prompt: `You set faction:${id} to ${tier}, but relationship:pc-${id} was not created. Draw the card now:\n  CR relationship:pc-${id} card="<slug>" orientation="upright|reversed" nuance="<one-sentence expression>" last_shift=null\n(Major Arcana slugs only. last_shift must be null at birth.)`,
+        });
+    }
+
+    // Clear dedup keys when the entity gets its relationship (so a future
+    // re-demote/re-promote cycle re-fires the correction if needed):
+    for (const relId of Object.keys(state.relationships || {})) {
+        const otherId = relId.replace(/^pc-/, '');
+        _firedRelationshipCorrections.delete(`missing-relationship:char:${otherId}`);
+        _firedRelationshipCorrections.delete(`missing-relationship:faction:${otherId}`);
+    }
 
     // Correction: RESOLVED relational collision with no relationship update
     for (const [cid, col] of Object.entries(state.collisions)) {
         if (col.ignition_class !== 'relational') continue;
         if (col.status !== 'RESOLVED' && col.status !== 'CRASHED') continue;
-        // Determine the paired relationship from involved_chars
         const other = (col.involved_chars || []).find(x => x !== 'pc');
         if (!other) continue;
         const relId = other.replace(/^(char|faction):/, 'pc-');
         const rel = state.relationships?.[relId];
         if (!rel) continue;
-        // Check: did last_shift.collision_id match this collision?
-        const lsCollision = rel.last_shift?.collision_id;
-        if (lsCollision !== cid) {
-            queueCorrection({
-                kind: 'missing-relationship-update',
-                entity: `collision:${cid}`,
-                prompt: `collision:${cid} resolved but relationship:${relId} was not updated. Commit the card/orientation/nuance/last_shift now inside a LEDGER block.`,
-            });
-        }
+        // Use history lookup, not current value — a later collision in the same
+        // block may have overwritten last_shift. The question is "did this
+        // collision ever update the relationship," not "is it the latest one."
+        if (relationshipEverPairedWithCollision(state, relId, cid)) continue;
+        const dedupKey = `missing-relationship-update:${cid}`;
+        if (_firedRelationshipCorrections.has(dedupKey)) continue;
+        _firedRelationshipCorrections.add(dedupKey);
+        queueCorrection({
+            kind: 'missing-relationship-update',
+            entity: `collision:${cid}`,
+            prompt: `collision:${cid} resolved but relationship:${relId} was not updated. Commit the card/orientation/nuance/last_shift now inside a LEDGER block. last_shift must be {tx, collision_id: "${cid}", from: {card, orientation}, to: {card, orientation}, reason}.`,
+        });
     }
 ```
 
@@ -2254,102 +2613,6 @@ No gaps.
 `validateRelationshipTx`, `validateCharTagsTx`, `validateFactionTierTx` are defined in consistency.js (Task 8) and wired into the main validator in the same task.
 
 `checkPrincipalUniqueness` is defined in state-machine.js (Task 7) but not wired into the commit pipeline in a code step. This is a gap — the validator exists but isn't called. **Fixing inline:** add wiring in Task 8 Step 5 so consistency.js's main validator calls `checkPrincipalUniqueness(state, tx.e, tx.id, newTier)` on char/faction CR or tier-TR.
-
----
-
-## Gap Fix: Wire PRINCIPAL Uniqueness Guard
-
-**Files:**
-- Modify: `consistency.js` — call `checkPrincipalUniqueness` in the main validator path
-
-This is actually a subtle issue: `checkPrincipalUniqueness` needs access to the **current state**, which the shape validator doesn't typically have. It needs to be called at a different layer — the state-machine-transition check in the commit pipeline (wherever `validateTransition` is called from).
-
-- [ ] **Step 1: Locate the `validateTransition` call site in index.js**
-
-Per CLAUDE.md, `validateTransition()` is called from `index.js:1514`. Find that call.
-
-- [ ] **Step 2: Add a PRINCIPAL uniqueness check right after**
-
-```javascript
-    // After validateTransition returns valid for a char/faction tier TR:
-    if ((tx.e === 'char' || tx.e === 'faction') && tx.d?.f === 'tier') {
-        const uniq = checkPrincipalUniqueness(_currentState, tx.e, tx.id, tx.d.to);
-        if (!uniq.valid) {
-            // Reject this tx
-            rejectedTxs.push({ tx, reason: uniq.error, fix: uniq.fix });
-            continue;
-        }
-    }
-    // Also check on CR:
-    if ((tx.e === 'char' || tx.e === 'faction') && tx.op === 'CR' && tx.d?.tier) {
-        const uniq = checkPrincipalUniqueness(_currentState, tx.e, tx.id, tx.d.tier);
-        if (!uniq.valid) {
-            rejectedTxs.push({ tx, reason: uniq.error, fix: uniq.fix });
-            continue;
-        }
-    }
-```
-
-Import `checkPrincipalUniqueness` at the top of `index.js`.
-
-- [ ] **Step 3: Test**
-
-Append to `scripts/test-relationship.js` — but this is tricky because the guard requires state + commit pipeline. We can test the pure function:
-
-```javascript
-const { checkPrincipalUniqueness } = require('../state-machine.js');
-
-group('state-machine: checkPrincipalUniqueness', () => {
-    test('second PRINCIPAL char rejects', () => {
-        const state = {
-            characters: {
-                kira: { tier: 'PRINCIPAL' },
-                lacus: { tier: 'TRACKED' },
-            },
-            factions: {},
-        };
-        const r = checkPrincipalUniqueness(state, 'char', 'lacus', 'PRINCIPAL');
-        assertEqual(r.valid, false, 'second PRINCIPAL rejected');
-    });
-
-    test('same entity re-assigned to PRINCIPAL passes (self-check)', () => {
-        const state = {
-            characters: { kira: { tier: 'PRINCIPAL' } },
-            factions: {},
-        };
-        const r = checkPrincipalUniqueness(state, 'char', 'kira', 'PRINCIPAL');
-        assertEqual(r.valid, true, 'self-assignment allowed');
-    });
-
-    test('PRINCIPAL faction rejection is independent from chars', () => {
-        const state = {
-            characters: { kira: { tier: 'PRINCIPAL' } },
-            factions: { zaft: { tier: 'PRINCIPAL' }, alliance: { tier: 'TRACKED' } },
-        };
-        const r = checkPrincipalUniqueness(state, 'faction', 'alliance', 'PRINCIPAL');
-        assertEqual(r.valid, false, 'second PRINCIPAL faction rejected');
-    });
-});
-```
-
-- [ ] **Step 4: Run tests**
-
-```
-node scripts/test-relationship.js
-node -c index.js
-```
-
-- [ ] **Step 5: Commit**
-
-```
-git add index.js scripts/test-relationship.js
-git commit -m "feat(relationship): wire PRINCIPAL uniqueness guard into commit pipeline
-
-Calls checkPrincipalUniqueness on char/faction tier TRs and CRs at
-commit time. Second PRINCIPAL of the same entity type rejects the
-offending tx while allowing the rest of the batch to commit
-(matches the existing validateTransition failure-mode)."
-```
 
 ---
 
