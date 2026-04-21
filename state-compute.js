@@ -335,6 +335,51 @@ function normalizeConstraintSField(field, value) {
     return { field, value };
 }
 
+// Aliases the LLM has used instead of canonical character field names.
+const CHARACTER_FIELD_ALIASES = {
+    want: 'agenda',
+};
+
+// Phase 2 character fields with no canonical replacement — drop unconditionally.
+// `doing` and `cost` duplicate prose context (removed per ledger-scope-reduction).
+// `stance_toward_pc` migrated to knowledge_asymmetry.{knows,hiding,misreading}_pc,
+// a structural change that cannot be expressed as a simple rename.
+const CHARACTER_DEPRECATED_FIELDS = ['doing', 'stance_toward_pc', 'cost'];
+
+/**
+ * Normalize aliased field names in a character field-bag (CR d object).
+ * Converts: want→agenda. Drops: doing, stance_toward_pc, cost.
+ */
+function normalizeCharacterFields(fields) {
+    if (!fields || typeof fields !== 'object') return fields;
+    const out = { ...fields };
+    for (const [alias, canonical] of Object.entries(CHARACTER_FIELD_ALIASES)) {
+        if (out[alias] !== undefined && out[canonical] === undefined) {
+            out[canonical] = out[alias];
+        }
+        delete out[alias];
+    }
+    for (const dep of CHARACTER_DEPRECATED_FIELDS) {
+        delete out[dep];
+    }
+    return out;
+}
+
+/**
+ * Normalize a single character field name + value (for S transactions).
+ * Returns { field, value } with canonical names applied. Returns field=null
+ * to signal a deprecated field whose S should be skipped entirely.
+ */
+function normalizeCharacterSField(field, value) {
+    if (CHARACTER_FIELD_ALIASES[field] !== undefined) {
+        return { field: CHARACTER_FIELD_ALIASES[field], value };
+    }
+    if (CHARACTER_DEPRECATED_FIELDS.includes(field)) {
+        return { field: null, value };
+    }
+    return { field, value };
+}
+
 /**
  * Record a field change in the history tracker.
  */
@@ -422,7 +467,9 @@ function applyTransaction(state, tx) {
             if (isSingleton) {
                 Object.assign(state[collection], tx.d);
             } else {
-                const rawD = tx.e === 'constraint' ? normalizeConstraintFields(tx.d) : tx.d;
+                let rawD = tx.d;
+                if (tx.e === 'constraint') rawD = normalizeConstraintFields(tx.d);
+                else if (tx.e === 'char') rawD = normalizeCharacterFields(tx.d);
                 const data = { id: tx.id, ...rawD };
                 // Normalize place defaults
                 if (tx.e === 'place') {
@@ -496,10 +543,13 @@ function applyTransaction(state, tx) {
             // TODO: validation should reject missing-target Ss before commit.
             if (!target) { if (tx.tx > 0) console.warn(`[state-compute] S no-op: entity ${tx.e}:${tx.id} not found (tx ${tx.tx}, field ${tx.d.f})`); break; }
             if (tx.d.f) {
-                // Normalize aliased field names on constraint S transactions.
-                const { field: sField, value: sVal } = tx.e === 'constraint'
-                    ? normalizeConstraintSField(tx.d.f, tx.d.v)
-                    : { field: tx.d.f, value: tx.d.v };
+                // Normalize aliased field names on constraint / character S transactions.
+                let sNorm;
+                if (tx.e === 'constraint') sNorm = normalizeConstraintSField(tx.d.f, tx.d.v);
+                else if (tx.e === 'char') sNorm = normalizeCharacterSField(tx.d.f, tx.d.v);
+                else sNorm = { field: tx.d.f, value: tx.d.v };
+                const { field: sField, value: sVal } = sNorm;
+                if (!sField) break; // deprecated character field — drop the S
                 const oldVal = target[sField];
                 let newVal = sVal;
                 if (tx.e === 'collision' && sField === 'status') {
