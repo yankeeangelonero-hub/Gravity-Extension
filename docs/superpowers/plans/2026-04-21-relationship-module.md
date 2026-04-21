@@ -691,6 +691,27 @@ group('engine-driven relationship.status', () => {
         assertEqual(state.relationships['pc-lacus'].status, 'archived', 'auto-archive on death');
     });
 
+    test('D char:id also scrubs pc.scene_cast reference', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'TRACKED' } },
+            { tx: 2, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:lacus', 'char:kira'] } },
+            { tx: 3, op: 'D', e: 'char', id: 'lacus' },
+        ];
+        const state = computeState(null, txs);
+        assert(!state.pc.scene_cast.includes('char:lacus'), 'dead char scrubbed from scene_cast');
+        assert(state.pc.scene_cast.includes('char:kira'), 'living cast member retained');
+    });
+
+    test('D faction:id scrubs pc.scene_cast reference', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'faction', id: 'zaft', d: { name: 'ZAFT', tier: 'TRACKED' } },
+            { tx: 2, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['faction:zaft'] } },
+            { tx: 3, op: 'D', e: 'faction', id: 'zaft' },
+        ];
+        const state = computeState(null, txs);
+        assert(!state.pc.scene_cast.includes('faction:zaft'), 'dead faction scrubbed from scene_cast');
+    });
+
     test('TR faction tier TRACKED->KNOWN auto-dormants faction relationship', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'faction', id: 'zaft', d: { name: 'ZAFT', tier: 'TRACKED' } },
@@ -757,7 +778,7 @@ Edit `state-compute.js` inside the TR switch case, after the existing `recordHis
 
 Place this block AFTER the existing `Bug 2: on tier demotion, clear fields` block for chars, INSIDE the `if (tx.d.f)` guard.
 
-- [ ] **Step 5: Wire the helper into the D case**
+- [ ] **Step 5: Wire the helper into the D case + scrub scene_cast**
 
 Edit `state-compute.js` inside the D switch case (around line 667):
 
@@ -767,6 +788,12 @@ Edit `state-compute.js` inside the D switch case (around line 667):
                 // Engine-driven: archive paired relationship BEFORE deleting entity
                 if (tx.e === 'char' || tx.e === 'faction') {
                     adjustRelationshipStatus(state, tx.e, tx.id, 'archived');
+                    // Scrub dangling scene_cast reference so the lean phonebook
+                    // never points at a ghost. Audit in Task 14 would flag it otherwise.
+                    const fqId = `${tx.e}:${tx.id}`;
+                    if (state.pc && Array.isArray(state.pc.scene_cast)) {
+                        state.pc.scene_cast = state.pc.scene_cast.filter(ref => ref !== fqId);
+                    }
                 }
                 delete state[collection][tx.id];
             }
@@ -789,9 +816,11 @@ git commit -m "feat(relationship): engine-driven status transitions
 
 Tier demotion below TRACKED auto-sets relationship.status=dormant.
 Re-promotion to TRACKED+ auto-sets status=active. D (destruction)
-auto-sets status=archived BEFORE the entity is removed. These are
-deterministic engine actions — LLM never writes relationship.status
-directly. Applies to both char and faction pairs (relationship:pc-X)."
+auto-sets status=archived BEFORE the entity is removed, AND scrubs
+the fq-id from pc.scene_cast so the lean phonebook never carries a
+dangling reference to a dead char/faction. These are deterministic
+engine actions — LLM never writes relationship.status directly.
+Applies to both char and faction pairs (relationship:pc-X)."
 ```
 
 ---
@@ -1051,12 +1080,20 @@ group('consistency: relationship shape', () => {
         assert(!result.valid, 'incomplete last_shift should reject');
     });
 
-    test('S relationship last_shift=null passes (birth state)', () => {
+    test('S relationship last_shift=null REJECTS (audit trail protection)', () => {
         const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
             f: 'last_shift', v: null
         }};
         const result = consistency.validateTransaction(tx, null);
-        assert(result.valid, 'null last_shift should pass');
+        assert(!result.valid, 'S last_shift=null would wipe audit trail — must reject');
+    });
+
+    test('CR relationship last_shift=null passes (birth state)', () => {
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'null last_shift at birth is legitimate');
     });
 
     test('CR char with >5 tags rejects', () => {
@@ -1239,12 +1276,22 @@ function validateRelationshipTx(tx) {
         if (f === 'status' && !RELATIONSHIP_STATUSES_SET.has(v)) {
             violations.push({ field: 'status', message: `invalid status "${v}"`, fix: 'active, dormant, or archived.' });
         }
-        if (f === 'last_shift' && !isValidLastShift(v)) {
-            violations.push({
-                field: 'last_shift',
-                message: 'last_shift must be null or {tx, collision_id, from, to, reason}',
-                fix: 'Null only at birth; afterward, full object.',
-            });
+        if (f === 'last_shift') {
+            // On S, null is NOT allowed — nulling last_shift would wipe the
+            // audit trail. Birth (only legitimate null case) uses CR, not S.
+            if (v === null) {
+                violations.push({
+                    field: 'last_shift',
+                    message: 'S last_shift=null would wipe the audit trail',
+                    fix: 'last_shift can only be null at birth (CR). Subsequent S ops require the full {tx, collision_id, from, to, reason} object.',
+                });
+            } else if (!isValidLastShift(v)) {
+                violations.push({
+                    field: 'last_shift',
+                    message: 'last_shift must be {tx, collision_id, from, to, reason}',
+                    fix: 'Provide all five fields including a non-null collision_id (every shift is anchored to a collision).',
+                });
+            }
         }
     }
     return violations;
@@ -1397,7 +1444,8 @@ git commit -m "feat(relationship): consistency shape validation + PRINCIPAL uniq
 
 Adds shape validators for:
 - relationship CR/S (id format, card whitelist, orientation enum,
-  nuance non-empty, status enum, last_shift null|complete-object)
+  nuance non-empty, status enum, last_shift: null allowed ONLY on CR
+  (birth); S last_shift=null hard-rejects to protect audit trail)
 - char.tags (array-of-strings, ≤5 entries, ≤40 chars each)
 - faction.tier (KNOWN|TRACKED|PRINCIPAL enum)
 - PRINCIPAL uniqueness (centralized in consistency — one hard-reject
@@ -1456,13 +1504,45 @@ function formatCardName(slug) {
 
 Find the faction dossier loop (around line 450-470 per the earlier grep). Add the same relationship render to each faction where `rel = state.relationships?.['pc-' + factionId]`.
 
-- [ ] **Step 4: Syntax check**
+- [ ] **Step 4: Render memorials for archived relationships whose target is gone**
+
+After BOTH the character and faction dossier loops complete, iterate `state.relationships` and emit a compact MEMORIAL line for every archived relationship whose target char/faction has been deleted. Without this, a dead-but-loved character silently vanishes from the LLM's prompt the turn after they die (`state.characters[id]` is gone but `state.relationships['pc-id']` is still `archived`). The UI panel would still show them, but the LLM wouldn't — creating a jarring "she who?" on the very next turn.
+
+Add near the bottom of `formatStateView`, before the closing `return lines.join('\n')`:
+
+```javascript
+    // Memorials — archived relationships whose subject is no longer a live
+    // entity. Emotionally load-bearing dead characters/factions must remain
+    // visible in prompt so the LLM can reference the loss. Rendered last so
+    // they don't clutter the live-cast section.
+    const memorials = [];
+    for (const [relId, rel] of Object.entries(state.relationships || {})) {
+        if (rel.status !== 'archived') continue;
+        if (!relId.startsWith('pc-')) continue;
+        const otherId = relId.slice('pc-'.length);
+        const stillLive = state.characters?.[otherId] || state.factions?.[otherId];
+        if (stillLive) continue;  // archived but target still alive — handled elsewhere
+        memorials.push([otherId, rel]);
+    }
+    if (memorials.length > 0) {
+        lines.push('');
+        lines.push(`MEMORIALS (${memorials.length}):`);
+        for (const [otherId, rel] of memorials) {
+            const reason = rel.last_shift?.reason
+                ? ` — ${normalizeText(rel.last_shift.reason).slice(0, 60)}`
+                : '';
+            lines.push(`  † ${otherId} · ${formatCardName(rel.card)} ${rel.orientation}${reason}`);
+        }
+    }
+```
+
+- [ ] **Step 5: Syntax check**
 
 ```
 node -c state-view.js
 ```
 
-- [ ] **Step 5: Add a render smoke test**
+- [ ] **Step 6: Add a render smoke test**
 
 Append to `scripts/test-relationship.js`:
 
@@ -1494,27 +1574,65 @@ group('state-view render — relationship block', () => {
         const rendered = formatStateView(state, { mode: 'regular' });
         assert(!rendered.includes('Bond (PC): The Hermit'), 'dormant should not render the bond line');
     });
+
+    test('archived relationship for dead char renders as memorial', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'nicol', d: { name: 'Nicol', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-nicol', d: {
+                card: 'the-star', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+            }},
+            // Simulate a collision-resolve stamping the death shift onto last_shift
+            { tx: 3, op: 'S', e: 'relationship', id: 'pc-nicol', d: {
+                f: 'last_shift', v: { tx: 3, collision_id: 'col:duel', from: 'the-star-upright', to: 'the-star-upright', reason: 'killed in duel' },
+            }},
+            { tx: 4, op: 'D', e: 'char', id: 'nicol' },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('MEMORIALS'), 'memorial section present');
+        assert(rendered.includes('† nicol'), 'dead char has memorial line');
+        assert(rendered.includes('The Star'), 'memorial shows card');
+        assert(rendered.includes('killed in duel'), 'memorial shows last_shift reason');
+    });
+
+    test('archived relationship with living target is NOT memorialized', () => {
+        // e.g. betrayal where the char still walks the earth but the bond is over
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'rau', d: { name: 'Rau', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-rau', d: {
+                card: 'the-tower', orientation: 'reversed', nuance: 'x', status: 'archived', last_shift: null,
+            }},
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(!rendered.includes('MEMORIALS'), 'no memorial when target is alive');
+    });
 });
 ```
 
-- [ ] **Step 6: Run tests — expect pass**
+- [ ] **Step 7: Run tests — expect pass**
 
 ```
 node scripts/test-relationship.js
 ```
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```
 git add state-view.js scripts/test-relationship.js
-git commit -m "feat(relationship): render bond block in char/faction dossiers
+git commit -m "feat(relationship): render bond block in char/faction dossiers + memorials
 
 Adds the ♥ Bond (PC): <card> · <orientation> line below Agenda in
 character and faction dossier renders. Only renders when the
 relationship status is 'active'. Tags also render as a compact line
-when present. Dormant/archived relationships skip the block at this
-layer — the next task (lean phonebook) handles cast-gated rendering
-and the on-stage-by-location exception."
+when present. Dormant/archived relationships skip the bond render at
+this layer — the next task (lean phonebook) handles cast-gated
+rendering and the on-stage-by-location exception.
+
+Also adds a MEMORIALS section at the bottom: archived relationships
+whose target char/faction has been D'd render a compact memorial line
+so the LLM retains visibility of emotionally load-bearing losses even
+after the dead entity is removed from state.characters / state.factions."
 ```
 
 ---
@@ -1536,8 +1654,19 @@ Wrap the character rendering block (around line 200) with:
     const castSet = new Set(state.pc?.scene_cast || []);
     const currentPlace = state.pc?.current_place_id || '';
 
-    // Split characters by on-stage vs off-stage
+    // Split characters by on-stage vs off-stage.
+    // Buckets (in render order):
+    //   inCast           — TRACKED+ char explicitly in scene_cast: full dossier
+    //   inCastKnown      — KNOWN char explicitly in scene_cast: mid-weight block
+    //                      (the LLM said "this person is here" — don't bury them
+    //                      in the KNOWN roll-up just because they have no card)
+    //   offStagePrincipal — PRINCIPAL, not in cast: one-liner WITH card
+    //   offStageTracked  — TRACKED, not in cast: compact line, no card
+    //   dormantOnStageByLocation — dormant rel + char.location matches pc.current_place_id
+    //                      (belt-and-suspenders when LLM forgets to cast them)
+    //   knownList        — KNOWN, not in cast: Task 11 roll-up with tags
     const inCast = [];
+    const inCastKnown = [];
     const offStagePrincipal = [];
     const offStageTracked = [];
     const dormantOnStageByLocation = [];
@@ -1555,6 +1684,11 @@ Wrap the character rendering block (around line 200) with:
 
         if (onStage && (tier === 'TRACKED' || tier === 'PRINCIPAL')) {
             inCast.push([id, char]);
+        } else if (onStage && tier === 'KNOWN') {
+            // KNOWN-in-cast: LLM explicitly put them on stage. They have no card
+            // (KNOWN tier can't own a relationship per spec), but they MUST be
+            // visible to the LLM or the cast declaration was meaningless.
+            inCastKnown.push([id, char]);
         } else if (tier === 'PRINCIPAL') {
             offStagePrincipal.push([id, char]);
         } else if (tier === 'TRACKED') {
@@ -1586,6 +1720,19 @@ After the split, replace the existing single-loop rendering with category-specif
             if (rel.nuance) lines.push(`      "${rel.nuance}"`);
         }
         // ...rest of existing dossier render (KA, constraints, key_moments, intimate_history)...
+    }
+
+    // In-cast KNOWN: mid-weight block — no card, no KA, no key_moments,
+    // but tags + agenda + location so the LLM can actually write them.
+    // This is narrower than the full dossier but richer than the KNOWN
+    // roll-up (which is one-line-per-character with tags only).
+    for (const [id, char] of inCastKnown) {
+        lines.push(`CHARACTER: ${char.name || id} [KNOWN · on-stage]`);
+        if (char.location) lines.push(`    Location: ${char.location}`);
+        if (Array.isArray(char.tags) && char.tags.length > 0) {
+            lines.push(`    Tags: [${char.tags.join(', ')}]`);
+        }
+        if (char.agenda) lines.push(`    Agenda: ${normalizeText(char.agenda)}`);
     }
 
     // Off-stage PRINCIPAL: one-liner with card
@@ -1670,6 +1817,20 @@ group('lean phonebook — cast gating', () => {
         assert(!rendered.includes('The Chariot'), 'should NOT show card for off-stage TRACKED');
     });
 
+    test('KNOWN char in scene_cast renders mid-weight block (not roll-up)', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'dak', d: { name: 'Dak', tier: 'KNOWN', tags: ['bartender'] } },
+            { tx: 2, op: 'S', e: 'char', id: 'dak', d: { f: 'agenda', v: 'keeps the peace' } },
+            { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:dak'] } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('CHARACTER: Dak [KNOWN · on-stage]'), 'mid-weight header');
+        assert(rendered.includes('Tags: [bartender]'), 'tags present');
+        assert(rendered.includes('keeps the peace'), 'agenda present');
+        assert(!rendered.includes('♥ Bond'), 'no card for KNOWN');
+    });
+
     test('dormant char on-stage by location re-injects with card', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'flay', d: { name: 'Flay', tier: 'KNOWN' } },
@@ -1703,6 +1864,10 @@ git commit -m "feat(relationship): lean phonebook cast-gating in state-view
 
 Split character rendering by scene presence:
 - In-cast TRACKED+: full dossier (as before)
+- In-cast KNOWN: mid-weight block (tags + agenda + location, no card).
+  Previously KNOWN chars in scene_cast fell through to the roll-up
+  and vanished from LLM view despite being explicitly cast — this
+  fixes the silent-cast-member bug.
 - Off-stage PRINCIPAL: one-liner with card (emotional anchor preserved)
 - Off-stage TRACKED: compact line, no card (token savings)
 - Dormant on-stage by location (char.location == pc.current_place_id):
