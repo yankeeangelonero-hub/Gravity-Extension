@@ -181,57 +181,25 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
     // ── Entity Registry ──────────────────────────────────────────────────
     lines.push('ENTITY REGISTRY — use these IDs in ledger transactions');
 
-    // Characters — tier-aware rendering
+    // Characters — bucketed by scene presence (§lean phonebook)
     lines.push('');
     lines.push('Characters:');
-    for (const char of Object.values(state.characters)) {
-        if (char.tier === 'UNKNOWN') continue;
+
+    // Helper: render the full TRACKED/PRINCIPAL dossier for a char
+    const renderFullCharDossier = (id, char) => {
         const tier = char.tier || 'KNOWN';
         const isPrincipal = tier === 'PRINCIPAL';
-        const isTracked = tier === 'TRACKED';
-        const isKnown = tier === 'KNOWN';
-
-        // Header line — power tag only in combat/full
-        let charLine = `  ${tier} "${char.name || char.id}"`;
-        if (showPower) charLine += formatPowerTag(char);
-        charLine += ` → id: ${char.id}`;
-        lines.push(charLine);
-
-        // KNOWN tier: name only, but emit KA if present (exception cases per readme)
-        if (isKnown) {
-            const ka = char.knowledge_asymmetry;
-            if (ka && typeof ka === 'object' && !Array.isArray(ka)) {
-                const kaLines = [];
-                for (const [k, v] of Object.entries(ka)) {
-                    if (k === 'legacy') continue;
-                    if (typeof v === 'string' && v) kaLines.push(`    ${k}: ${v}`);
-                }
-                if (ka.legacy) kaLines.push(`    [legacy] ${ka.legacy}`);
-                for (const kl of kaLines) lines.push(kl);
-            } else if (typeof ka === 'string' && ka) {
-                lines.push(`    Knowledge asymmetry: ${normalizeText(ka)}`);
-            }
-            continue;
-        }
-
-        // Location — TRACKED/PRINCIPAL only
+        lines.push(`CHARACTER: ${char.name || id} [${tier}]`);
         if (char.location) lines.push(`    Location: ${char.location}`);
-
-        // Render tags (if present)
         if (Array.isArray(char.tags) && char.tags.length > 0) {
             lines.push(`    Tags: [${char.tags.join(', ')}]`);
         }
-        // Render relationship block (active only)
-        {
-            const rel = state.relationships?.[`pc-${char.id}`];
-            if (rel && rel.status === 'active') {
-                const orientLabel = rel.orientation === 'reversed' ? 'reversed' : 'upright';
-                lines.push(`    ♥ Bond (PC): ${formatCardName(rel.card)} · ${orientLabel}`);
-                if (rel.nuance) lines.push(`      "${rel.nuance}"`);
-            }
+        const rel = state.relationships?.[`pc-${id}`];
+        if (rel && rel.status === 'active') {
+            const orientLabel = rel.orientation === 'reversed' ? 'reversed' : 'upright';
+            lines.push(`    ♥ Bond (PC): ${formatCardName(rel.card)} · ${orientLabel}`);
+            if (rel.nuance) lines.push(`      "${rel.nuance}"`);
         }
-
-        // TRACKED+ fields: knowledge_asymmetry (flat semantic keys; `legacy` shown last), last_seen_at
         const ka = char.knowledge_asymmetry;
         if (ka !== undefined && ka !== null) {
             if (typeof ka === 'object' && !Array.isArray(ka)) {
@@ -253,9 +221,10 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
         if (char.last_seen_at !== undefined && char.last_seen_at !== null && normalizeText(char.last_seen_at)) {
             lines.push(`    Last seen at: ${normalizeText(char.last_seen_at)}`);
         }
-
         // Combat fields — only in combat/full
         if (showPower) {
+            const powerTag = formatPowerTag(char);
+            if (powerTag) lines.push(`    Power:${powerTag.replace(/^\s*\[/, ' [')}`);
             if (char.power_basis) lines.push(`    Power basis: ${char.power_basis}`);
             const abilities = toList(char.abilities);
             if (abilities.length) lines.push(`    Abilities: ${abilities.join(' | ')}`);
@@ -264,9 +233,7 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
                 lines.push(`    Wounds: ${woundList}`);
             }
         }
-
         // Key moments — PRINCIPAL only, last 10 per turn (§2.1).
-        // TRACKED/KNOWN/UNKNOWN chars omit this section per spec.
         if (isPrincipal) {
             const moments = Array.isArray(char.key_moments) ? char.key_moments : [];
             const displayMoments = moments.slice(-10);
@@ -276,7 +243,88 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
                 for (const m of displayMoments) lines.push(`      - ${m}`);
             }
         }
+    };
+
+    // Bucket assignment
+    const castSet = new Set(state.pc?.scene_cast || []);
+    const currentPlace = state.pc?.current_place_id || '';
+
+    const inCast = [];
+    const inCastKnown = [];
+    const offStagePrincipal = [];
+    const offStageTracked = [];
+    const dormantOnStageByLocation = [];
+    const knownList = [];
+
+    for (const [id, char] of Object.entries(state.characters)) {
+        if (char.tier === 'UNKNOWN') continue;
+        const fqId = `char:${id}`;
+        const tier = String(char.tier || 'KNOWN').toUpperCase();
+        const onStage = castSet.has(fqId);
+        const rel = state.relationships?.[`pc-${id}`];
+        const isDormantOnStage = (
+            rel && rel.status === 'dormant' &&
+            currentPlace && char.location === currentPlace
+        );
+
+        if (onStage && (tier === 'TRACKED' || tier === 'PRINCIPAL')) {
+            inCast.push([id, char]);
+        } else if (onStage && tier === 'KNOWN') {
+            inCastKnown.push([id, char]);
+        } else if (tier === 'PRINCIPAL') {
+            offStagePrincipal.push([id, char]);
+        } else if (tier === 'TRACKED') {
+            offStageTracked.push([id, char]);
+        } else if (isDormantOnStage) {
+            dormantOnStageByLocation.push([id, char, rel]);
+        } else if (tier === 'KNOWN') {
+            knownList.push([id, char]);
+        }
     }
+
+    // In-cast TRACKED+: full dossier
+    for (const [id, char] of inCast) {
+        renderFullCharDossier(id, char);
+    }
+
+    // In-cast KNOWN: mid-weight block
+    for (const [id, char] of inCastKnown) {
+        lines.push(`CHARACTER: ${char.name || id} [KNOWN · on-stage]`);
+        if (char.location) lines.push(`    Location: ${char.location}`);
+        if (Array.isArray(char.tags) && char.tags.length > 0) {
+            lines.push(`    Tags: [${char.tags.join(', ')}]`);
+        }
+        if (char.agenda) lines.push(`    Agenda: ${normalizeText(char.agenda)}`);
+    }
+
+    // Off-stage PRINCIPAL: one-liner with card + tags sub-line
+    for (const [id, char] of offStagePrincipal) {
+        const rel = state.relationships?.[`pc-${id}`];
+        const cardFrag = rel && rel.status === 'active'
+            ? ` · Bond (PC): ${formatCardName(rel.card)} · ${rel.orientation}`
+            : '';
+        const loc = char.location ? ` — last seen ${char.location}` : '';
+        lines.push(`PRINCIPAL (off-stage): ${char.name || id}${loc}${cardFrag}`);
+        if (Array.isArray(char.tags) && char.tags.length > 0) {
+            lines.push(`    Tags: [${char.tags.join(', ')}]`);
+        }
+    }
+
+    // Off-stage TRACKED: compact line, no card
+    for (const [id, char] of offStageTracked) {
+        const loc = char.location ? ` @ ${char.location}` : '';
+        lines.push(`TRACKED (off-stage): ${char.name || id}${loc}`);
+    }
+
+    // Dormant on-stage by location: compact with card (belt-and-suspenders re-injection)
+    for (const [id, char, rel] of dormantOnStageByLocation) {
+        lines.push(`DORMANT (on-stage): ${char.name || id} · ${formatCardName(rel.card)} ${rel.orientation}`);
+        if (rel.nuance) lines.push(`    "${rel.nuance}"`);
+    }
+
+    // KNOWN — placeholder for Task 11 roll-up
+    // (will be filled in Task 11)
+
     if (Object.keys(state.characters).length === 0) lines.push('  (none)');
 
     // Constraints — mode-aware detail level
@@ -387,30 +435,29 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
         }
     }
 
-    // Factions — lite/combat/intimacy: name + territory/state + compact KA; full: detail section below
+    // Factions — bucketed by scene presence (§lean phonebook)
     const factionEntities = Object.values(state.factions || {});
     if (factionEntities.length) {
         lines.push('');
         lines.push('Factions:');
-        for (const f of factionEntities) {
-            const territoryStr = Array.isArray(f.territory) ? f.territory.join(', ') : f.territory;
+
+        const renderFullFaction = (id, faction) => {
+            const territoryStr = Array.isArray(faction.territory) ? faction.territory.join(', ') : faction.territory;
             const territory = territoryStr ? ` @ ${territoryStr}` : '';
-            const fState = f.state ? ` [${f.state}]` : '';
-            lines.push(`  ${f.name || f.id}${territory}${fState} → id: ${f.id}`);
-            // Render tags (if present)
-            if (Array.isArray(f.tags) && f.tags.length > 0) {
-                lines.push(`    Tags: [${f.tags.join(', ')}]`);
+            const fState = faction.state ? ` [${faction.state}]` : '';
+            lines.push(`  ${faction.name || id}${territory}${fState} → id: ${id}`);
+            if (Array.isArray(faction.tags) && faction.tags.length > 0) {
+                lines.push(`    Tags: [${faction.tags.join(', ')}]`);
             }
-            // Render relationship block (active only)
-            const fRel = state.relationships?.[`pc-${f.id}`];
-            if (fRel && fRel.status === 'active') {
-                const orientLabel = fRel.orientation === 'reversed' ? 'reversed' : 'upright';
-                lines.push(`    ♥ Bond (PC): ${formatCardName(fRel.card)} · ${orientLabel}`);
-                if (fRel.nuance) lines.push(`      "${fRel.nuance}"`);
+            const rel = state.relationships?.[`pc-${id}`];
+            if (rel && rel.status === 'active') {
+                const orientLabel = rel.orientation === 'reversed' ? 'reversed' : 'upright';
+                lines.push(`    ♥ Bond (PC): ${formatCardName(rel.card)} · ${orientLabel}`);
+                if (rel.nuance) lines.push(`      "${rel.nuance}"`);
             }
             // Lite mode: emit compact KA so the model can use faction.knowledge_asymmetry on regular turns
             if (isLite) {
-                const ka = f.knowledge_asymmetry;
+                const ka = faction.knowledge_asymmetry;
                 if (ka && typeof ka === 'object' && !Array.isArray(ka)) {
                     for (const [k, v] of Object.entries(ka)) {
                         if (k === 'legacy') continue;
@@ -419,6 +466,63 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
                     if (ka.legacy) lines.push(`    [legacy] ${ka.legacy}`);
                 }
             }
+        };
+
+        const inCastFaction = [];
+        const offStagePrincipalFaction = [];
+        const offStageTrackedFaction = [];
+        const dormantOnStageFaction = [];
+        const knownFactionList = [];
+
+        for (const [id, faction] of Object.entries(state.factions)) {
+            const fqId = `faction:${id}`;
+            const tier = String(faction.tier || 'KNOWN').toUpperCase();
+            const onStage = castSet.has(fqId);
+            const rel = state.relationships?.[`pc-${id}`];
+            const isDormantFactionOnStage = (
+                rel && rel.status === 'dormant' &&
+                currentPlace &&
+                Array.isArray(faction.territory) &&
+                faction.territory.includes(currentPlace)
+            );
+            if (onStage && (tier === 'TRACKED' || tier === 'PRINCIPAL')) {
+                inCastFaction.push([id, faction]);
+            } else if (onStage && tier === 'KNOWN') {
+                // Mid-weight in-cast KNOWN faction treated like inCast for rendering
+                inCastFaction.push([id, faction]);
+            } else if (tier === 'PRINCIPAL') {
+                offStagePrincipalFaction.push([id, faction]);
+            } else if (tier === 'TRACKED') {
+                offStageTrackedFaction.push([id, faction]);
+            } else if (isDormantFactionOnStage) {
+                dormantOnStageFaction.push([id, faction, rel]);
+            } else {
+                knownFactionList.push([id, faction]);
+            }
+        }
+
+        for (const [id, faction] of inCastFaction) {
+            renderFullFaction(id, faction);
+        }
+        for (const [id, faction] of offStagePrincipalFaction) {
+            const rel = state.relationships?.[`pc-${id}`];
+            const cardFrag = rel && rel.status === 'active'
+                ? ` · ${formatCardName(rel.card)} ${rel.orientation}`
+                : '';
+            lines.push(`PRINCIPAL faction (off-stage): ${faction.name || id}${cardFrag}`);
+        }
+        for (const [id, faction] of offStageTrackedFaction) {
+            lines.push(`TRACKED faction (off-stage): ${faction.name || id}`);
+        }
+        for (const [id, faction, rel] of dormantOnStageFaction) {
+            lines.push(`DORMANT faction (on-stage): ${faction.name || id} · ${formatCardName(rel.card)} ${rel.orientation}`);
+        }
+        // KNOWN factions rendered minimally when present (mirrors pre-refactor behavior of listing all)
+        for (const [id, faction] of knownFactionList) {
+            const territoryStr = Array.isArray(faction.territory) ? faction.territory.join(', ') : faction.territory;
+            const territory = territoryStr ? ` @ ${territoryStr}` : '';
+            const fState = faction.state ? ` [${faction.state}]` : '';
+            lines.push(`  ${faction.name || id}${territory}${fState} → id: ${id}`);
         }
     }
 

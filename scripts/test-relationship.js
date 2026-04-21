@@ -745,6 +745,77 @@ group('state-view render — relationship block', () => {
     });
 });
 
+group('lean phonebook — cast gating', () => {
+    test('TRACKED char in scene_cast renders full dossier', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'upright', nuance: 'n', last_shift: null,
+            }},
+            { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:lacus'] } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('CHARACTER: Lacus [TRACKED]'), 'full dossier for in-cast');
+    });
+
+    test('PRINCIPAL char off-stage renders one-liner', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'upright', nuance: 'n', last_shift: null,
+            }},
+            { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: [] } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('PRINCIPAL (off-stage): Lacus'), 'principal off-stage one-liner');
+        assert(!rendered.includes('CHARACTER: Lacus [PRINCIPAL]'), 'should NOT render full dossier');
+    });
+
+    test('TRACKED char off-stage renders compact line without card', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'mu', d: { name: 'Mu', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-mu', d: {
+                card: 'the-chariot', orientation: 'upright', nuance: 'n', last_shift: null,
+            }},
+            { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: [] } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('TRACKED (off-stage): Mu'), 'tracked off-stage one-liner');
+        assert(!rendered.includes('The Chariot'), 'should NOT show card for off-stage TRACKED');
+    });
+
+    test('KNOWN char in scene_cast renders mid-weight block (not roll-up)', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'dak', d: { name: 'Dak', tier: 'KNOWN', tags: ['bartender'] } },
+            { tx: 2, op: 'S', e: 'char', id: 'dak', d: { f: 'agenda', v: 'keeps the peace' } },
+            { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:dak'] } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('CHARACTER: Dak [KNOWN · on-stage]'), 'mid-weight header');
+        assert(rendered.includes('Tags: [bartender]'), 'tags present');
+        assert(rendered.includes('keeps the peace'), 'agenda present');
+        assert(!rendered.includes('♥ Bond'), 'no card for KNOWN');
+    });
+
+    test('dormant char on-stage by location re-injects with card', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'flay', d: { name: 'Flay', tier: 'KNOWN' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-flay', d: {
+                card: 'death', orientation: 'upright', nuance: 'g', status: 'dormant', last_shift: null,
+            }},
+            { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'current_place_id', v: 'place:bridge' } },
+            { tx: 4, op: 'S', e: 'char', id: 'flay', d: { f: 'location', v: 'place:bridge' } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('DORMANT (on-stage): Flay'), 'dormant-on-stage re-injects');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
