@@ -256,10 +256,26 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
         for (const c of constraints) {
             const owner = state.characters[c.owner_id];
             const ownerName = owner?.name || c.owner_id;
-            let cLine = `  ${c.name} [${c.integrity}] (${ownerName})`;
+            // Detect schema drift on canonical fields — surface loudly so the LLM can self-correct
+            // next turn (same feedback loop the corrections system uses for format errors).
+            const drifts = [];
+            if (!c.owner_id) {
+                const aliasChar = typeof c.char === 'string' && c.char ? c.char.replace(/^char:/, '') : '';
+                drifts.push(aliasChar
+                    ? `owner_id missing — 'char' was used instead. Fix: S constraint:${c.id} field=owner_id value=${aliasChar}`
+                    : `owner_id missing. Fix: S constraint:${c.id} field=owner_id value=<char_id>`);
+            }
+            if (!c.integrity) {
+                drifts.push(`integrity missing. Fix: S constraint:${c.id} field=integrity value=<STABLE|STRESSED|CRITICAL|BREACHED>`);
+            }
+            if (!c.name) {
+                drifts.push(`name missing. Fix: S constraint:${c.id} field=name value="..."`);
+            }
+            let cLine = `  ${c.name || '(unnamed)'} [${c.integrity || 'UNKNOWN'}] (${ownerName || '?'})`;
             if (c.shedding_order) cLine += ` shed:${c.shedding_order}`;
             cLine += ` → id: ${c.id}`;
             lines.push(cLine);
+            for (const d of drifts) lines.push(`    [SCHEMA DRIFT] ${d}`);
             // Lite: name [INTEGRITY] only (already in header line)
             // Combat: + current_pressure
             if (isCombat && !showConstraintDetail && c.current_pressure) {
