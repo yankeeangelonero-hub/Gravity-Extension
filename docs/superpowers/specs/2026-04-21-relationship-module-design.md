@@ -44,7 +44,7 @@ relationship:pc-<other_id>
   orientation:     "upright" | "reversed"
   nuance:          "<free text, ~100-word soft cap>"
   status:          "active" | "dormant" | "archived"
-  last_shift: {
+  last_shift:      null | {            // null at birth; set on first collision resolve
     tx:            234,
     collision_id:  "lacus-first-step",
     from:          { card: "the-fool", orientation: "upright" },
@@ -100,7 +100,7 @@ Relationship entities are born at the moment a character or faction reaches TRAC
 - **`TR char:<id> field=tier from=KNOWN to=TRACKED`** → same rule.
 - **`CR faction:<id>`** with `tier ∈ {TRACKED, PRINCIPAL}` → same rule. A faction created without a tier defaults to KNOWN (no relationship entity).
 
-The LLM chooses the initial card based on accumulated KA, demonstrated_traits, recent reads, and scene context. No collision is required for birth.
+The LLM chooses the initial card based on accumulated KA, demonstrated_traits, recent reads, and scene context. No collision is required for birth. At birth, `last_shift` is `null` — there is no prior state to record. The first relational collision to resolve sets `last_shift` to its first complete value.
 
 ### Change (always a collision)
 
@@ -123,8 +123,10 @@ Status transitions are engine-driven — the LLM does not write them. This keeps
 
 ### Death (permanent archive)
 
-- **`D char:<id>`** or **`D faction:<id>`** → engine auto-`S` on `relationship:pc-<id>` with `status=archived`. The final `last_shift.to` values become the memorial card.
-- Archived relationships never re-activate. They render at the bottom of the relationship block as a compact memorial line.
+- **`D char:<id>`** or **`D faction:<id>`** → engine auto-`S` on `relationship:pc-<id>` with `status=archived`. The relationship's current `card`/`orientation` become the memorial state. If `last_shift` is still `null` (char D'd before any relational collision resolved), the memorial simply shows the birth card; no final-shift line renders.
+- Archived relationships never re-activate via direct state change. They render at the bottom of the relationship block as a compact memorial line.
+
+**Semantic note — `D` is for permanent destruction only.** Fake deaths, presumed-dead scenarios, and resurrections should NOT issue `D`. Use tier demotion (`TR char:<id> field=tier from=TRACKED to=KNOWN`) with `last_seen_at` to mark a character as offscreen-assumed-gone. KA updates on other characters handle "PC thinks they're dead"; the reveal later is a KA correction, not an entity-level change. If `D` was issued in error and must be reversed, use the standard `AMEND` transaction machinery.
 
 ## Scene Management (Phonebook)
 
@@ -217,7 +219,7 @@ Three layers, matching existing architecture.
 - `CR relationship:*` requires: `id` matching `pc-<other_id>`, `card` ∈ whitelist, `orientation` ∈ {upright, reversed}, `nuance` non-empty
 - Card slug must match one of the 22 Major Arcana
 - `status` ∈ {active, dormant, archived}
-- `last_shift` must be complete object with all five fields
+- `last_shift` must be either `null` (birth state, before first relational collision resolves) or a complete object with all five fields (`tx`, `collision_id`, `from`, `to`, `reason`)
 - `faction.tier` ∈ {KNOWN, TRACKED, PRINCIPAL}
 - `char.tags` array of strings, max 5 elements, each ≤ 40 chars
 - `pc.scene_cast` array of valid `char:<id>`/`faction:<id>` refs
@@ -302,6 +304,16 @@ We're already at heavy LLM cognitive load (cast, cards, nuance, last_shift, coll
 
 Token budget on long chats is the real constraint. Rendering every TRACKED+ character's full dossier every turn balloons injection cost past the point where the LLM can attend to it. Cast-gated rendering focuses attention on who's *actually on stage* while preserving off-stage context as compact one-liners (PRINCIPAL) or tag-driven lookups (KNOWN).
 
+### Monitored concern — LLM friction on IMMEDIATE relational micro-shifts
+
+A single-scene micro-shift (e.g., a subtle trust strain in one conversation) currently requires ~6 transactions: collision CR (with forces/cost/ignition_class/fires_when/involved_chars/distance_category), collision TR to RESOLVED (with outcome_type + aftermath), plus 4 `S` ops on the relationship entity. That's heavy boilerplate for a small beat, on top of generating engaging prose in the same turn.
+
+The risk is LLM avoidance: rather than take the cognitive hit, the model may simply not flag micro-shifts at all, and the relationship drifts in prose without ledger anchoring.
+
+We're keeping the design as-is for MVP — relaxing the "every change is a collision" rule would re-open the free-text drift problem we specifically designed around. If playtesting shows avoidance, the right mitigation is an **engine-assisted macro**: a shorthand syntax like `RELSHIFT pc-lacus from=upright to=reversed reason="..."` that parses server-side and expands to the full transaction sequence. LLM writes one line; ledger gets the full audit trail. This is a preset/parser-layer optimization, not a state-model change — additive and non-breaking.
+
+Flag: watch for low ratio of relational collisions to narrative relational beats in early playtests. If LLM is narrating shifts but not logging them, the macro is the next move.
+
 ## Open Questions (to revisit during implementation)
 
 1. **Cap on active relationships** — should we hard-cap TRACKED+ at, say, 8 per chat? Or let narrative decide? Currently unlimited.
@@ -309,6 +321,7 @@ Token budget on long chats is the real constraint. Rendering every TRACKED+ char
 3. **Faction scene-presence inference** — is a TRACKED faction "on-stage" only if one of its members is in cast? Or when its territory intersects `pc.current_place_id`? Current design: the LLM explicitly adds the faction to `scene_cast` — no inference.
 4. **Tag uniqueness** — should tags be globally unique (i.e., "pilot" means the same thing across the chat)? Emergent for now; revisit if drift is an issue.
 5. **Readme weight** — how much preset space does this module take? Must trade against existing readme budget.
+6. **PRINCIPAL cap (1 vs 2–3).** Currently capped at 1 PRINCIPAL char and 1 PRINCIPAL faction (matches existing Gravity convention). Dual-protagonist narratives (Lacus + Kira, Cloud + Tifa) may want 2. Functional cost of relaxing to 2–3 is tiny (one extra one-liner render per off-stage PRINCIPAL ≈ 50 tokens). Tradeoff: relaxing blurs what PRINCIPAL *means* as a narrative pin. Keep at 1 for MVP; relax if playtesting shows recurring friction on multi-central-character chats.
 
 ## Acceptance Criteria
 
