@@ -685,6 +685,66 @@ group('consistency: scene_cast entity-ref validation', () => {
     });
 });
 
+const { formatStateView } = require('../state-view.js');
+
+group('state-view render — relationship block', () => {
+    test('active relationship renders with ♥ line', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL', tags: ['idol'] } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'reversed', nuance: 'Hermit because...', last_shift: null,
+            }},
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('Bond (PC): The Hermit · reversed'), 'relationship line present');
+        assert(rendered.includes('Tags: [idol]'), 'tags line present');
+    });
+
+    test('dormant relationship does not render Bond line', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'KNOWN' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'reversed', nuance: 'x', status: 'dormant', last_shift: null,
+            }},
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(!rendered.includes('Bond (PC): The Hermit'), 'dormant should not render the bond line');
+    });
+
+    test('archived relationship for dead char renders as memorial', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'nicol', d: { name: 'Nicol', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-nicol', d: {
+                card: 'the-star', orientation: 'upright', nuance: 'x', last_shift: null,
+            }},
+            { tx: 3, op: 'S', e: 'relationship', id: 'pc-nicol', d: {
+                f: 'last_shift', v: { tx: 3, collision_id: 'col:duel', from: { card: 'the-star', orientation: 'upright' }, to: { card: 'the-star', orientation: 'upright' }, reason: 'killed in duel' },
+            }},
+            { tx: 4, op: 'D', e: 'char', id: 'nicol' },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('MEMORIALS'), 'memorial section present');
+        assert(rendered.includes('† Nicol'), 'dead char has memorial line');
+        assert(rendered.includes('The Star'), 'memorial shows card');
+        assert(rendered.includes('killed in duel'), 'memorial shows last_shift reason');
+    });
+
+    test('archived relationship with living target is NOT memorialized', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'rau', d: { name: 'Rau', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-rau', d: {
+                card: 'the-tower', orientation: 'reversed', nuance: 'x', status: 'archived', last_shift: null,
+            }},
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(!rendered.includes('MEMORIALS'), 'no memorial when target is alive');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

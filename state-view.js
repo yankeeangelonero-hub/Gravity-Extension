@@ -14,6 +14,14 @@ function normalizeText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function formatCardName(slug) {
+    if (!slug || typeof slug !== 'string') return '';
+    return slug.split('-').map(w => {
+        if (w.length <= 2) return w;
+        return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(' ');
+}
+
 function getCollisionForcesText(col) {
     if (Array.isArray(col?.forces)) {
         return col.forces
@@ -144,7 +152,16 @@ function formatChallenge(challenge, { compact = false } = {}) {
     return lines;
 }
 
-function formatStateView(state, mode = 'full', includeArchive = true) {
+function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
+    // Accept either (state, mode, includeArchive) or (state, { mode, includeArchive })
+    let mode, includeArchive;
+    if (modeOrOpts && typeof modeOrOpts === 'object') {
+        mode = modeOrOpts.mode || 'full';
+        includeArchive = modeOrOpts.includeArchive !== undefined ? modeOrOpts.includeArchive : true;
+    } else {
+        mode = modeOrOpts || 'full';
+        includeArchive = includeArchiveArg;
+    }
     const lines = [];
     // ── Mode flags ────────────────────────────────────────────────────────
     const isLite = (mode === 'lite');
@@ -199,6 +216,20 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
 
         // Location — TRACKED/PRINCIPAL only
         if (char.location) lines.push(`    Location: ${char.location}`);
+
+        // Render tags (if present)
+        if (Array.isArray(char.tags) && char.tags.length > 0) {
+            lines.push(`    Tags: [${char.tags.join(', ')}]`);
+        }
+        // Render relationship block (active only)
+        {
+            const rel = state.relationships?.[`pc-${char.id}`];
+            if (rel && rel.status === 'active') {
+                const orientLabel = rel.orientation === 'reversed' ? 'reversed' : 'upright';
+                lines.push(`    ♥ Bond (PC): ${formatCardName(rel.card)} · ${orientLabel}`);
+                if (rel.nuance) lines.push(`      "${rel.nuance}"`);
+            }
+        }
 
         // TRACKED+ fields: knowledge_asymmetry (flat semantic keys; `legacy` shown last), last_seen_at
         const ka = char.knowledge_asymmetry;
@@ -366,6 +397,17 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
             const territory = territoryStr ? ` @ ${territoryStr}` : '';
             const fState = f.state ? ` [${f.state}]` : '';
             lines.push(`  ${f.name || f.id}${territory}${fState} → id: ${f.id}`);
+            // Render tags (if present)
+            if (Array.isArray(f.tags) && f.tags.length > 0) {
+                lines.push(`    Tags: [${f.tags.join(', ')}]`);
+            }
+            // Render relationship block (active only)
+            const fRel = state.relationships?.[`pc-${f.id}`];
+            if (fRel && fRel.status === 'active') {
+                const orientLabel = fRel.orientation === 'reversed' ? 'reversed' : 'upright';
+                lines.push(`    ♥ Bond (PC): ${formatCardName(fRel.card)} · ${orientLabel}`);
+                if (fRel.nuance) lines.push(`      "${fRel.nuance}"`);
+            }
             // Lite mode: emit compact KA so the model can use faction.knowledge_asymmetry on regular turns
             if (isLite) {
                 const ka = f.knowledge_asymmetry;
@@ -533,6 +575,30 @@ function formatStateView(state, mode = 'full', includeArchive = true) {
             for (const { who, entries } of pcReads) {
                 lines.push(`    ${who}:`);
                 for (const e of entries) lines.push(`      - ${e}`);
+            }
+        }
+    }
+
+    // Memorials — archived relationships whose target entity has been D'd
+    {
+        const memorials = [];
+        for (const [relId, rel] of Object.entries(state.relationships || {})) {
+            if (rel.status !== 'archived') continue;
+            if (!relId.startsWith('pc-')) continue;
+            const otherId = relId.slice('pc-'.length);
+            const stillLive = state.characters?.[otherId] || state.factions?.[otherId];
+            if (stillLive) continue;
+            memorials.push([otherId, rel]);
+        }
+        if (memorials.length > 0) {
+            lines.push('');
+            lines.push(`MEMORIALS (${memorials.length}):`);
+            for (const [otherId, rel] of memorials) {
+                const displayName = rel.display_name || otherId;
+                const reason = rel.last_shift?.reason
+                    ? ` — ${normalizeText(rel.last_shift.reason).slice(0, 60)}`
+                    : '';
+                lines.push(`  † ${displayName} · ${formatCardName(rel.card)} ${rel.orientation}${reason}`);
             }
         }
     }
