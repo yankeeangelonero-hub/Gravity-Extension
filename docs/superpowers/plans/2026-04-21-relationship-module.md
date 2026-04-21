@@ -524,6 +524,23 @@ Edit `state-compute.js` in the A (append) switch case, inside the `if (!isDuplic
                 }
 ```
 
+- [ ] **Step 5b: Enforce cap on S op**
+
+The consistency validator (Task 8) rejects S char.tags with > 5 entries at Layer 1. But for belt-and-suspenders, and to handle any engine-originated S writes, also clamp in the compute layer inside the S case, after the existing `record[tx.d.f] = tx.d.v` assignment:
+
+```javascript
+                record[tx.d.f] = tx.d.v;
+                recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, tx.d.v, tx);
+                // Belt-and-suspenders: normalize tags array on S (consistency handles
+                // shape validation, but engine-originated S ops bypass consistency).
+                if (tx.e === 'char' && tx.d.f === 'tags' && Array.isArray(record.tags)) {
+                    record.tags = Array.from(new Set(record.tags));
+                    if (record.tags.length > CHARACTER_TAGS_MAX) {
+                        record.tags = record.tags.slice(0, CHARACTER_TAGS_MAX);
+                    }
+                }
+```
+
 - [ ] **Step 6: Run tests — expect pass**
 
 ```
@@ -539,9 +556,11 @@ git commit -m "feat(relationship): add char.tags with 5-entry cap
 
 Characters may carry up to 5 short tag strings for queryable
 identification (role, faction-affiliation, location, notable
-knowledge). Cap enforced on both CR and A operations; excess
-entries dropped silently. Tags are additive metadata — existing
-char behavior unchanged when tags unset."
+knowledge). Cap enforced on CR, A, and S operations — the S
+exploit (bypassing both compute-layer and consistency-layer guards
+by rewriting the whole array via SET) is closed at both layers.
+Excess entries dropped silently; consistency validator hard-rejects
+before compute even sees the tx."
 ```
 
 ---
@@ -692,6 +711,21 @@ group('engine-driven relationship.status', () => {
         assertEqual(state.relationships['pc-lacus'].status, 'archived', 'auto-archive on death');
     });
 
+    test('D char:id stamps rel.display_name before entity is removed', () => {
+        // After D, state.characters['lacus'] is gone. Without the pre-delete stamp,
+        // memorial render falls back to raw id "lacus" instead of "Lacus Clyne".
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus Clyne', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+            }},
+            { tx: 3, op: 'D', e: 'char', id: 'lacus' },
+        ];
+        const state = computeState(null, txs);
+        assert(!state.characters['lacus'], 'entity removed from state.characters');
+        assertEqual(state.relationships['pc-lacus'].display_name, 'Lacus Clyne', 'name preserved in rel');
+    });
+
     test('D char:id also scrubs pc.scene_cast reference', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'TRACKED' } },
@@ -779,18 +813,40 @@ Edit `state-compute.js` inside the TR switch case, after the existing `recordHis
 
 Place this block AFTER the existing `Bug 2: on tier demotion, clear fields` block for chars, INSIDE the `if (tx.d.f)` guard.
 
-- [ ] **Step 5: Wire the helper into the D case + scrub scene_cast**
+- [ ] **Step 5: Wire the helper into the D case + scrub scene_cast + stamp display_name**
+
+**Design note — auto-scrub vs. Layer 2 guard:**
+The design spec originally had a Layer 2 rule: "Cannot D a char/faction currently in pc.scene_cast — must exit cast first." That guard was designed to prevent a dangling scene_cast reference. The plan takes a different approach: D is always allowed (narrative deaths happen on-stage), and the engine atomically fixes the cast in the same handler. This is intentionally better than the spec's naive guard because:
+- It preserves the LLM's ability to kill a character mid-scene without a mandatory two-step (exit cast, then D)
+- The end state is identical (no dangling ref) with one fewer transaction
+
+The spec Layer 2 guard for D-on-cast-member is therefore **intentionally omitted** in this plan. Task 7 does NOT add a state-machine rejection for D-while-in-cast.
 
 Edit `state-compute.js` inside the D switch case (around line 667):
 
 ```javascript
         case 'D': {
             if (!isSingleton) {
-                // Engine-driven: archive paired relationship BEFORE deleting entity
                 if (tx.e === 'char' || tx.e === 'faction') {
+                    const entity = state[collection]?.[tx.id];
+
+                    // Stamp display_name onto the relationship BEFORE deleting the
+                    // entity. After D, state.characters[id] is gone — the relationship
+                    // entity is the only surviving record. Without this stamp, the
+                    // memorial render falls back to the raw kebab id ("lacus", not
+                    // "Lacus Clyne"). The rel entity can access the name here; it can't
+                    // after the delete on the next line.
+                    const relId = `pc-${tx.id}`;
+                    const rel = state.relationships?.[relId];
+                    if (rel && entity?.name) {
+                        rel.display_name = entity.name;
+                    }
+
+                    // Engine-driven: archive paired relationship BEFORE deleting entity
                     adjustRelationshipStatus(state, tx.e, tx.id, 'archived');
                     // Scrub dangling scene_cast reference so the lean phonebook
                     // never points at a ghost. Audit in Task 14 would flag it otherwise.
+                    // (Intentional deviation from spec Layer 2 guard — see design note above.)
                     const fqId = `${tx.e}:${tx.id}`;
                     if (state.pc && Array.isArray(state.pc.scene_cast)) {
                         state.pc.scene_cast = state.pc.scene_cast.filter(ref => ref !== fqId);
@@ -1194,6 +1250,35 @@ group('consistency: relationship shape', () => {
         const result = consistency.validateTransaction(tx, null);
         assert(result.valid, 'valid last_shift with card-obj from/to passes');
     });
+
+    test('S last_shift with reason > 200 chars rejects (token bloat cap)', () => {
+        const longReason = 'x'.repeat(201);
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'last_shift', v: {
+                tx: 5, collision_id: 'col:duel',
+                from: { card: 'the-hermit', orientation: 'upright' },
+                to: { card: 'the-tower', orientation: 'reversed' },
+                reason: longReason,
+            }
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'reason > 200 chars must reject');
+        assert(result.violations.some(v => /too long/i.test(v.message)), 'specific too-long message');
+    });
+
+    test('S last_shift with reason exactly 200 chars passes', () => {
+        const maxReason = 'x'.repeat(200);
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'last_shift', v: {
+                tx: 5, collision_id: 'col:duel',
+                from: { card: 'the-hermit', orientation: 'upright' },
+                to: { card: 'the-tower', orientation: 'reversed' },
+                reason: maxReason,
+            }
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'reason at exactly 200 chars passes');
+    });
 });
 
 group('consistency: scene_cast entity-ref validation', () => {
@@ -1240,12 +1325,51 @@ group('consistency: scene_cast entity-ref validation', () => {
         assert(!result.valid, 'bare id without type prefix must reject');
     });
 
+    test('S pc current_place_id without place: prefix rejects', () => {
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'current_place_id', v: 'bridge' } };
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'bare place id without "place:" prefix must reject');
+    });
+
+    test('S pc current_place_id with place: prefix passes', () => {
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'current_place_id', v: 'place:bridge' } };
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'well-formed place id passes');
+    });
+
+    test('S pc current_place_id null clears field (passes)', () => {
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'current_place_id', v: null } };
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'null clears place id — allowed');
+    });
+
     test('CR char with >5 tags rejects', () => {
         const tx = { tx: 1, op: 'CR', e: 'char', id: 'dak', d: {
             name: 'Dak', tier: 'KNOWN', tags: ['a','b','c','d','e','f']
         }};
         const result = consistency.validateTransaction(tx, null);
         assert(!result.valid, 'too many tags should reject');
+    });
+
+    test('S char tags with >5 entries rejects (S exploit closed)', () => {
+        // LLM bypasses CR/A validation by using S to rewrite the whole array.
+        const tx = { tx: 1, op: 'S', e: 'char', id: 'dak', d: {
+            f: 'tags', v: ['a','b','c','d','e','f']
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'S with >5 tags must reject');
+    });
+
+    test('S char tags with non-array rejects', () => {
+        const tx = { tx: 1, op: 'S', e: 'char', id: 'dak', d: { f: 'tags', v: 'rebel' } };
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'S tags with string value (not array) must reject');
+    });
+
+    test('S char tags with valid array passes', () => {
+        const tx = { tx: 1, op: 'S', e: 'char', id: 'dak', d: { f: 'tags', v: ['rebel', 'pilot'] } };
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'S tags with valid ≤5-entry array passes');
     });
 
     test('CR faction with invalid tier rejects', () => {
@@ -1368,6 +1492,13 @@ const FACTION_TIERS_SET = new Set(['KNOWN', 'TRACKED', 'PRINCIPAL']);
 const CHARACTER_TAGS_MAX = 5;
 const CHARACTER_TAG_MAXLEN = 40;
 
+// Hard cap on last_shift.reason length. reason is written by the LLM on every
+// relational collision resolution; without a limit it becomes narrative prose.
+// This data lives in active state (not just ledger) so it affects every prompt
+// injection that references relationships. 200 chars is roughly 2-3 short
+// sentences — enough to capture "betrayal at Jachin", not a scene summary.
+const LAST_SHIFT_REASON_MAXLEN = 200;
+
 /**
  * Validate a tarot card+orientation sub-object (used inside last_shift.from/to).
  * Both from and to record the relationship state before/after a relational
@@ -1394,6 +1525,8 @@ function isValidLastShift(v) {
     if (typeof v.tx !== 'number') return false;
     if (!('collision_id' in v)) return false;
     if (typeof v.reason !== 'string') return false;
+    // reason length cap — prevents LLM prose from accumulating in active state.
+    if (v.reason.length > LAST_SHIFT_REASON_MAXLEN) return false;
     // from and to must be valid {card, orientation} objects — checking mere
     // presence allows "from: 'good', to: 'bad'" to corrupt the tarot audit trail.
     if (!isValidCardObj(v.from)) return false;
@@ -1516,12 +1649,22 @@ function validateRelationshipTx(tx) {
                     message: 'S last_shift=null would wipe the audit trail',
                     fix: 'last_shift can only be null at birth (CR). Subsequent S ops require the full {tx, collision_id, from, to, reason} object.',
                 });
-            } else if (!isValidLastShift(v)) {
-                violations.push({
-                    field: 'last_shift',
-                    message: 'last_shift must be {tx, collision_id, from: {card, orientation}, to: {card, orientation}, reason}',
-                    fix: 'All five fields required. from/to must be {card, orientation} objects using valid Major Arcana slugs.',
-                });
+            } else {
+                // Check reason length before the full isValidLastShift call
+                // so the violation message is specific, not generic.
+                if (v && typeof v.reason === 'string' && v.reason.length > LAST_SHIFT_REASON_MAXLEN) {
+                    violations.push({
+                        field: 'last_shift',
+                        message: `last_shift.reason is too long (${v.reason.length} chars; max ${LAST_SHIFT_REASON_MAXLEN})`,
+                        fix: `Keep reason to 1-2 terse sentences (≤${LAST_SHIFT_REASON_MAXLEN} chars). This is an ID tag for the shift, not a scene summary.`,
+                    });
+                } else if (!isValidLastShift(v)) {
+                    violations.push({
+                        field: 'last_shift',
+                        message: 'last_shift must be {tx, collision_id, from: {card, orientation}, to: {card, orientation}, reason}',
+                        fix: 'All five fields required. from/to must be {card, orientation} objects using valid Major Arcana slugs.',
+                    });
+                }
             }
         }
     }
@@ -1529,12 +1672,42 @@ function validateRelationshipTx(tx) {
 }
 
 /**
- * Validate char.tags shape on CR or A.
+ * Validate char.tags shape on CR, A, or S.
+ *
+ * CR: d.tags is the initial array — full array validation.
+ * A:  d.v is a single tag being appended — validate the tag string only
+ *     (total count post-append is not checkable here without state, but
+ *     state-compute's normalizeCharacterFields already dedup+caps A ops).
+ * S:  d.f === 'tags' and d.v is the replacement array — full array validation,
+ *     same rules as CR. Without this, the LLM can bypass the 5-cap and type
+ *     checks by using S instead of CR/A.
  */
 function validateCharTagsTx(tx) {
     const violations = [];
     let tags = null;
-    if (tx.op === 'CR' && Array.isArray(tx.d?.tags)) tags = tx.d.tags;
+    if (tx.op === 'CR' && Array.isArray(tx.d?.tags)) {
+        tags = tx.d.tags;
+    } else if (tx.op === 'S' && tx.d?.f === 'tags') {
+        // S replaces the whole tags array — must validate as array
+        if (!Array.isArray(tx.d.v)) {
+            violations.push({
+                field: 'tags',
+                message: `S char.tags value must be an array, got ${typeof tx.d.v}`,
+                fix: 'Use an array: SET char:id field=tags value=["tag1","tag2"]',
+            });
+            return violations;
+        }
+        tags = tx.d.v;
+    } else if (tx.op === 'A' && tx.d?.f === 'tags') {
+        // A appends a single tag — validate the individual string only
+        const t = tx.d.v;
+        if (typeof t !== 'string') {
+            violations.push({ field: 'tags', message: 'appended tag must be a string', fix: 'Tags must be plain text strings.' });
+        } else if (t.length > CHARACTER_TAG_MAXLEN) {
+            violations.push({ field: 'tags', message: `tag "${t.slice(0, 30)}..." exceeds ${CHARACTER_TAG_MAXLEN} chars`, fix: 'Tags should be 1-3 words.' });
+        }
+        return violations;
+    }
     if (!tags) return violations;
     if (tags.length > CHARACTER_TAGS_MAX) {
         violations.push({
@@ -1630,20 +1803,38 @@ Find the main per-tx validator function in `consistency.js`. Extend it to accept
         const relViolations = validateRelationshipTx(tx);
         violations.push(...relViolations);
     }
-    // char.tags shape validation
-    if (tx.e === 'char' && (tx.op === 'CR' || tx.op === 'A')) {
+    // char.tags shape validation (CR, A, and S — S exploit closed)
+    if (tx.e === 'char' && (tx.op === 'CR' || tx.op === 'A' || tx.op === 'S')) {
         violations.push(...validateCharTagsTx(tx));
     }
     // faction.tier shape validation
     if (tx.e === 'faction' && (tx.op === 'CR' || tx.op === 'S')) {
         violations.push(...validateFactionTierTx(tx));
     }
-    // pc.scene_cast A/S entity-ref validation (state-dependent)
+    // pc entity shape validation (state-dependent for scene_cast refs)
     if (tx.e === 'pc') {
         let refs = null;
         if (tx.op === 'S' && tx.d?.f === 'scene_cast' && Array.isArray(tx.d.v)) refs = tx.d.v;
         if (tx.op === 'A' && tx.d?.f === 'scene_cast') refs = [tx.d.v];
         if (refs) violations.push(...validateSceneCastEntries(refs, state));
+
+        // current_place_id must be "place:<id>" format (or null/empty to clear).
+        // LLMs frequently omit the prefix, writing just "bridge" instead of
+        // "place:bridge". The lean-phonebook's dormant-on-stage check compares
+        // char.location === state.pc.current_place_id — a bare string will
+        // never match a properly-prefixed location.
+        if (tx.op === 'S' && tx.d?.f === 'current_place_id') {
+            const v = tx.d.v;
+            if (v !== null && v !== '' && v !== undefined) {
+                if (typeof v !== 'string' || !v.startsWith('place:') || v.length <= 'place:'.length) {
+                    violations.push({
+                        field: 'current_place_id',
+                        message: `current_place_id must be "place:<id>", got "${v}"`,
+                        fix: 'Use the fully-qualified place id (e.g., place:bridge). The "place:" prefix is required.',
+                    });
+                }
+            }
+        }
     }
     // PRINCIPAL uniqueness — state-dependent, lives in consistency for centralized hard-reject
     if (state && (tx.e === 'char' || tx.e === 'faction')) {
@@ -1880,10 +2071,13 @@ Add near the bottom of `formatStateView`, before the closing `return lines.join(
         lines.push('');
         lines.push(`MEMORIALS (${memorials.length}):`);
         for (const [otherId, rel] of memorials) {
+            // Use display_name stamped at D time — after entity deletion, this is
+            // the only surviving copy of the character's display name.
+            const displayName = rel.display_name || otherId;
             const reason = rel.last_shift?.reason
                 ? ` — ${normalizeText(rel.last_shift.reason).slice(0, 60)}`
                 : '';
-            lines.push(`  † ${otherId} · ${formatCardName(rel.card)} ${rel.orientation}${reason}`);
+            lines.push(`  † ${displayName} · ${formatCardName(rel.card)} ${rel.orientation}${reason}`);
         }
     }
 ```
@@ -2494,7 +2688,9 @@ At the end of the character-panel loop, add an `archived` memorial section:
     if (archived.length > 0) {
         parts.push(`<details class="gl-memorials"><summary>Memorials (${archived.length})</summary>`);
         for (const [relId, r] of archived) {
-            const pair = relId.replace(/^pc-/, '');
+            // Use display_name stamped at archive time — state.characters[id] is
+            // gone after D, so the raw relId suffix is the only fallback.
+            const pair = r.display_name || relId.replace(/^pc-/, '');
             const finalShift = r.last_shift
                 ? ` (tx ${r.last_shift.tx}: ${r.last_shift.reason})`
                 : '';
