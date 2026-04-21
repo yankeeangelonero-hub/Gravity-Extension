@@ -58,6 +58,7 @@ function createEmptyState() {
         factions: {},
         places: {},
         pressures: {},
+        relationships: {},
         world: {
             world_state: '',
             collision_archive: [],
@@ -279,6 +280,7 @@ function getCollectionName(entityType) {
         world: 'world',
         pc: 'pc',
         divination: 'divination',
+        relationship: 'relationships',
     };
     return map[entityType] || entityType;
 }
@@ -479,6 +481,10 @@ function applyTransaction(state, tx) {
                 // Pressure entity: engine stamps created_at_tx from tx.tx (LLM-supplied value overwritten)
                 if (tx.e === 'pressure') {
                     data.created_at_tx = tx.tx;
+                }
+                if (tx.e === 'relationship') {
+                    if (!('last_shift' in data)) data.last_shift = null;
+                    if (!data.status) data.status = 'active';
                 }
                 // Phase 2: distance_category → canonical starting distance
                 if (tx.e === 'collision') {
@@ -742,6 +748,7 @@ function computeState(snapshot, transactions) {
     if (!state._history) state._history = {};
     if (!state.factions) state.factions = {};
     if (!state.divination) state.divination = { active_system: 'arcana', last_draw: null, readings: [] };
+    if (!state.relationships) state.relationships = {};
 
     // First pass: collect amendments
     const amendments = new Map();

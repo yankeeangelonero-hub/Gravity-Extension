@@ -28,6 +28,7 @@ const ENTITY_TO_COLLECTION = {
     world: 'world',
     pc: 'pc',
     divination: 'divination',
+    relationship: 'relationships',
 };
 
 // LLM-rejected fields owned by the engine. SET writes here are dropped at
@@ -41,7 +42,7 @@ const ENGINE_OWNED_FIELDS = {
 // ─── Valid Values ──────────────────────────────────────────────────────────────
 
 const VALID_OPS = ['CR', 'TR', 'S', 'A', 'R', 'MS', 'MR', 'D', 'SNAP', 'ROLL', 'AMEND'];
-const VALID_ENTITIES = ['char', 'constraint', 'collision', 'combat', 'faction', 'place', 'pressure', 'world', 'pc', 'divination'];
+const VALID_ENTITIES = ['char', 'constraint', 'collision', 'combat', 'faction', 'place', 'pressure', 'world', 'pc', 'divination', 'relationship'];
 
 // Required fields per operation type
 const OP_REQUIRED_FIELDS = {

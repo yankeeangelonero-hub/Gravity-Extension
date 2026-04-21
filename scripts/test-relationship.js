@@ -58,6 +58,52 @@ group('harness sanity', () => {
     });
 });
 
+group('relationship entity — CR + S', () => {
+    test('CR relationship:pc-lacus creates entity with engine-defaulted status=active', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-fool',
+                orientation: 'upright',
+                nuance: 'First impression.',
+                last_shift: null,
+            }},
+        ];
+        const state = computeState(null, txs);
+        const rel = state.relationships?.['pc-lacus'];
+        assert(rel !== undefined, 'relationship not in state.relationships');
+        assertEqual(rel.card, 'the-fool', 'card');
+        assertEqual(rel.orientation, 'upright', 'orientation');
+        assertEqual(rel.status, 'active', 'status defaulted to active by engine');
+        assertEqual(rel.last_shift, null, 'last_shift null at birth');
+    });
+
+    test('S relationship field=card updates card', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-fool', orientation: 'upright', nuance: 'x', last_shift: null,
+            }},
+            { tx: 3, op: 'S', e: 'relationship', id: 'pc-lacus', d: { f: 'card', v: 'the-hermit' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.relationships['pc-lacus'].card, 'the-hermit', 'card updated');
+    });
+
+    test('CR relationship without last_shift defaults to null', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-fool', orientation: 'upright', nuance: 'x',
+                // last_shift omitted intentionally
+            }},
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.relationships['pc-lacus'].last_shift, null, 'last_shift defaulted to null');
+        assertEqual(state.relationships['pc-lacus'].status, 'active', 'status defaulted to active');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
