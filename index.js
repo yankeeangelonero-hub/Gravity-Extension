@@ -964,11 +964,11 @@ function getNudgeState() {
 }
 
 function saveNudgeState(counter, slot, rotIdx) {
-    const meta = SillyTavern.getContext().chatMetadata;
-    meta[NUDGE_COUNTER_KEY] = counter;
-    meta[NUDGE_SLOT_KEY] = slot;
-    meta[NUDGE_ROTATION_INDEX_KEY] = rotIdx;
-    saveMetadataDebounced();
+    const { chatMetadata, saveMetadata } = SillyTavern.getContext();
+    chatMetadata[NUDGE_COUNTER_KEY] = counter;
+    chatMetadata[NUDGE_SLOT_KEY] = slot;
+    chatMetadata[NUDGE_ROTATION_INDEX_KEY] = rotIdx;
+    saveMetadata();
 }
 
 function buildNudge_agendaCheck(state, charId) {
