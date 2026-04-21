@@ -68,6 +68,8 @@ function createEmptyState() {
             name: '',
             demonstrated_traits: [],
             current_scene: '',
+            current_place_id: '',
+            scene_cast: [],
         },
         divination: {
             active_system: 'arcana',

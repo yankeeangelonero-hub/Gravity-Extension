@@ -169,6 +169,40 @@ group('char.tags', () => {
     });
 });
 
+group('pc.scene_cast + pc.current_place_id', () => {
+    test('empty state has pc.current_place_id and pc.scene_cast defaults', () => {
+        const state = computeState(null, []);
+        assertEqual(state.pc.current_place_id, '', 'current_place_id default');
+        assertEqual(state.pc.scene_cast, [], 'scene_cast default');
+    });
+
+    test('S pc field=current_place_id sets it', () => {
+        const txs = [
+            { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'current_place_id', v: 'place:medbay' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.pc.current_place_id, 'place:medbay', 'place id set');
+    });
+
+    test('S pc field=scene_cast replaces array (advance-turn semantics)', () => {
+        const txs = [
+            { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:a', 'char:b'] } },
+            { tx: 2, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:c'] } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.pc.scene_cast, ['char:c'], 'S replaced cast');
+    });
+
+    test('A pc field=scene_cast appends (regular-turn entry semantics)', () => {
+        const txs = [
+            { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:a'] } },
+            { tx: 2, op: 'A', e: 'pc', id: '', d: { f: 'scene_cast', v: 'char:b' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.pc.scene_cast, ['char:a', 'char:b'], 'append extended cast');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
