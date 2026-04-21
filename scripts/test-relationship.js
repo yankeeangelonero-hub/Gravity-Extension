@@ -131,6 +131,44 @@ group('faction.tier', () => {
     });
 });
 
+group('char.tags', () => {
+    test('CR char with tags stores them', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'dak', d: { name: 'Dak', tier: 'KNOWN', tags: ['smuggler', 'archangel'] } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.dak.tags, ['smuggler', 'archangel'], 'tags stored');
+    });
+
+    test('CR char with >5 tags keeps only first 5', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'dak', d: { name: 'Dak', tier: 'KNOWN',
+              tags: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.dak.tags, ['a', 'b', 'c', 'd', 'e'], 'tags capped at 5');
+    });
+
+    test('A char field=tags appends and respects cap', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'dak', d: { name: 'Dak', tier: 'KNOWN', tags: ['a', 'b', 'c', 'd'] } },
+            { tx: 2, op: 'A', e: 'char', id: 'dak', d: { f: 'tags', v: 'e' } },
+            { tx: 3, op: 'A', e: 'char', id: 'dak', d: { f: 'tags', v: 'f' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.dak.tags, ['a', 'b', 'c', 'd', 'e'], 'append respects cap');
+    });
+
+    test('CR char with duplicate tags dedupes BEFORE capping', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'dak', d: { name: 'Dak', tier: 'KNOWN',
+              tags: ['smuggler', 'smuggler', 'smuggler', 'smuggler', 'smuggler', 'rebel'] } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.dak.tags, ['smuggler', 'rebel'], 'dedup preserves unique traits');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

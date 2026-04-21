@@ -8,6 +8,7 @@
 // NOTE: spec §2 uses state.chars as shorthand; codebase keeps state.characters (D1 decision).
 const CATEGORY_DISTANCES = { IMMEDIATE: 1, SHORT: 10, MEDIUM: 20, LONG: 50 };
 const MAX_COLLISION_ARCHIVE = 20;
+const CHARACTER_TAGS_MAX = 5;
 
 /**
  * @typedef {Object} ComputedState
@@ -489,6 +490,12 @@ function applyTransaction(state, tx) {
                 if (tx.e === 'faction') {
                     if (!data.tier) data.tier = 'KNOWN';
                 }
+                if (tx.e === 'char' && Array.isArray(data.tags)) {
+                    data.tags = Array.from(new Set(data.tags));
+                    if (data.tags.length > CHARACTER_TAGS_MAX) {
+                        data.tags = data.tags.slice(0, CHARACTER_TAGS_MAX);
+                    }
+                }
                 // Phase 2: distance_category → canonical starting distance
                 if (tx.e === 'collision') {
                     if (data.distance_category) {
@@ -573,6 +580,12 @@ function applyTransaction(state, tx) {
                 if (tx.e === 'collision' && sField === 'status' && newVal === 'CRASHED' && !target.outcome_type) {
                     target.outcome_type = 'CRASHED';
                 }
+                if (tx.e === 'char' && sField === 'tags' && Array.isArray(target.tags)) {
+                    target.tags = Array.from(new Set(target.tags));
+                    if (target.tags.length > CHARACTER_TAGS_MAX) {
+                        target.tags = target.tags.slice(0, CHARACTER_TAGS_MAX);
+                    }
+                }
                 if (oldVal !== newVal) {
                     recordHistory(state, tx.e, tx.id, sField, oldVal, newVal, tx);
                 }
@@ -603,6 +616,12 @@ function applyTransaction(state, tx) {
                         const arr = state.world.collision_archive;
                         if (Array.isArray(arr) && arr.length > MAX_COLLISION_ARCHIVE) {
                             state.world.collision_archive = arr.slice(-MAX_COLLISION_ARCHIVE);
+                        }
+                    }
+                    if (tx.e === 'char' && tx.d.f === 'tags' && Array.isArray(target.tags)) {
+                        target.tags = Array.from(new Set(target.tags));
+                        if (target.tags.length > CHARACTER_TAGS_MAX) {
+                            target.tags = target.tags.slice(0, CHARACTER_TAGS_MAX);
                         }
                     }
                 }
