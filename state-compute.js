@@ -283,6 +283,58 @@ function getCollectionName(entityType) {
     return map[entityType] || entityType;
 }
 
+// Aliases the LLM has used instead of canonical constraint field names.
+const CONSTRAINT_FIELD_ALIASES = {
+    description: 'profile',
+    shed: 'shedding_order',
+};
+
+/**
+ * Normalize aliased field names in a constraint field-bag (CR d object).
+ * Converts: description→profile, shed→shedding_order, char→owner_id (strips char: prefix).
+ */
+function normalizeConstraintFields(fields) {
+    if (!fields || typeof fields !== 'object') return fields;
+    const out = { ...fields };
+    for (const [alias, canonical] of Object.entries(CONSTRAINT_FIELD_ALIASES)) {
+        if (out[alias] !== undefined && out[canonical] === undefined) {
+            out[canonical] = out[alias];
+        }
+        delete out[alias];
+    }
+    if (out.char !== undefined && out.owner_id === undefined) {
+        out.owner_id = out.char;
+    }
+    delete out.char;
+    if (typeof out.owner_id === 'string' && out.owner_id.startsWith('char:')) {
+        out.owner_id = out.owner_id.slice('char:'.length);
+    }
+    return out;
+}
+
+/**
+ * Normalize a single constraint field name + value (for S transactions).
+ * Returns { field, value } with canonical names applied.
+ */
+function normalizeConstraintSField(field, value) {
+    // Simple alias map
+    if (CONSTRAINT_FIELD_ALIASES[field] !== undefined) {
+        return { field: CONSTRAINT_FIELD_ALIASES[field], value };
+    }
+    // char → owner_id with char: prefix stripping
+    if (field === 'char') {
+        const v = (typeof value === 'string' && value.startsWith('char:'))
+            ? value.slice('char:'.length)
+            : value;
+        return { field: 'owner_id', value: v };
+    }
+    // owner_id value may still carry the char: prefix even on a canonical-named S
+    if (field === 'owner_id' && typeof value === 'string' && value.startsWith('char:')) {
+        return { field: 'owner_id', value: value.slice('char:'.length) };
+    }
+    return { field, value };
+}
+
 /**
  * Record a field change in the history tracker.
  */
@@ -370,7 +422,8 @@ function applyTransaction(state, tx) {
             if (isSingleton) {
                 Object.assign(state[collection], tx.d);
             } else {
-                const data = { id: tx.id, ...tx.d };
+                const rawD = tx.e === 'constraint' ? normalizeConstraintFields(tx.d) : tx.d;
+                const data = { id: tx.id, ...rawD };
                 // Normalize place defaults
                 if (tx.e === 'place') {
                     if (!data.reach) data.reach = 'LOCAL';
@@ -443,22 +496,26 @@ function applyTransaction(state, tx) {
             // TODO: validation should reject missing-target Ss before commit.
             if (!target) { if (tx.tx > 0) console.warn(`[state-compute] S no-op: entity ${tx.e}:${tx.id} not found (tx ${tx.tx}, field ${tx.d.f})`); break; }
             if (tx.d.f) {
-                const oldVal = target[tx.d.f];
-                let newVal = tx.d.v;
-                if (tx.e === 'collision' && tx.d.f === 'status') {
+                // Normalize aliased field names on constraint S transactions.
+                const { field: sField, value: sVal } = tx.e === 'constraint'
+                    ? normalizeConstraintSField(tx.d.f, tx.d.v)
+                    : { field: tx.d.f, value: tx.d.v };
+                const oldVal = target[sField];
+                let newVal = sVal;
+                if (tx.e === 'collision' && sField === 'status') {
                     newVal = migrateCollisionStatus(newVal);
                 }
                 // Bug 4(b): coerce null writes to known map-backed fields to empty object.
                 // null on map-backed fields is interpreted as "reset to empty map" — distinguishing explicit-clear from never-had-it is not supported
                 const MAP_BACKED_FIELDS = ['knowledge_asymmetry', 'intimate_history', 'wounds'];
-                if (newVal === null && MAP_BACKED_FIELDS.includes(tx.d.f)) newVal = {};
-                target[tx.d.f] = newVal;
+                if (newVal === null && MAP_BACKED_FIELDS.includes(sField)) newVal = {};
+                target[sField] = newVal;
                 // Phase 2: when collision lands in CRASHED, default outcome_type if absent
-                if (tx.e === 'collision' && tx.d.f === 'status' && newVal === 'CRASHED' && !target.outcome_type) {
+                if (tx.e === 'collision' && sField === 'status' && newVal === 'CRASHED' && !target.outcome_type) {
                     target.outcome_type = 'CRASHED';
                 }
                 if (oldVal !== newVal) {
-                    recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, newVal, tx);
+                    recordHistory(state, tx.e, tx.id, sField, oldVal, newVal, tx);
                 }
             }
             break;
