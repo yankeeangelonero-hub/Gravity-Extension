@@ -49,7 +49,8 @@ if (constraints.length === 0) {
 
 // ─── Char orphan audit ────────────────────────────────────────────────────────
 console.log('\n--- Char orphan audit ---');
-const ORPHAN_FIELDS = ['want', 'doing', 'stance_toward_pc', 'cost', 'reads'];
+// 'reads' is intentionally absent: normalizeCharacterKnowledgeAsymmetry() in state-compute.js deletes it unconditionally, so it can never appear post-replay.
+const ORPHAN_FIELDS = ['want', 'doing', 'stance_toward_pc', 'cost'];
 let orphanFound = false;
 for (const ch of Object.values(state.characters || {})) {
     const orphans = ORPHAN_FIELDS.filter(f => ch[f] !== undefined);
