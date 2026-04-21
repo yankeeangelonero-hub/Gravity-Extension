@@ -1116,6 +1116,130 @@ group('consistency: relationship shape', () => {
         assert(result.valid, 'CR without status should pass (defaulted by engine)');
     });
 
+    test('S relationship nuance="" rejects (empty nuance loophole)', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'nuance', v: ''
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'empty string nuance must reject');
+    });
+
+    test('S relationship nuance=42 rejects (type coercion loophole)', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'nuance', v: 42
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'non-string nuance must reject');
+    });
+
+    test('S relationship nuance with valid string passes', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'nuance', v: 'The hermit archetype deepens after the Jachin encounter.'
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'valid nuance string passes');
+    });
+
+    test('S relationship missing pc- prefix rejects (id prefix bypass)', () => {
+        // LLM forgets prefix: "SET relationship:lacus field=card ..."
+        // Without S-branch id check, this would silently create state.relationships['lacus'].
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'lacus', d: {
+            f: 'card', v: 'the-hermit'
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'missing pc- prefix on S must reject');
+    });
+
+    test('CR orientation "Upright" (title-case) passes after normalization', () => {
+        // LLMs frequently title-case tarot terms. Normalizing to lowercase before
+        // checking RELATIONSHIP_ORIENTATIONS prevents relentless rejections.
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'Upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'title-cased orientation should pass after normalization');
+    });
+
+    test('S orientation "Reversed" (title-case) passes after normalization', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'orientation', v: 'Reversed'
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'title-cased S orientation normalizes to reversed');
+    });
+
+    test('S last_shift with string from/to rejects (sub-object validation)', () => {
+        // "from: 'good', to: 'bad'" passes the mere 'in v' key-presence check
+        // but must fail because from/to must be {card, orientation} objects.
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'last_shift', v: {
+                tx: 5, collision_id: 'col:duel',
+                from: 'the-hermit-upright', to: 'the-tower-reversed',
+                reason: 'betrayal',
+            }
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'string from/to must reject — must be {card, orientation} objects');
+    });
+
+    test('S last_shift with valid card-obj from/to passes', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'last_shift', v: {
+                tx: 5, collision_id: 'col:duel',
+                from: { card: 'the-hermit', orientation: 'upright' },
+                to: { card: 'the-tower', orientation: 'reversed' },
+                reason: 'betrayal at the hangar',
+            }
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'valid last_shift with card-obj from/to passes');
+    });
+});
+
+group('consistency: scene_cast entity-ref validation', () => {
+    test('S pc scene_cast with non-existent char rejects', () => {
+        const state = { characters: {}, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:ghost'] } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'hallucinated char id in scene_cast must reject');
+        assert(result.violations.some(v => v.field === 'scene_cast'), 'violation on scene_cast field');
+    });
+
+    test('A pc scene_cast with non-existent faction rejects', () => {
+        const state = { characters: {}, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'A', e: 'pc', id: '', d: { f: 'scene_cast', v: 'faction:phantom' } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'hallucinated faction id in scene_cast A must reject');
+    });
+
+    test('S pc scene_cast with unsupported type rejects', () => {
+        const state = { characters: {}, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['collision:x'] } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'non-char/faction entity type in scene_cast must reject');
+    });
+
+    test('S pc scene_cast with existing char passes', () => {
+        const state = { characters: { lacus: { tier: 'TRACKED' } }, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:lacus'] } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(result.valid, 'existing char in scene_cast passes');
+    });
+
+    test('S pc scene_cast with existing faction passes', () => {
+        const state = { characters: {}, factions: { zaft: { tier: 'PRINCIPAL' } }, relationships: {} };
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['faction:zaft'] } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(result.valid, 'existing faction in scene_cast passes');
+    });
+
+    test('S pc scene_cast with malformed ref (no colon) rejects', () => {
+        const state = { characters: {}, factions: {}, relationships: {} };
+        const tx = { tx: 1, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['lacus'] } };
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'bare id without type prefix must reject');
+    });
+
     test('CR char with >5 tags rejects', () => {
         const tx = { tx: 1, op: 'CR', e: 'char', id: 'dak', d: {
             name: 'Dak', tier: 'KNOWN', tags: ['a','b','c','d','e','f']
@@ -1245,19 +1369,52 @@ const CHARACTER_TAGS_MAX = 5;
 const CHARACTER_TAG_MAXLEN = 40;
 
 /**
+ * Validate a tarot card+orientation sub-object (used inside last_shift.from/to).
+ * Both from and to record the relationship state before/after a relational
+ * collision, so both must be fully-formed tarot references.
+ */
+function isValidCardObj(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+    // Normalize orientation to lowercase before checking — LLMs frequently
+    // title-case these values (the same normalization applied in the main
+    // orientation validator). Card slugs should always be lowercase already,
+    // but we normalize them too for robustness.
+    const card = typeof obj.card === 'string' ? obj.card.toLowerCase() : '';
+    const orientation = typeof obj.orientation === 'string' ? obj.orientation.toLowerCase() : '';
+    return MAJOR_ARCANA.has(card) && RELATIONSHIP_ORIENTATIONS.has(orientation);
+}
+
+/**
  * Validate the shape of a last_shift value. Null is allowed (birth state).
- * Non-null must be an object with all five fields present.
+ * Non-null must be an object with all five fields present AND valid from/to.
  */
 function isValidLastShift(v) {
     if (v === null) return true;
     if (typeof v !== 'object' || Array.isArray(v)) return false;
-    return (
-        typeof v.tx === 'number' &&
-        ('collision_id' in v) &&   // may be null only at initial forced-write; caller typically non-null
-        ('from' in v) &&            // may be null or object
-        ('to' in v) &&
-        typeof v.reason === 'string'
-    );
+    if (typeof v.tx !== 'number') return false;
+    if (!('collision_id' in v)) return false;
+    if (typeof v.reason !== 'string') return false;
+    // from and to must be valid {card, orientation} objects — checking mere
+    // presence allows "from: 'good', to: 'bad'" to corrupt the tarot audit trail.
+    if (!isValidCardObj(v.from)) return false;
+    if (!isValidCardObj(v.to)) return false;
+    return true;
+}
+
+/**
+ * Check the id prefix format used by both CR and S operations.
+ * Must be "pc-<suffix>" (LLM sometimes omits the prefix, creating a
+ * malformed key like state.relationships['lacus'] that never renders).
+ */
+function validateRelationshipId(id) {
+    if (typeof id !== 'string' || !id.startsWith('pc-') || id.length <= 3) {
+        return {
+            field: 'id',
+            message: `relationship id must be "pc-<other_id>", got "${id}"`,
+            fix: 'Use e.g. relationship:pc-lacus (PC is always first in the pair).',
+        };
+    }
+    return null;
 }
 
 /**
@@ -1266,28 +1423,30 @@ function isValidLastShift(v) {
  */
 function validateRelationshipTx(tx) {
     const violations = [];
-    // ID format: must be "pc-<suffix>"
+
+    // ID format check applies to both CR and S — a missing "pc-" prefix on S
+    // would silently create a malformed relationship key in state.
+    const idViolation = validateRelationshipId(tx.id);
+    if (idViolation) violations.push(idViolation);
+
     if (tx.op === 'CR') {
-        if (typeof tx.id !== 'string' || !tx.id.startsWith('pc-') || tx.id.length <= 3) {
-            violations.push({
-                field: 'id',
-                message: `relationship id must be "pc-<other_id>", got "${tx.id}"`,
-                fix: 'Use e.g. relationship:pc-lacus (PC is always first in the pair).',
-            });
-        }
         const d = tx.d || {};
-        if (!MAJOR_ARCANA.has(d.card)) {
+        // Normalize card slug and orientation to lowercase before checking.
+        // LLMs frequently title-case tarot terms ("The Hermit", "Upright").
+        const card = typeof d.card === 'string' ? d.card.toLowerCase() : d.card;
+        const orientation = typeof d.orientation === 'string' ? d.orientation.toLowerCase() : d.orientation;
+        if (!MAJOR_ARCANA.has(card)) {
             violations.push({
                 field: 'card',
                 message: `invalid card slug "${d.card}"`,
-                fix: `Must be one of the 22 Major Arcana slugs (the-fool, the-lovers, the-tower, ...).`,
+                fix: `Must be one of the 22 Major Arcana slugs in lowercase-hyphen form (the-fool, the-lovers, the-tower, ...).`,
             });
         }
-        if (!RELATIONSHIP_ORIENTATIONS.has(d.orientation)) {
+        if (!RELATIONSHIP_ORIENTATIONS.has(orientation)) {
             violations.push({
                 field: 'orientation',
                 message: `invalid orientation "${d.orientation}"`,
-                fix: 'Must be upright or reversed.',
+                fix: 'Must be "upright" or "reversed" (lowercase). Do not title-case.',
             });
         }
         if (typeof d.nuance !== 'string' || d.nuance.trim() === '') {
@@ -1299,9 +1458,7 @@ function validateRelationshipTx(tx) {
         }
         if (d.status !== undefined) {
             // CR: status is engine-defaulted to 'active' at birth. LLM-authored
-            // status is forbidden — it has no legitimate use case (new bonds
-            // cannot be born archived/dormant) and enables the status-override
-            // loophole in a different disguise.
+            // status is forbidden — no legitimate use case; enables override loophole.
             violations.push({
                 field: 'status',
                 message: 'relationship.status is engine-owned — omit on CR (engine defaults to "active")',
@@ -1311,26 +1468,40 @@ function validateRelationshipTx(tx) {
         if (d.last_shift !== undefined && !isValidLastShift(d.last_shift)) {
             violations.push({
                 field: 'last_shift',
-                message: 'last_shift must be null or {tx, collision_id, from, to, reason}',
+                message: 'last_shift must be null or {tx, collision_id, from: {card, orientation}, to: {card, orientation}, reason}',
                 fix: 'Use null at birth; full object on subsequent collision-resolve updates.',
             });
         }
     } else if (tx.op === 'S') {
         const f = tx.d?.f;
         const v = tx.d?.v;
-        if (f === 'card' && !MAJOR_ARCANA.has(v)) {
-            violations.push({ field: 'card', message: `invalid card slug "${v}"`, fix: 'Major Arcana only.' });
+        if (f === 'card') {
+            const card = typeof v === 'string' ? v.toLowerCase() : v;
+            if (!MAJOR_ARCANA.has(card)) {
+                violations.push({ field: 'card', message: `invalid card slug "${v}"`, fix: 'Major Arcana only, lowercase-hyphen (the-hermit, not "The Hermit").' });
+            }
         }
-        if (f === 'orientation' && !RELATIONSHIP_ORIENTATIONS.has(v)) {
-            violations.push({ field: 'orientation', message: `invalid orientation "${v}"`, fix: 'upright or reversed.' });
+        if (f === 'orientation') {
+            // Normalize to lowercase — LLMs title-case "Upright"/"Reversed" frequently.
+            const orientation = typeof v === 'string' ? v.toLowerCase() : v;
+            if (!RELATIONSHIP_ORIENTATIONS.has(orientation)) {
+                violations.push({ field: 'orientation', message: `invalid orientation "${v}"`, fix: '"upright" or "reversed" (lowercase).' });
+            }
+        }
+        if (f === 'nuance') {
+            // Nuance can be updated via S (e.g., nuance deepened mid-arc without a full
+            // card shift). Must remain a non-empty string — empty or non-string corrupts
+            // the prompt injection line that the LLM reads back.
+            if (typeof v !== 'string' || v.trim() === '') {
+                violations.push({
+                    field: 'nuance',
+                    message: `nuance must be a non-empty string, got ${JSON.stringify(v)}`,
+                    fix: 'Nuance must be a non-empty prose string (max ~100 words). Use DELETE to remove it entirely rather than setting it to "".',
+                });
+            }
         }
         if (f === 'status') {
-            // RULE: relationship.status is engine-owned. It is set by
-            // state-compute's TR/D handlers (tier demotion → dormant, promotion
-            // → active, D → archived). The LLM must never write it — allowing
-            // the LLM to manually force status would let it revive archived
-            // relationships, dormant-silence a live bond mid-scene, or mask a
-            // tier-drift bug. Hard-reject regardless of value.
+            // RULE: relationship.status is engine-owned. The LLM must never write it.
             violations.push({
                 field: 'status',
                 message: 'relationship.status is engine-owned and cannot be SET manually',
@@ -1338,8 +1509,7 @@ function validateRelationshipTx(tx) {
             });
         }
         if (f === 'last_shift') {
-            // On S, null is NOT allowed — nulling last_shift would wipe the
-            // audit trail. Birth (only legitimate null case) uses CR, not S.
+            // On S, null is NOT allowed — would wipe the audit trail. Birth is CR-only.
             if (v === null) {
                 violations.push({
                     field: 'last_shift',
@@ -1349,8 +1519,8 @@ function validateRelationshipTx(tx) {
             } else if (!isValidLastShift(v)) {
                 violations.push({
                     field: 'last_shift',
-                    message: 'last_shift must be {tx, collision_id, from, to, reason}',
-                    fix: 'Provide all five fields including a non-null collision_id (every shift is anchored to a collision).',
+                    message: 'last_shift must be {tx, collision_id, from: {card, orientation}, to: {card, orientation}, reason}',
+                    fix: 'All five fields required. from/to must be {card, orientation} objects using valid Major Arcana slugs.',
                 });
             }
         }
@@ -1403,6 +1573,53 @@ function validateFactionTierTx(tx) {
 }
 ```
 
+**Add `validateSceneCastTx` below `validateFactionTierTx`:**
+
+```javascript
+/**
+ * Validate scene_cast A (append) and S (replace) operations on the pc entity.
+ * Checks: each entry is a "type:id" string AND the referenced entity actually
+ * exists in state.characters or state.factions.
+ *
+ * This is a state-dependent validator (needs state) — it goes in the
+ * main validateTransaction call which already accepts state.
+ */
+function validateSceneCastEntries(refs, state) {
+    const violations = [];
+    for (const ref of refs) {
+        if (typeof ref !== 'string' || !ref.includes(':')) {
+            violations.push({
+                field: 'scene_cast',
+                message: `invalid cast entry "${ref}" — must be "type:id" format (char:lacus, faction:zaft)`,
+                fix: 'Use the fully-qualified entity id (e.g., char:lacus). The "char:" prefix is required.',
+            });
+            continue;
+        }
+        if (!state) continue;  // no state available — shape check only
+        const [type, id] = ref.split(':');
+        let exists = false;
+        if (type === 'char') exists = Boolean(state.characters?.[id]);
+        else if (type === 'faction') exists = Boolean(state.factions?.[id]);
+        else {
+            violations.push({
+                field: 'scene_cast',
+                message: `unsupported entity type "${type}" in cast ref "${ref}"`,
+                fix: 'Only "char:" and "faction:" prefixes are allowed in scene_cast.',
+            });
+            continue;
+        }
+        if (!exists) {
+            violations.push({
+                field: 'scene_cast',
+                message: `cast ref "${ref}" references a non-existent entity`,
+                fix: `Create ${type}:${id} first, or correct the id. The LLM may have hallucinated the id.`,
+            });
+        }
+    }
+    return violations;
+}
+```
+
 - [ ] **Step 5: Wire the new validators into the main validator (including PRINCIPAL uniqueness)**
 
 Find the main per-tx validator function in `consistency.js`. Extend it to accept the current state as a second parameter (needed for state-dependent checks like PRINCIPAL uniqueness). Inside it, after existing per-entity validation, add:
@@ -1420,6 +1637,13 @@ Find the main per-tx validator function in `consistency.js`. Extend it to accept
     // faction.tier shape validation
     if (tx.e === 'faction' && (tx.op === 'CR' || tx.op === 'S')) {
         violations.push(...validateFactionTierTx(tx));
+    }
+    // pc.scene_cast A/S entity-ref validation (state-dependent)
+    if (tx.e === 'pc') {
+        let refs = null;
+        if (tx.op === 'S' && tx.d?.f === 'scene_cast' && Array.isArray(tx.d.v)) refs = tx.d.v;
+        if (tx.op === 'A' && tx.d?.f === 'scene_cast') refs = [tx.d.v];
+        if (refs) violations.push(...validateSceneCastEntries(refs, state));
     }
     // PRINCIPAL uniqueness — state-dependent, lives in consistency for centralized hard-reject
     if (state && (tx.e === 'char' || tx.e === 'faction')) {
@@ -1560,14 +1784,25 @@ git add consistency.js scripts/test-relationship.js
 git commit -m "feat(relationship): consistency shape validation + PRINCIPAL uniqueness
 
 Adds shape validators for:
-- relationship CR/S (id format, card whitelist, orientation enum,
-  nuance non-empty, status enum, last_shift: null allowed ONLY on CR
-  (birth); S last_shift=null hard-rejects to protect audit trail)
+- relationship CR/S — id prefix "pc-" required on both CR and S;
+  card slug normalized to lowercase before MAJOR_ARCANA whitelist
+  check; orientation normalized to lowercase (LLMs title-case these);
+  nuance validated as non-empty string on BOTH CR and S (empty/non-
+  string on S was a silent loophole); status hard-rejects on BOTH CR
+  (engine-defaults 'active') and S (engine-owned field); last_shift
+  null only on CR (audit-trail protection), and from/to validated as
+  {card, orientation} objects — string values like "good"/"bad" that
+  passed the 'in v' key-presence check now hard-reject
 - char.tags (array-of-strings, ≤5 entries, ≤40 chars each)
 - faction.tier (KNOWN|TRACKED|PRINCIPAL enum)
+- pc.scene_cast A/S — each entry validated as "type:id" format AND
+  existence-checked against state.characters/factions so LLM can't
+  hallucinate cast refs that land as dangling strings in the ledger
 - PRINCIPAL uniqueness (centralized in consistency — one hard-reject
   path for both shape and state-dependent checks; validateTransaction
   now accepts state as a second argument)
+- validateBlock (block-scoped shadow-state walk closes same-block
+  double-PRINCIPAL exploit)
 
 Hard-rejects malformed transactions at commit time. Index.js call
 sites updated to pass _currentState as second arg."
@@ -1879,6 +2114,38 @@ After the split, replace the existing single-loop rendering with category-specif
 ```
 
 Faction rendering gets the same treatment — split into in-cast full dossier vs off-stage compact line. PRINCIPAL faction should always render (auto-cast rule).
+
+**Faction dormant-on-stage check: use `territory` array, NOT `location` string.**
+Characters have a `location` field (a single string — `"place:bridge"`). Factions use a `territory` field (an array — `["place:plant-home"]`). The dormant-reinjection logic must NOT copy `faction.location === currentPlace` from the character loop; that will always be `undefined === string` → false. Use:
+
+```javascript
+    for (const [id, faction] of Object.entries(state.factions)) {
+        const fqId = `faction:${id}`;
+        const tier = String(faction.tier || '').toUpperCase();
+        const onStage = castSet.has(fqId);
+        const rel = state.relationships?.[`pc-${id}`];
+        // Dormant faction re-injects if its territory includes the PC's current location.
+        // Factions use territory: [place:X] (array), NOT location (string) like chars.
+        const isDormantFactionOnStage = (
+            rel && rel.status === 'dormant' &&
+            currentPlace &&
+            Array.isArray(faction.territory) &&
+            faction.territory.includes(currentPlace)
+        );
+        // Bucket split: same structure as characters
+        if (onStage && (tier === 'TRACKED' || tier === 'PRINCIPAL')) {
+            // inCastFaction.push([id, faction]);
+        } else if (tier === 'PRINCIPAL') {
+            // offStagePrincipalFaction.push([id, faction]);
+        } else if (tier === 'TRACKED') {
+            // offStageTrackedFaction.push([id, faction]);
+        } else if (isDormantFactionOnStage) {
+            // dormantOnStageFaction.push([id, faction, rel]);
+        }
+    }
+```
+
+Add `inCastFaction`, `offStagePrincipalFaction`, `offStageTrackedFaction`, `dormantOnStageFaction` buckets alongside the character buckets and render them in the same fashion.
 
 - [ ] **Step 4: Syntax check**
 
@@ -2396,32 +2663,37 @@ At the collision-arrival hook site (after the arrival is detected but before the
 
 (Adapt function names `nextTxId`, `currentTimestamp`, `appendTransaction` to whatever the existing `index.js` uses.)
 
-- [ ] **Step 3: Add PRINCIPAL faction auto-cast on advance turns**
+- [ ] **Step 3: Pre-commit PRINCIPAL faction merge on advance turns**
 
-At the advance-turn handler in `index.js`, after state has been updated from the LLM's ledger block:
+At the advance-turn handler in `index.js`, BEFORE committing the LLM's ledger block, intercept any `S pc field=scene_cast` transaction and merge missing PRINCIPAL factions into its `d.v` array.
+
+**Why pre-commit, not post-commit A tx:** a post-commit `A pc scene_cast=faction:X` transaction creates a "drop→reappend" pair in the ledger on every advance turn. Over a long session, this pollutes the transaction log with constant engine-generated noise. Pre-commit mutation is architecturally cleaner: the engine silently corrects the payload before it lands in the ledger, no secondary tx needed, and the log stays clean.
+
+Locate where `index.js` iterates the parsed tx block before appending (the validation loop, or a "pre-apply hook" if one exists). Add:
 
 ```javascript
+    // Pre-commit hook: on advance turns, ensure PRINCIPAL factions are in
+    // every S pc field=scene_cast transaction before it hits the ledger.
+    // This prevents the post-commit drop→reappend log-pollution cycle.
     if (turnMode === 'advance') {
-        // Ensure PRINCIPAL factions are always in scene_cast
-        const principalFactions = Object.entries(state.factions || {})
+        const principalFactionIds = Object.entries(state.factions || {})
             .filter(([, f]) => String(f.tier || '').toUpperCase() === 'PRINCIPAL')
             .map(([id]) => `faction:${id}`);
-        const currentCast = Array.isArray(state.pc?.scene_cast) ? state.pc.scene_cast : [];
-        const missing = principalFactions.filter(id => !currentCast.includes(id));
-        for (const id of missing) {
-            appendTransaction({
-                tx: nextTxId(),
-                t: currentTimestamp(),
-                _ts: new Date().toISOString(),
-                op: 'A',
-                e: 'pc',
-                id: '',
-                d: { f: 'scene_cast', v: id },
-                r: 'Auto-added: PRINCIPAL faction always in cast',
-            });
+        for (const tx of block) {
+            if (tx.op === 'S' && tx.e === 'pc' && tx.d?.f === 'scene_cast' && Array.isArray(tx.d.v)) {
+                for (const fqId of principalFactionIds) {
+                    if (!tx.d.v.includes(fqId)) {
+                        tx.d.v.push(fqId);
+                    }
+                }
+            }
         }
     }
 ```
+
+Run this BEFORE `validateBlock(block, _currentState)` so the merged tx is what gets validated and logged.
+
+**Note:** do NOT emit a separate A tx for this. The pre-commit merge is invisible in the sense that it runs in the JS layer and modifies the transaction payload before ledger write — the logged tx already includes the PRINCIPAL faction.
 
 - [ ] **Step 4: Add correction-queue entries for missing relationship updates**
 
@@ -2495,7 +2767,23 @@ For each, queue a correction prompt. Two design notes:
         if (!other) continue;
         const relId = other.replace(/^(char|faction):/, 'pc-');
         const rel = state.relationships?.[relId];
-        if (!rel) continue;
+        if (!rel) {
+            // Relational collision tagged as relational but no relationship entity exists
+            // for the involved party. Could be: (a) mislabeled collision (should be
+            // combat/environmental), or (b) relationship CR was forgotten. Either way
+            // we must fire a correction — silent continue would let the error persist
+            // until the Task 14 replay harness, which is too late.
+            const dedupKey = `orphan-relational-collision:${cid}`;
+            if (!_firedRelationshipCorrections.has(dedupKey)) {
+                _firedRelationshipCorrections.add(dedupKey);
+                queueCorrection({
+                    kind: 'orphan-relational-collision',
+                    entity: `collision:${cid}`,
+                    prompt: `collision:${cid} is tagged ignition_class=relational and resolved, but no relationship:${relId} exists. Either:\n  (A) Create the missing relationship first: CR relationship:${relId} card="<slug>" orientation="upright|reversed" nuance="<description>" last_shift=null\n  (B) If this collision was mislabeled, correct the ignition_class via S collision:${cid} field=ignition_class value=environmental (or combat/social).`,
+                });
+            }
+            continue;
+        }
         // Use history lookup, not current value — a later collision in the same
         // block may have overwritten last_shift. The question is "did this
         // collision ever update the relationship," not "is it the latest one."
@@ -2561,21 +2849,25 @@ git commit -m "feat(relationship): index.js auto-cast + correction hooks
 Hook behaviors:
 1. Collision arrival at distance 0 auto-appends involved_chars to
    pc.scene_cast (fires only for chars not already in cast, dedupes).
-2. Advance turns auto-add PRINCIPAL factions to scene_cast if missing
-   (per spec: PRINCIPAL faction is always in cast).
-3. Correction queue gains three new rules:
+2. Advance turns: PRINCIPAL faction pre-commit merge. Instead of a
+   post-commit A tx (which would create a 'drop→reappend' noise cycle
+   in the ledger every advance), the engine intercepts S pc scene_cast
+   transactions before they hit validateBlock and silently adds any
+   missing PRINCIPAL faction refs to the d.v array. One clean tx, no
+   secondary append, no log pollution.
+3. Correction queue gains four new rules:
    - TRACKED+ entities without paired relationships
    - RESOLVED relational collisions whose last_shift.collision_id
      doesn't match the collision that resolved
-   - Scene cast overflow (>6 members): soft nudge asking the LLM to
-     prune or advance. Re-fires when cast grows further, clears when
-     it shrinks back under the cap. Closes the Layer 3 gap the spec
-     called out but the earlier plan draft missed — without this,
-     scene_cast grows unbounded through regular turns and burns the
-     lean-phonebook token savings.
+   - Orphaned relational collision (tagged relational but no
+     relationship:pc-X exists): fires a correction with two recovery
+     paths (create the missing relationship OR fix ignition_class).
+     Previously the loop 'continue'd silently, hiding the error until
+     the Task 14 replay harness.
+   - Scene cast overflow (>6 members): soft nudge asking LLM to prune
+     or advance. Re-fires on further growth, clears when cast shrinks.
 
-All hooks use existing tx-emission and correction-queue machinery —
-no new injection slots or persistence paths introduced."
+All hooks use existing tx-emission and correction-queue machinery."
 ```
 
 ---
