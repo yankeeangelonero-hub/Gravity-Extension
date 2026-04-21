@@ -322,8 +322,30 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
         if (rel.nuance) lines.push(`    "${rel.nuance}"`);
     }
 
-    // KNOWN — placeholder for Task 11 roll-up
-    // (will be filled in Task 11)
+    // KNOWN — roll-up: top 15 by last_active_tx, rest as name-only older list
+    if (knownList.length > 0) {
+        const sorted = knownList.slice().sort(([, a], [, b]) => {
+            return (b.last_active_tx || 0) - (a.last_active_tx || 0);
+        });
+        const TOP_N = 15;
+        const top = sorted.slice(0, TOP_N);
+        const older = sorted.slice(TOP_N);
+
+        lines.push('');
+        lines.push(`KNOWN (${top.length} most-recently-active${older.length ? `; ${older.length} older below` : ''}):`);
+        for (const [id, char] of top) {
+            const tagsFrag = Array.isArray(char.tags) && char.tags.length > 0
+                ? ` [${char.tags.join(', ')}]`
+                : '';
+            const fallback = !tagsFrag && char.agenda ? ` — "${normalizeText(char.agenda).slice(0, 80)}"` : '';
+            const locFallback = !tagsFrag && !char.agenda && char.location ? ` @ ${char.location}` : '';
+            lines.push(`  • ${char.name || id}${tagsFrag}${fallback}${locFallback}`);
+        }
+        if (older.length > 0) {
+            const names = older.map(([, c]) => c.name || '<unnamed>').join(', ');
+            lines.push(`Older KNOWN (${older.length} inactive): ${names}`);
+        }
+    }
 
     if (Object.keys(state.characters).length === 0) lines.push('  (none)');
 

@@ -816,6 +816,66 @@ group('lean phonebook — cast gating', () => {
     });
 });
 
+group('char.last_active_tx stamping', () => {
+    test('CR stamps last_active_tx = tx.tx', () => {
+        const txs = [
+            { tx: 5, op: 'CR', e: 'char', id: 'a', d: { name: 'A', tier: 'KNOWN' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.a.last_active_tx, 5, 'stamp on CR');
+    });
+
+    test('S updates last_active_tx to latest tx', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'a', d: { name: 'A', tier: 'KNOWN' } },
+            { tx: 42, op: 'S', e: 'char', id: 'a', d: { f: 'location', v: 'place:x' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.a.last_active_tx, 42, 'S updates stamp');
+    });
+
+    test('TR on char also updates last_active_tx', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'a', d: { name: 'A', tier: 'KNOWN' } },
+            { tx: 17, op: 'TR', e: 'char', id: 'a', d: { f: 'tier', from: 'KNOWN', to: 'TRACKED' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.a.last_active_tx, 17, 'TR updates stamp');
+    });
+});
+
+group('state-view — KNOWN roll-up', () => {
+    test('KNOWN chars render with tags', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'dak', d: { name: 'Dak', tier: 'KNOWN', tags: ['smuggler', 'archangel'] } },
+            { tx: 2, op: 'CR', e: 'char', id: 'finch', d: { name: 'Old Finch', tier: 'KNOWN', tags: ['engineer'] } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('• Dak [smuggler, archangel]'), 'Dak with tags');
+        assert(rendered.includes('• Old Finch [engineer]'), 'Finch with tag');
+    });
+
+    test('KNOWN without tags falls back to agenda', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'dak', d: { name: 'Dak', tier: 'KNOWN', agenda: 'Runs the night shift.' } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('• Dak — "Runs the night shift."'), 'agenda fallback');
+    });
+
+    test('KNOWN > 15 shows top-15 plus older-rollup', () => {
+        const txs = [];
+        for (let i = 0; i < 20; i++) {
+            txs.push({ tx: i + 1, op: 'CR', e: 'char', id: `k${i}`, d: { name: `K${i}`, tier: 'KNOWN', tags: ['a'] } });
+        }
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('Older KNOWN (5 inactive):'), 'older rollup present');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

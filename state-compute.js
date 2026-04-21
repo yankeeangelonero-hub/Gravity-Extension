@@ -797,6 +797,13 @@ function applyTransaction(state, tx) {
             break;
     }
 
+    // Stamp last_active_tx on any char-touching transaction (for KNOWN roll-up sort).
+    // This runs regardless of op; the char may not exist (e.g., after D) — guard with ?.
+    if (tx.e === 'char' && tx.id) {
+        const ch = state.characters?.[tx.id];
+        if (ch) ch.last_active_tx = tx.tx;
+    }
+
     state.lastTxId = tx.tx;
     return state;
 }
