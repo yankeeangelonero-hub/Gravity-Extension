@@ -9,7 +9,7 @@
 
 import { init as initLedger, reset as resetLedger, append, getAllTransactions, getTransactionsForEntity, exportData, importData } from './ledger-store.js';
 import { initSnapshots, computeCurrentState, createSnapshot, onRollback } from './snapshot-mgr.js';
-import { validateBatch, formatErrors, validateTransitions, findMissingArchiveEntries } from './consistency.js';
+import { validateBatch, formatErrors, validateTransitions, findMissingArchiveEntries, validateBlock } from './consistency.js';
 import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel, CATEGORY_DISTANCES } from './state-compute.js';
 import { formatStateView, formatReadme, computeArchiveVersion } from './state-view.js';
 import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
@@ -65,6 +65,10 @@ let _pendingManualDivination = null; // one-shot player-supplied divination roll
 // Both reset on chat change, snapshot rollback, and import.
 let _firedCollisionArrivals = new Set();
 let _foreshadowedCollisions = new Map();
+// Dedup keys for relationship-module corrections (§13 — missing relationship,
+// orphaned relational collision, missing rel update, scene cast overflow).
+// Cleared on chat change, rollback, import, and when the underlying condition resolves.
+let _firedRelationshipCorrections = new Set();
 
 // Phase 2: Timeskip multipliers (§3.2)
 const TICK = { HOURS: 1, DAYS: 3, WEEKS: 10, MONTHS: 20 };
@@ -867,13 +871,18 @@ No multi-turn delay. This collision is decided this turn.
 Commit the decision in the ledger this turn. No waiting.`;
 }
 
-function buildAndInjectArrivals(ids, state) {
+async function buildAndInjectArrivals(ids, state) {
     const blocks = [];
+    // Collect arrival collisions so we can auto-append their involved_chars to pc.scene_cast
+    // AFTER their arrival injection is built (engine-owned convenience write — the party
+    // physically walks onto the stage when a collision arrives).
+    const arrivalCollisions = [];
     for (const id of ids) {
         if (_firedCollisionArrivals.has(id)) continue;
         _firedCollisionArrivals.add(id);
         const col = state.collisions[id];
         if (!col) continue;
+        arrivalCollisions.push(col);
         const draw = drawDivination();
         const proximity = checkProximity(col, state);
         const involvedSummary = buildInvolvedCharsSummary(col, state);
@@ -887,6 +896,41 @@ function buildAndInjectArrivals(ids, state) {
         }[proximity];
         blocks.push(buildArrivalBlock(col, draw, involvedSummary, placeName, proximityLine));
     }
+
+    // Auto-cast: for each arriving collision, emit engine A tx on pc.scene_cast for each
+    // involved char not already in the cast. Uses bare-id → char:id normalization; pc sentinel skipped.
+    if (arrivalCollisions.length > 0 && state?.pc) {
+        const currentCast = Array.isArray(state.pc.scene_cast) ? state.pc.scene_cast : [];
+        const castSet = new Set(currentCast);
+        const autoCastTxns = [];
+        for (const col of arrivalCollisions) {
+            const involved = Array.isArray(col.involved_chars) ? col.involved_chars : [];
+            for (const party of involved) {
+                if (!party || party === 'pc') continue;
+                const fqRef = String(party).includes(':') ? String(party) : `char:${party}`;
+                if (castSet.has(fqRef)) continue;
+                // Ensure the char actually exists — skip silently otherwise (state-compute would drop it)
+                const bareId = fqRef.startsWith('char:') ? fqRef.slice('char:'.length) : fqRef;
+                if (!state.characters?.[bareId]) continue;
+                castSet.add(fqRef);
+                autoCastTxns.push({
+                    op: 'A', e: 'pc', id: '_',
+                    d: { f: 'scene_cast', v: fqRef },
+                    r: `system:arrival:auto-cast:${col.id}`,
+                });
+            }
+        }
+        if (autoCastTxns.length > 0) {
+            try {
+                const committed = await append(autoCastTxns);
+                _currentState = computeState(_currentState, committed);
+                console.log(`${LOG_PREFIX} Arrival auto-cast: appended ${committed.length} cast ref(s)`);
+            } catch (err) {
+                console.warn(`${LOG_PREFIX} Arrival auto-cast append failed:`, err);
+            }
+        }
+    }
+
     if (blocks.length > 0) {
         if (blocks.length > 1) {
             // Build name list from collisions that actually produced a block — skipped arrivals
@@ -1418,6 +1462,7 @@ async function initialize(force = false) {
     _pendingManualDivination = null;
     _firedCollisionArrivals = new Set();
     _foreshadowedCollisions = new Map();
+    _firedRelationshipCorrections = new Set();
     _arrivalLastFiredTurn = -1;
     _archiveCorrectionAttempts = new Map();
     _archiveInjectedVersion = null;
@@ -1686,6 +1731,53 @@ async function onMessageReceived(messageId) {
     validTxns = trResult.valid;
     for (const e of trResult.errors) validationErrors.push(e);
 
+    // ── PRINCIPAL faction pre-commit merge on advance turns ─────────────────────
+    // Ensure PRINCIPAL factions always appear in pc.scene_cast when the LLM
+    // writes a replacement list during an advance turn. Mutate the tx payload
+    // IN PLACE before ledger write so the commit log carries the merged value
+    // (avoids a post-commit drop→reappend cycle that would pollute history).
+    const isAdvanceTurn = _lastCompletedMode === 'advance';
+    if (isAdvanceTurn && _currentState) {
+        const principalFactionRefs = Object.entries(_currentState.factions || {})
+            .filter(([, f]) => String(f?.tier || '').toUpperCase() === 'PRINCIPAL')
+            .map(([id]) => `faction:${id}`);
+        if (principalFactionRefs.length > 0) {
+            for (const tx of validTxns) {
+                if (tx.op === 'S' && tx.e === 'pc' && tx.d?.f === 'scene_cast' && Array.isArray(tx.d.v)) {
+                    for (const fqId of principalFactionRefs) {
+                        if (!tx.d.v.includes(fqId)) {
+                            tx.d.v.push(fqId);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Block-level validation (§13) ────────────────────────────────────────────
+    // Catches same-block exploits (e.g. two PRINCIPAL CRs in one batch) that the
+    // per-tx loop above cannot see because each tx is checked against the frozen
+    // pre-batch state. Runs after the PRINCIPAL merge so the merged payload is
+    // what gets validated. Rejects the entire block on violation — no partial commit.
+    if (validTxns.length > 0) {
+        const blockCheck = validateBlock(validTxns, _currentState);
+        if (!blockCheck.valid) {
+            for (const v of blockCheck.violations) {
+                const rawToken = v.tx !== undefined
+                    ? `[block tx=${v.tx} field=${v.field}]`
+                    : `[block field=${v.field}]`;
+                validationErrors.push({
+                    lineNum: -1,
+                    error: `Block validation failed — ${v.field}: ${v.message}`,
+                    fix: v.fix || 'Re-examine the batch — one of the same-block transactions conflicts with another.',
+                    raw: rawToken,
+                });
+            }
+            console.warn(`${LOG_PREFIX} validateBlock rejected batch: ${blockCheck.violations.length} violation(s); skipping commit.`);
+            validTxns = [];
+        }
+    }
+
     // Combine all errors (extraction parse errors + validation errors)
     const allErrors = [...extractionErrors, ...validationErrors];
 
@@ -1852,7 +1944,7 @@ async function onMessageReceived(messageId) {
                     && !_firedCollisionArrivals.has(id))
                 .map(([id]) => id);
             if (immediateArrivals.length > 0) {
-                buildAndInjectArrivals(immediateArrivals, _currentState);
+                await buildAndInjectArrivals(immediateArrivals, _currentState);
             }
         }
 
@@ -1894,6 +1986,108 @@ async function onMessageReceived(messageId) {
                     text: `Collision pool has ${activeNonImmediate.length} active non-IMMEDIATE collisions (cap ${MAX_COLLISIONS}). Consolidate: merge two with the MERGE flow, or IMPLODE the least relevant one. IMMEDIATE collisions are exempt.`,
                     attempts: 0,
                 });
+            }
+        }
+
+        // ── Relationship-module corrections (§13) ───────────────────────────────────
+        // 5b. TRACKED+ chars without relationship:pc-<id>
+        // 5b. TRACKED+ factions without relationship:pc-<id>
+        // 5c. Orphaned/stale relational collisions (no paired relationship, or no
+        //     last_shift update tying the relationship to the resolved collision)
+        // 5d. Scene cast overflow (> SCENE_CAST_SOFT_CAP)
+        if (_currentState) {
+            const relationships = _currentState.relationships || {};
+
+            // 5b — missing relationship on TRACKED+ chars
+            for (const [id, char] of Object.entries(_currentState.characters || {})) {
+                const tier = String(char?.tier || '').toUpperCase();
+                if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') continue;
+                if (relationships[`pc-${id}`]) continue;
+                const key = `missing-relationship:char:${id}`;
+                if (_firedRelationshipCorrections.has(key)) continue;
+                _firedRelationshipCorrections.add(key);
+                queueCorrections([{
+                    raw: `[${key}]`,
+                    error: `char:${id} is ${tier} but has no relationship:pc-${id}. Draw the card:\n  CREATE relationship:pc-${id} card="<major-arcana-slug>" orientation="upright|reversed" nuance="<one-sentence bond description>" last_shift=null\n(last_shift must be null at birth)`,
+                }]);
+            }
+            // 5b — missing relationship on TRACKED+ factions
+            for (const [id, f] of Object.entries(_currentState.factions || {})) {
+                const tier = String(f?.tier || '').toUpperCase();
+                if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') continue;
+                if (relationships[`pc-${id}`]) continue;
+                const key = `missing-relationship:faction:${id}`;
+                if (_firedRelationshipCorrections.has(key)) continue;
+                _firedRelationshipCorrections.add(key);
+                queueCorrections([{
+                    raw: `[${key}]`,
+                    error: `faction:${id} is ${tier} but has no relationship:pc-${id}. Draw the card:\n  CREATE relationship:pc-${id} card="<major-arcana-slug>" orientation="upright|reversed" nuance="<one-sentence bond description>" last_shift=null`,
+                }]);
+            }
+
+            // Clear missing-relationship keys once the relationship exists
+            for (const relId of Object.keys(relationships)) {
+                const otherId = relId.replace(/^pc-/, '');
+                _firedRelationshipCorrections.delete(`missing-relationship:char:${otherId}`);
+                _firedRelationshipCorrections.delete(`missing-relationship:faction:${otherId}`);
+            }
+
+            // 5c — orphaned relational collisions + missing rel update
+            for (const [cid, col] of Object.entries(_currentState.collisions || {})) {
+                if (col?.ignition_class !== 'relational') continue;
+                const status = String(col?.status || '').toUpperCase();
+                if (status !== 'RESOLVED' && status !== 'CRASHED') continue;
+                const involved = Array.isArray(col.involved_chars) ? col.involved_chars : [];
+                const other = involved.find(x => x && x !== 'pc');
+                if (!other) continue;
+                // Normalize to bare id (strip char:/faction: prefix if present)
+                const bareOther = String(other).replace(/^(char|faction):/, '');
+                const relId = `pc-${bareOther}`;
+                const rel = relationships[relId];
+                if (!rel) {
+                    const key = `orphan-relational:${cid}`;
+                    if (!_firedRelationshipCorrections.has(key)) {
+                        _firedRelationshipCorrections.add(key);
+                        queueCorrections([{
+                            raw: `[${key}]`,
+                            error: `collision:${cid} is tagged ignition_class=relational and ${status.toLowerCase()}, but no relationship:${relId} exists. Either:\n  (A) CREATE the missing relationship:${relId} card="..." orientation="..." nuance="..." last_shift=null\n  (B) If mislabeled, SET collision:${cid} field=ignition_class value=environmental`,
+                        }]);
+                    }
+                    continue;
+                }
+                // Relationship exists — was it updated to reference this collision?
+                if (rel.last_shift && rel.last_shift.collision_id === cid) continue;
+                const histKey = `relationship:${relId}:last_shift`;
+                const history = _currentState._history?.[histKey] || [];
+                const alreadyPaired = history.some(e => e && e.to && typeof e.to === 'object' && e.to.collision_id === cid);
+                if (alreadyPaired) continue;
+                const key = `missing-rel-update:${cid}`;
+                if (_firedRelationshipCorrections.has(key)) continue;
+                _firedRelationshipCorrections.add(key);
+                queueCorrections([{
+                    raw: `[${key}]`,
+                    error: `collision:${cid} resolved but relationship:${relId} was not updated. Commit now:\n  SET relationship:${relId} field=card value="<slug>"\n  SET relationship:${relId} field=orientation value="upright|reversed"\n  SET relationship:${relId} field=nuance value="<updated expression>"\n  SET relationship:${relId} field=last_shift value={tx, collision_id: "${cid}", from:{card,orientation}, to:{card,orientation}, reason}`,
+                }]);
+            }
+
+            // 5d — scene cast overflow (soft cap)
+            const SCENE_CAST_SOFT_CAP = 6;
+            const castNow = Array.isArray(_currentState.pc?.scene_cast) ? _currentState.pc.scene_cast : [];
+            if (castNow.length > SCENE_CAST_SOFT_CAP) {
+                const key = `cast-overflow:${castNow.length}`;
+                if (!_firedRelationshipCorrections.has(key)) {
+                    _firedRelationshipCorrections.add(key);
+                    const preview = castNow.slice(0, 4).join(', ')
+                        + (castNow.length > 4 ? `, +${castNow.length - 4} more` : '');
+                    queueCorrections([{
+                        raw: `[${key}]`,
+                        error: `Scene cast has ${castNow.length} members (soft cap ${SCENE_CAST_SOFT_CAP}): ${preview}. Either prune with SET pc field=scene_cast v=[<reduced list>] or advance the turn to replace the cast.`,
+                    }]);
+                }
+            } else {
+                for (const k of Array.from(_firedRelationshipCorrections)) {
+                    if (k.startsWith('cast-overflow:')) _firedRelationshipCorrections.delete(k);
+                }
             }
         }
 
@@ -2067,7 +2261,7 @@ async function applyAdvanceTick() {
         }
     }
     if (newArrivalIds.length > 0) {
-        buildAndInjectArrivals(newArrivalIds, _currentState);
+        await buildAndInjectArrivals(newArrivalIds, _currentState);
     }
 
     // collision_health fires on every advance turn regardless of nudge counter (§4.4)
@@ -2330,6 +2524,7 @@ async function handleNewLedger() {
     _pendingReinforcement = null;
     _firedCollisionArrivals = new Set();
     _foreshadowedCollisions = new Map();
+    _firedRelationshipCorrections = new Set();
     _arrivalLastFiredTurn = -1;
     _archiveCorrectionAttempts = new Map();
     _archiveInjectedVersion = null;
@@ -2357,6 +2552,7 @@ async function handleImportData(data) {
     _pendingReinforcement = null;
     _firedCollisionArrivals = new Set();
     _foreshadowedCollisions = new Map();
+    _firedRelationshipCorrections = new Set();
     _arrivalLastFiredTurn = -1;
     _archiveCorrectionAttempts = new Map();
     _archiveInjectedVersion = null;
@@ -2376,6 +2572,7 @@ async function handleImportData(data) {
     onRollback(() => {
         _firedCollisionArrivals = new Set();
         _foreshadowedCollisions = new Map();
+        _firedRelationshipCorrections = new Set();
         _arrivalLastFiredTurn = -1;
         _archiveCorrectionAttempts = new Map();
         _archiveInjectedVersion = null;
