@@ -148,14 +148,15 @@ Append to `scripts/test-relationship.js` (above the `// ─── Summary ──
 
 ```javascript
 group('relationship entity — CR + S', () => {
-    test('CR relationship:pc-lacus creates entity at state.relationships', () => {
+    test('CR relationship:pc-lacus creates entity with engine-defaulted status=active', () => {
+        // LLM omits status on CR (forbidden by consistency validator); engine
+        // defaults it to 'active' in the state-compute CR handler.
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } },
             { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
                 card: 'the-fool',
                 orientation: 'upright',
                 nuance: 'First impression.',
-                status: 'active',
                 last_shift: null,
             }},
         ];
@@ -164,7 +165,7 @@ group('relationship entity — CR + S', () => {
         assert(rel !== undefined, 'relationship not in state.relationships');
         assertEqual(rel.card, 'the-fool', 'card');
         assertEqual(rel.orientation, 'upright', 'orientation');
-        assertEqual(rel.status, 'active', 'status');
+        assertEqual(rel.status, 'active', 'status defaulted to active by engine');
         assertEqual(rel.last_shift, null, 'last_shift null at birth');
     });
 
@@ -172,7 +173,7 @@ group('relationship entity — CR + S', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } },
             { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-                card: 'the-fool', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+                card: 'the-fool', orientation: 'upright', nuance: 'x', last_shift: null,
             }},
             { tx: 3, op: 'S', e: 'relationship', id: 'pc-lacus', d: { f: 'card', v: 'the-hermit' } },
         ];
@@ -659,7 +660,7 @@ group('engine-driven relationship.status', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'TRACKED' } },
             { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-                card: 'the-hermit', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+                card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
             }},
             { tx: 3, op: 'TR', e: 'char', id: 'lacus', d: { f: 'tier', from: 'TRACKED', to: 'KNOWN' } },
         ];
@@ -683,7 +684,7 @@ group('engine-driven relationship.status', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'TRACKED' } },
             { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-                card: 'the-hermit', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+                card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
             }},
             { tx: 3, op: 'D', e: 'char', id: 'lacus' },
         ];
@@ -716,7 +717,7 @@ group('engine-driven relationship.status', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'faction', id: 'zaft', d: { name: 'ZAFT', tier: 'TRACKED' } },
             { tx: 2, op: 'CR', e: 'relationship', id: 'pc-zaft', d: {
-                card: 'the-chariot', orientation: 'reversed', nuance: 'x', status: 'active', last_shift: null,
+                card: 'the-chariot', orientation: 'reversed', nuance: 'x', last_shift: null,
             }},
             { tx: 3, op: 'TR', e: 'faction', id: 'zaft', d: { f: 'tier', from: 'TRACKED', to: 'KNOWN' } },
         ];
@@ -1042,7 +1043,7 @@ const consistency = require('../consistency.js');
 group('consistency: relationship shape', () => {
     test('CR relationship with invalid card slug rejects', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-            card: 'made-up-card', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+            card: 'made-up-card', orientation: 'upright', nuance: 'x', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, null);
         assert(!result.valid, 'invalid card should reject');
@@ -1050,7 +1051,7 @@ group('consistency: relationship shape', () => {
 
     test('CR relationship with invalid orientation rejects', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-            card: 'the-fool', orientation: 'sideways', nuance: 'x', status: 'active', last_shift: null,
+            card: 'the-fool', orientation: 'sideways', nuance: 'x', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, null);
         assert(!result.valid, 'invalid orientation should reject');
@@ -1058,7 +1059,7 @@ group('consistency: relationship shape', () => {
 
     test('CR relationship with valid fields passes', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-            card: 'the-hermit', orientation: 'reversed', nuance: 'x', status: 'active', last_shift: null,
+            card: 'the-hermit', orientation: 'reversed', nuance: 'x', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, null);
         assert(result.valid, 'valid CR should pass');
@@ -1066,7 +1067,7 @@ group('consistency: relationship shape', () => {
 
     test('CR relationship with bad id format rejects', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'lacus-kira', d: {
-            card: 'the-fool', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+            card: 'the-fool', orientation: 'upright', nuance: 'x', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, null);
         assert(!result.valid, 'non-pc-prefixed id should reject');
@@ -1090,10 +1091,29 @@ group('consistency: relationship shape', () => {
 
     test('CR relationship last_shift=null passes (birth state)', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-            card: 'the-hermit', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, null);
         assert(result.valid, 'null last_shift at birth is legitimate');
+    });
+
+    test('S relationship status REJECTS unconditionally (engine-owned)', () => {
+        // Spec: status is engine-written on tier movement or D. LLM never writes it.
+        // Even a well-formed value must hard-reject.
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
+            f: 'status', v: 'active'
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(!result.valid, 'S status must reject regardless of value — engine-only field');
+    });
+
+    test('CR relationship with omitted status passes (defaults to active)', () => {
+        // Engine is allowed to default status at birth via CR; only S is forbidden.
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, null);
+        assert(result.valid, 'CR without status should pass (defaulted by engine)');
     });
 
     test('CR char with >5 tags rejects', () => {
@@ -1132,6 +1152,33 @@ group('consistency: relationship shape', () => {
         assert(!result.valid, 'second PRINCIPAL faction via TR rejected');
     });
 
+    test('same-block double-PRINCIPAL rejects via validateBlock (shadow-state walk)', () => {
+        // Pre-block state is empty — neither CR would fail against frozen state
+        // individually, so per-tx validation would pass both. validateBlock must
+        // catch the conflict by progressively mutating a shadow state.
+        const baseState = { characters: {}, factions: {}, relationships: {} };
+        const block = [
+            { tx: 1, op: 'CR', e: 'char', id: 'ally', d: { name: 'Ally', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'char', id: 'enemy', d: { name: 'Enemy', tier: 'PRINCIPAL' } },
+        ];
+        const result = consistency.validateBlock(block, baseState);
+        assert(!result.valid, 'same-block duplicate PRINCIPAL must reject');
+        assert(result.violations.some(v => /PRINCIPAL/i.test(v.message)), 'reason cites PRINCIPAL');
+    });
+
+    test('same-block CR + TR pushing two PRINCIPALs rejects', () => {
+        // CR ally TRACKED, CR enemy PRINCIPAL, TR ally TRACKED→PRINCIPAL:
+        // tx-by-tx against frozen state would miss the final conflict.
+        const baseState = { characters: {}, factions: {}, relationships: {} };
+        const block = [
+            { tx: 1, op: 'CR', e: 'char', id: 'enemy', d: { name: 'Enemy', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'char', id: 'ally', d: { name: 'Ally', tier: 'TRACKED' } },
+            { tx: 3, op: 'TR', e: 'char', id: 'ally', d: { f: 'tier', from: 'TRACKED', to: 'PRINCIPAL' } },
+        ];
+        const result = consistency.validateBlock(block, baseState);
+        assert(!result.valid, 'CR + TR producing two PRINCIPALs must reject');
+    });
+
     test('CR relationship for KNOWN-tier char rejects', () => {
         const state = {
             characters: { flay: { tier: 'KNOWN' } },
@@ -1139,7 +1186,7 @@ group('consistency: relationship shape', () => {
             relationships: {},
         };
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-flay', d: {
-            card: 'three-of-swords', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+            card: 'three-of-swords', orientation: 'upright', nuance: 'x', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, state);
         assert(!result.valid, 'CR relationship for KNOWN target must reject');
@@ -1148,7 +1195,7 @@ group('consistency: relationship shape', () => {
     test('CR relationship for missing target rejects', () => {
         const state = { characters: {}, factions: {}, relationships: {} };
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-ghost', d: {
-            card: 'the-hermit', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, state);
         assert(!result.valid, 'CR relationship for nonexistent target rejects');
@@ -1161,7 +1208,7 @@ group('consistency: relationship shape', () => {
             relationships: {},
         };
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-            card: 'the-hermit', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, state);
         assert(result.valid, 'TRACKED+ target should pass');
@@ -1250,11 +1297,15 @@ function validateRelationshipTx(tx) {
                 fix: 'Describe the specific expression of the archetype for this pair.',
             });
         }
-        if (d.status !== undefined && !RELATIONSHIP_STATUSES_SET.has(d.status)) {
+        if (d.status !== undefined) {
+            // CR: status is engine-defaulted to 'active' at birth. LLM-authored
+            // status is forbidden — it has no legitimate use case (new bonds
+            // cannot be born archived/dormant) and enables the status-override
+            // loophole in a different disguise.
             violations.push({
                 field: 'status',
-                message: `invalid status "${d.status}"`,
-                fix: 'Must be active, dormant, or archived. Usually omit on CR — defaults to active.',
+                message: 'relationship.status is engine-owned — omit on CR (engine defaults to "active")',
+                fix: 'Remove the status field from the CR line. Status follows tier automatically after birth.',
             });
         }
         if (d.last_shift !== undefined && !isValidLastShift(d.last_shift)) {
@@ -1273,8 +1324,18 @@ function validateRelationshipTx(tx) {
         if (f === 'orientation' && !RELATIONSHIP_ORIENTATIONS.has(v)) {
             violations.push({ field: 'orientation', message: `invalid orientation "${v}"`, fix: 'upright or reversed.' });
         }
-        if (f === 'status' && !RELATIONSHIP_STATUSES_SET.has(v)) {
-            violations.push({ field: 'status', message: `invalid status "${v}"`, fix: 'active, dormant, or archived.' });
+        if (f === 'status') {
+            // RULE: relationship.status is engine-owned. It is set by
+            // state-compute's TR/D handlers (tier demotion → dormant, promotion
+            // → active, D → archived). The LLM must never write it — allowing
+            // the LLM to manually force status would let it revive archived
+            // relationships, dormant-silence a live bond mid-scene, or mask a
+            // tier-drift bug. Hard-reject regardless of value.
+            violations.push({
+                field: 'status',
+                message: 'relationship.status is engine-owned and cannot be SET manually',
+                fix: 'To change a relationship, write card/orientation/nuance/last_shift inside a collision resolution. Status follows tier automatically.',
+            });
         }
         if (f === 'last_shift') {
             // On S, null is NOT allowed — nulling last_shift would wipe the
@@ -1414,6 +1475,61 @@ Update the main validator's signature from `validateTransaction(tx)` to `validat
 
 **Note:** if the existing function does not expose `validateTransaction` as a single-tx entry point, add a thin exported wrapper that applies these checks. Read the file's public API first and adapt.
 
+- [ ] **Step 5b: Add `validateBlock` for block-scoped invariants**
+
+Per-tx validation against `_currentState` (frozen pre-block state) misses intra-block invariant violations. Example: a block containing two `CR char … tier=PRINCIPAL` ops would see no pre-existing PRINCIPAL for either tx, so both pass individually — and both commit, breaking the one-PRINCIPAL invariant. Fix: walk the block through a shadow state, applying each tx as we go so later validations see earlier mutations.
+
+Append to `consistency.js`:
+
+```javascript
+// Import applyTransaction lazily (inside the function) to avoid a module-load
+// cycle between consistency.js and state-compute.js.
+function validateBlock(txs, baseState) {
+    // Minimal shadow copy: we only need the fields the validators read
+    // (characters, factions, relationships). Deep-copying the whole state
+    // every block would be wasteful; a shallow per-collection clone is enough
+    // because applyTransaction will write new entity records, not mutate
+    // baseState's existing ones.
+    const shadow = {
+        characters: { ...(baseState?.characters || {}) },
+        factions:   { ...(baseState?.factions   || {}) },
+        relationships: { ...(baseState?.relationships || {}) },
+        pc: baseState?.pc ? { ...baseState.pc } : {},
+    };
+    // Re-clone any entity we're about to TR/S so we don't corrupt baseState.
+    // CR creates new records; TR/S mutates existing ones.
+    const violations = [];
+    const { applyTransaction } = require('./state-compute.js');
+    for (const tx of txs) {
+        const perTx = validateTransaction(tx, shadow);
+        if (!perTx.valid) {
+            violations.push(...perTx.violations.map(v => ({ ...v, tx: tx.tx })));
+            // Hard-fail on the first block-aware violation — don't try to apply
+            // a tx that would poison later checks.
+            return { valid: false, violations };
+        }
+        // Deep-clone the entity we're about to mutate so baseState stays clean.
+        if ((tx.op === 'TR' || tx.op === 'S') && (tx.e === 'char' || tx.e === 'faction')) {
+            const coll = tx.e === 'char' ? 'characters' : 'factions';
+            if (shadow[coll][tx.id]) {
+                shadow[coll][tx.id] = { ...shadow[coll][tx.id] };
+            }
+        }
+        try {
+            applyTransaction(shadow, tx);
+        } catch (e) {
+            violations.push({ field: '_apply', message: `applyTransaction threw: ${e.message}`, tx: tx.tx });
+            return { valid: false, violations };
+        }
+    }
+    return { valid: true, violations: [] };
+}
+```
+
+Export `validateBlock` alongside `validateTransaction` in the export block below.
+
+**Caller update in `index.js`:** find the per-block commit path (around the existing `validateTransaction` loop) and switch to a single `validateBlock(block, _currentState)` call. Reject the whole block if it returns `{ valid: false }`. This preserves the single-tx entry point for OOC/test paths while closing the intra-block gap.
+
 - [ ] **Step 6: Export the new helpers**
 
 At the bottom of `consistency.js`, extend the export block:
@@ -1426,6 +1542,7 @@ export {
     validateCharTagsTx,
     validateFactionTierTx,
     validateTransaction,   // if not already exported
+    validateBlock,         // block-scoped invariants via shadow-state walk
 };
 ```
 
@@ -1554,7 +1671,7 @@ group('state-view render — relationship block', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL', tags: ['idol'] } },
             { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-                card: 'the-hermit', orientation: 'reversed', nuance: 'Hermit because...', status: 'active', last_shift: null,
+                card: 'the-hermit', orientation: 'reversed', nuance: 'Hermit because...', last_shift: null,
             }},
         ];
         const state = computeState(null, txs);
@@ -1579,7 +1696,7 @@ group('state-view render — relationship block', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'nicol', d: { name: 'Nicol', tier: 'TRACKED' } },
             { tx: 2, op: 'CR', e: 'relationship', id: 'pc-nicol', d: {
-                card: 'the-star', orientation: 'upright', nuance: 'x', status: 'active', last_shift: null,
+                card: 'the-star', orientation: 'upright', nuance: 'x', last_shift: null,
             }},
             // Simulate a collision-resolve stamping the death shift onto last_shift
             { tx: 3, op: 'S', e: 'relationship', id: 'pc-nicol', d: {
@@ -1779,7 +1896,7 @@ group('lean phonebook — cast gating', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'TRACKED' } },
             { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-                card: 'the-hermit', orientation: 'upright', nuance: 'n', status: 'active', last_shift: null,
+                card: 'the-hermit', orientation: 'upright', nuance: 'n', last_shift: null,
             }},
             { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:lacus'] } },
         ];
@@ -1792,7 +1909,7 @@ group('lean phonebook — cast gating', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } },
             { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-                card: 'the-hermit', orientation: 'upright', nuance: 'n', status: 'active', last_shift: null,
+                card: 'the-hermit', orientation: 'upright', nuance: 'n', last_shift: null,
             }},
             // scene_cast does NOT include Lacus
             { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: [] } },
@@ -1807,7 +1924,7 @@ group('lean phonebook — cast gating', () => {
         const txs = [
             { tx: 1, op: 'CR', e: 'char', id: 'mu', d: { name: 'Mu', tier: 'TRACKED' } },
             { tx: 2, op: 'CR', e: 'relationship', id: 'pc-mu', d: {
-                card: 'the-chariot', orientation: 'upright', nuance: 'n', status: 'active', last_shift: null,
+                card: 'the-chariot', orientation: 'upright', nuance: 'n', last_shift: null,
             }},
             { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: [] } },
         ];
@@ -2153,7 +2270,7 @@ group('ui-panel — HTML string builder', () => {
             characters: { lacus: { name: 'Lacus', tier: 'PRINCIPAL' } },
             factions: {},
             relationships: { 'pc-lacus': {
-                card: 'the-lovers', orientation: 'upright', nuance: 'genuine alignment', status: 'active', last_shift: null,
+                card: 'the-lovers', orientation: 'upright', nuance: 'genuine alignment', last_shift: null,
             }},
             pc: {},
             _history: {},
@@ -2169,7 +2286,7 @@ group('ui-panel — HTML string builder', () => {
             characters: { lacus: { name: 'Lacus', tier: 'PRINCIPAL' } },
             factions: {},
             relationships: { 'pc-lacus': {
-                card: 'the-tower', orientation: 'reversed', nuance: 'x', status: 'active', last_shift: null,
+                card: 'the-tower', orientation: 'reversed', nuance: 'x', last_shift: null,
             }},
             pc: {},
             _history: {},
@@ -2392,6 +2509,39 @@ For each, queue a correction prompt. Two design notes:
             prompt: `collision:${cid} resolved but relationship:${relId} was not updated. Commit the card/orientation/nuance/last_shift now inside a LEDGER block. last_shift must be {tx, collision_id: "${cid}", from: {card, orientation}, to: {card, orientation}, reason}.`,
         });
     }
+
+    // Correction: scene_cast overflow (spec: soft cap 6; Layer 3 nudge).
+    // Without this, scene_cast grows unbounded through regular turns —
+    // every collision arrival auto-appends, nothing evicts. The lean-phonebook
+    // token savings are quickly burned off. Soft warning asks the LLM to
+    // either prune the cast or advance the turn (which replaces the cast).
+    const SCENE_CAST_SOFT_CAP = 6;
+    const cast = state.pc?.scene_cast || [];
+    if (cast.length > SCENE_CAST_SOFT_CAP) {
+        // Re-fire every turn the cast stays oversized — this is a soft
+        // ongoing condition, not a one-shot correctable event. Use a
+        // size-bucketed dedup so we don't re-nag on the same overflow size
+        // within the same chat window of turns; new additions that push it
+        // higher should re-fire.
+        const dedupKey = `scene-cast-overflow:${cast.length}`;
+        if (!_firedRelationshipCorrections.has(dedupKey)) {
+            _firedRelationshipCorrections.add(dedupKey);
+            const preview = cast.slice(0, 4).join(', ') + (cast.length > 4 ? `, +${cast.length - 4} more` : '');
+            queueCorrection({
+                kind: 'scene-cast-overflow',
+                entity: 'pc',
+                prompt: `Scene cast has ${cast.length} members (soft cap ${SCENE_CAST_SOFT_CAP}): ${preview}. Either (A) prune via S pc field=scene_cast v=[<reduced list>] to drop anyone who's left the scene, or (B) advance the turn so the cast is replaced cleanly. Keeping the cast large wastes injection tokens and dilutes LLM focus on the real on-stage characters.`,
+            });
+        }
+    } else {
+        // Clear overflow dedup keys when cast shrinks back under the cap,
+        // so a future overflow will re-fire.
+        for (const key of Array.from(_firedRelationshipCorrections)) {
+            if (key.startsWith('scene-cast-overflow:')) {
+                _firedRelationshipCorrections.delete(key);
+            }
+        }
+    }
 ```
 
 `queueCorrection` matches whatever the existing correction injector is called — read `index.js` to find the current naming.
@@ -2408,14 +2558,21 @@ node -c index.js
 git add index.js
 git commit -m "feat(relationship): index.js auto-cast + correction hooks
 
-Three new hook behaviors:
+Hook behaviors:
 1. Collision arrival at distance 0 auto-appends involved_chars to
    pc.scene_cast (fires only for chars not already in cast, dedupes).
 2. Advance turns auto-add PRINCIPAL factions to scene_cast if missing
    (per spec: PRINCIPAL faction is always in cast).
-3. Correction queue gains two new rules: TRACKED+ entities without
-   paired relationships, and RESOLVED relational collisions whose
-   last_shift.collision_id doesn't match the collision that resolved.
+3. Correction queue gains three new rules:
+   - TRACKED+ entities without paired relationships
+   - RESOLVED relational collisions whose last_shift.collision_id
+     doesn't match the collision that resolved
+   - Scene cast overflow (>6 members): soft nudge asking the LLM to
+     prune or advance. Re-fires when cast grows further, clears when
+     it shrinks back under the cap. Closes the Layer 3 gap the spec
+     called out but the earlier plan draft missed — without this,
+     scene_cast grows unbounded through regular turns and burns the
+     lean-phonebook token savings.
 
 All hooks use existing tx-emission and correction-queue machinery —
 no new injection slots or persistence paths introduced."
