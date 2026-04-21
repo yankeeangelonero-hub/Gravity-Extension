@@ -87,6 +87,14 @@ function setBookName(name) {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
+function formatCardName(slug) {
+    if (!slug || typeof slug !== 'string') return '';
+    return slug.split('-').map(w => {
+        if (w.length <= 2) return w;
+        return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(' ');
+}
+
 function esc(str) {
     if (str == null) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -445,6 +453,19 @@ function renderAllSections() {
     });
 
     syncCombatDifficultyControls();
+
+    // Memorial section — archived relationships
+    const archived = Object.entries(_lastState.relationships || {}).filter(([, r]) => r.status === 'archived');
+    if (archived.length > 0) {
+        let memHtml = `<details class="gl-memorials"><summary>Memorials (${archived.length})</summary>`;
+        for (const [relId, r] of archived) {
+            const pair = r.display_name || relId.replace(/^pc-/, '');
+            const finalShift = r.last_shift?.reason ? ` (${esc(r.last_shift.reason.slice(0, 80))})` : '';
+            memHtml += `<div class="gl-memorial">${esc(pair)} &middot; ${esc(formatCardName(r.card))} ${esc(r.orientation)}${finalShift}</div>`;
+        }
+        memHtml += '</details>';
+        container.insertAdjacentHTML('beforeend', memHtml);
+    }
 }
 
 // ─── Update Panel ───────────────────────────────────────────────────────────────
@@ -774,6 +795,22 @@ function renderCharDossier(char, state) {
         parts.push(`<div class="gl-d-row"><b>Abilities:</b> ${charAbilities.map(ability => esc(ability)).join(', ')}</div>`);
     }
     if (char.location) parts.push(`<div class="gl-d-row"><b>Location:</b> ${esc(char.location)}</div>`);
+
+    // Tags
+    if (Array.isArray(char.tags) && char.tags.length > 0) {
+        parts.push(`<div class="gl-d-row gl-tags">Tags: [${char.tags.map(t => esc(t)).join(', ')}]</div>`);
+    }
+
+    // Relationship block (before agenda)
+    const rel = state.relationships?.[`pc-${char.id}`];
+    if (rel && rel.status === 'active') {
+        const orientClass = rel.orientation === 'reversed' ? 'gl-tarot-reversed' : 'gl-tarot-upright';
+        parts.push(`<div class="gl-d-row gl-relationship ${orientClass}">&#9829; <b>${esc(formatCardName(rel.card))}</b> &middot; ${esc(rel.orientation)}</div>`);
+        if (rel.nuance) {
+            parts.push(`<div class="gl-d-row gl-relationship-nuance">"${esc(rel.nuance)}"</div>`);
+        }
+    }
+
     if (char.agenda) parts.push(`<div class="gl-d-row gl-agenda"><b>Agenda:</b> ${esc(char.agenda)}</div>`);
     if (char.knowledge_asymmetry) {
         const ka = char.knowledge_asymmetry;
