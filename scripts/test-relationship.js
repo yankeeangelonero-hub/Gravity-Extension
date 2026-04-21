@@ -203,6 +203,98 @@ group('pc.scene_cast + pc.current_place_id', () => {
     });
 });
 
+function makeRel(id, card, orientation, status) {
+    return {
+        tx: 100, op: 'CR', e: 'relationship', id, d: {
+            card, orientation, nuance: 'x', status: status || 'active', last_shift: null,
+        }
+    };
+}
+
+group('engine-driven relationship.status', () => {
+    test('TR char tier TRACKED->KNOWN auto-dormants relationship', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+            }},
+            { tx: 3, op: 'TR', e: 'char', id: 'lacus', d: { f: 'tier', from: 'TRACKED', to: 'KNOWN' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.relationships['pc-lacus'].status, 'dormant', 'auto-dormant on demotion');
+    });
+
+    test('TR char tier KNOWN->TRACKED auto-activates dormant relationship', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'KNOWN' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'upright', nuance: 'x', status: 'dormant', last_shift: null,
+            }},
+            { tx: 3, op: 'TR', e: 'char', id: 'lacus', d: { f: 'tier', from: 'KNOWN', to: 'TRACKED' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.relationships['pc-lacus'].status, 'active', 'auto-active on re-promotion');
+    });
+
+    test('D char:id auto-archives relationship', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+            }},
+            { tx: 3, op: 'D', e: 'char', id: 'lacus' },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.relationships['pc-lacus'].status, 'archived', 'auto-archive on death');
+    });
+
+    test('D char:id stamps rel.display_name before entity is removed', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus Clyne', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+            }},
+            { tx: 3, op: 'D', e: 'char', id: 'lacus' },
+        ];
+        const state = computeState(null, txs);
+        assert(!state.characters['lacus'], 'entity removed from state.characters');
+        assertEqual(state.relationships['pc-lacus'].display_name, 'Lacus Clyne', 'name preserved in rel');
+    });
+
+    test('D char:id also scrubs pc.scene_cast reference', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'TRACKED' } },
+            { tx: 2, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:lacus', 'char:kira'] } },
+            { tx: 3, op: 'D', e: 'char', id: 'lacus' },
+        ];
+        const state = computeState(null, txs);
+        assert(!state.pc.scene_cast.includes('char:lacus'), 'dead char scrubbed from scene_cast');
+        assert(state.pc.scene_cast.includes('char:kira'), 'living cast member retained');
+    });
+
+    test('D faction:id scrubs pc.scene_cast reference', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'faction', id: 'zaft', d: { name: 'ZAFT', tier: 'TRACKED' } },
+            { tx: 2, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['faction:zaft'] } },
+            { tx: 3, op: 'D', e: 'faction', id: 'zaft' },
+        ];
+        const state = computeState(null, txs);
+        assert(!state.pc.scene_cast.includes('faction:zaft'), 'dead faction scrubbed from scene_cast');
+    });
+
+    test('TR faction tier TRACKED->KNOWN auto-dormants faction relationship', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'faction', id: 'zaft', d: { name: 'ZAFT', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-zaft', d: {
+                card: 'the-chariot', orientation: 'reversed', nuance: 'x', last_shift: null,
+            }},
+            { tx: 3, op: 'TR', e: 'faction', id: 'zaft', d: { f: 'tier', from: 'TRACKED', to: 'KNOWN' } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.relationships['pc-zaft'].status, 'dormant', 'faction auto-dormant');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

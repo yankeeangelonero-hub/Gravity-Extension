@@ -441,6 +441,15 @@ function getEntityHistory(state, entityType, entityId) {
     return result;
 }
 
+function adjustRelationshipStatus(state, entityType, entityId, newStatus) {
+    if (entityType !== 'char' && entityType !== 'faction') return;
+    const relId = `pc-${entityId}`;
+    const rel = state.relationships?.[relId];
+    if (!rel) return;
+    if (rel.status === newStatus) return;
+    rel.status = newStatus;
+}
+
 /**
  * Apply a single transaction to the state.
  */
@@ -551,6 +560,17 @@ function applyTransaction(state, tx) {
                     }
                 }
                 recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, toVal, tx);
+                if ((tx.e === 'char' || tx.e === 'faction') && tx.d.f === 'tier') {
+                    const TIER_ORDER = ['UNKNOWN', 'KNOWN', 'TRACKED', 'PRINCIPAL'];
+                    const fromIdx = TIER_ORDER.indexOf(String(oldVal || '').toUpperCase());
+                    const toIdx = TIER_ORDER.indexOf(String(toVal || '').toUpperCase());
+                    const trackedIdx = TIER_ORDER.indexOf('TRACKED');
+                    if (fromIdx >= trackedIdx && toIdx < trackedIdx) {
+                        adjustRelationshipStatus(state, tx.e, tx.id, 'dormant');
+                    } else if (fromIdx < trackedIdx && toIdx >= trackedIdx) {
+                        adjustRelationshipStatus(state, tx.e, tx.id, 'active');
+                    }
+                }
             }
             break;
         }
@@ -746,6 +766,25 @@ function applyTransaction(state, tx) {
 
         case 'D': {
             if (!isSingleton) {
+                if (tx.e === 'char' || tx.e === 'faction') {
+                    const entity = state[collection]?.[tx.id];
+
+                    // 1. Stamp display_name BEFORE deleting entity (after D, entity is gone)
+                    const relId = `pc-${tx.id}`;
+                    const rel = state.relationships?.[relId];
+                    if (rel && entity?.name) {
+                        rel.display_name = entity.name;
+                    }
+
+                    // 2. Archive the relationship
+                    adjustRelationshipStatus(state, tx.e, tx.id, 'archived');
+
+                    // 3. Scrub dangling scene_cast reference
+                    const fqId = `${tx.e}:${tx.id}`;
+                    if (state.pc && Array.isArray(state.pc.scene_cast)) {
+                        state.pc.scene_cast = state.pc.scene_cast.filter(ref => ref !== fqId);
+                    }
+                }
                 delete state[collection][tx.id];
             }
             break;
