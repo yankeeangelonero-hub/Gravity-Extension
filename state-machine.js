@@ -60,6 +60,28 @@ const COMBAT_TRANSITIONS = {
     RESOLVED: {},
 };
 
+// ─── Relationship Status ───────────────────────────────────────────────────────
+// active <-> dormant (bidirectional), any -> archived (terminal)
+
+const RELATIONSHIP_STATUSES = ['active', 'dormant', 'archived'];
+
+const RELATIONSHIP_TRANSITIONS = {
+    active:   { dormant: 'dormant', archive: 'archived' },
+    dormant:  { activate: 'active', archive: 'archived' },
+    archived: {},  // terminal — no transitions out
+};
+
+// ─── Faction Tier ─────────────────────────────────────────────────────────────
+// KNOWN <-> TRACKED <-> PRINCIPAL (flexible, all movements allowed)
+
+const FACTION_TIERS = ['KNOWN', 'TRACKED', 'PRINCIPAL'];
+
+const FACTION_TRANSITIONS = {
+    KNOWN:     { promote: 'TRACKED', escalate: 'PRINCIPAL' },
+    TRACKED:   { promote: 'PRINCIPAL', retire: 'KNOWN' },
+    PRINCIPAL: { retire: 'TRACKED', demote: 'KNOWN' },
+};
+
 // ─── Transition Validator ──────────────────────────────────────────────────────
 
 /**
@@ -79,10 +101,12 @@ const COMBAT_TRANSITIONS = {
  */
 function validateTransition(entityType, field, from, to) {
     const machines = {
-        char:       { field: 'tier', transitions: CHARACTER_TRANSITIONS, states: CHARACTER_TIERS },
-        constraint: { field: 'integrity', transitions: CONSTRAINT_TRANSITIONS, states: CONSTRAINT_LEVELS },
-        collision:  { field: 'status', transitions: COLLISION_TRANSITIONS, states: COLLISION_STATES },
-        combat:     { field: 'status', transitions: COMBAT_TRANSITIONS, states: COMBAT_STATES },
+        char:         { field: 'tier',   transitions: CHARACTER_TRANSITIONS,     states: CHARACTER_TIERS },
+        constraint:   { field: 'integrity', transitions: CONSTRAINT_TRANSITIONS, states: CONSTRAINT_LEVELS },
+        collision:    { field: 'status', transitions: COLLISION_TRANSITIONS,     states: COLLISION_STATES },
+        combat:       { field: 'status', transitions: COMBAT_TRANSITIONS,        states: COMBAT_STATES },
+        faction:      { field: 'tier',   transitions: FACTION_TRANSITIONS,       states: FACTION_TIERS },
+        relationship: { field: 'status', transitions: RELATIONSHIP_TRANSITIONS,  states: RELATIONSHIP_STATUSES },
     };
 
     const machine = machines[entityType];
@@ -130,6 +154,31 @@ function validateTransition(entityType, field, from, to) {
 }
 
 /**
+ * Check that promoting an entity to PRINCIPAL is unique (max one PRINCIPAL per type).
+ * @param {Object} state - Current computed state
+ * @param {string} entityType - 'char' or 'faction'
+ * @param {string} entityId - The entity being promoted
+ * @param {string} newTier - The target tier
+ * @returns {ValidationResult}
+ */
+function checkPrincipalUniqueness(state, entityType, entityId, newTier) {
+    if (newTier !== 'PRINCIPAL') return { valid: true };
+    const collection = entityType === 'char' ? state.characters : state.factions;
+    if (!collection) return { valid: true };
+    for (const [id, ent] of Object.entries(collection)) {
+        if (id === entityId) continue;
+        if (String(ent.tier || '').toUpperCase() === 'PRINCIPAL') {
+            return {
+                valid: false,
+                error: `A PRINCIPAL ${entityType} already exists: "${id}". Max one PRINCIPAL per entity type.`,
+                fix: `Demote ${id} to TRACKED first (TR ${entityType}:${id} field=tier from=PRINCIPAL to=TRACKED), then promote ${entityId}.`,
+            };
+        }
+    }
+    return { valid: true };
+}
+
+/**
  * Get valid next states for an entity in a given state.
  * @param {string} entityType
  * @param {string} currentState
@@ -173,10 +222,12 @@ function isTerminal(entityType, state) {
  */
 function getStateMachineField(entityType, field) {
     const fields = {
-        char: 'tier',
-        constraint: 'integrity',
-        collision: 'status',
-        combat: 'status',
+        char:         'tier',
+        constraint:   'integrity',
+        collision:    'status',
+        combat:       'status',
+        faction:      'tier',
+        relationship: 'status',
     };
     const machineField = fields[entityType] || null;
     if (field === undefined) return machineField;
@@ -192,6 +243,11 @@ export {
     COLLISION_TRANSITIONS,
     COMBAT_STATES,
     COMBAT_TRANSITIONS,
+    FACTION_TIERS,
+    FACTION_TRANSITIONS,
+    RELATIONSHIP_STATUSES,
+    RELATIONSHIP_TRANSITIONS,
     validateTransition,
+    checkPrincipalUniqueness,
     getStateMachineField,
 };

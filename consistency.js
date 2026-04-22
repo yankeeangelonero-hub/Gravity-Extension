@@ -15,7 +15,8 @@
  * OOC: eval.
  */
 
-import { validateTransition, getStateMachineField } from './state-machine.js';
+import { validateTransition, getStateMachineField, checkPrincipalUniqueness } from './state-machine.js';
+import { applyTransaction as _applyTransactionFromCompute } from './state-compute.js';
 
 const ENTITY_TO_COLLECTION = {
     char: 'characters',
@@ -28,6 +29,7 @@ const ENTITY_TO_COLLECTION = {
     world: 'world',
     pc: 'pc',
     divination: 'divination',
+    relationship: 'relationships',
 };
 
 // LLM-rejected fields owned by the engine. SET writes here are dropped at
@@ -38,10 +40,26 @@ const ENGINE_OWNED_FIELDS = {
     pressure: new Set(['created_at_tx']),
 };
 
+// ─── Relationship Constants ────────────────────────────────────────────────────
+
+const MAJOR_ARCANA = new Set([
+    'the-fool', 'the-magician', 'the-high-priestess', 'the-empress', 'the-emperor',
+    'the-hierophant', 'the-lovers', 'the-chariot', 'strength', 'the-hermit',
+    'wheel-of-fortune', 'justice', 'the-hanged-man', 'death', 'temperance',
+    'the-devil', 'the-tower', 'the-star', 'the-moon', 'the-sun',
+    'judgement', 'the-world',
+]);
+
+const RELATIONSHIP_ORIENTATIONS = new Set(['upright', 'reversed']);
+const FACTION_TIERS_SET = new Set(['KNOWN', 'TRACKED', 'PRINCIPAL']);
+const CHARACTER_TAGS_MAX = 5;
+const CHARACTER_TAG_MAXLEN = 40;
+const LAST_SHIFT_REASON_MAXLEN = 200;
+
 // ─── Valid Values ──────────────────────────────────────────────────────────────
 
 const VALID_OPS = ['CR', 'TR', 'S', 'A', 'R', 'MS', 'MR', 'D', 'SNAP', 'ROLL', 'AMEND'];
-const VALID_ENTITIES = ['char', 'constraint', 'collision', 'combat', 'faction', 'place', 'pressure', 'world', 'pc', 'divination'];
+const VALID_ENTITIES = ['char', 'constraint', 'collision', 'combat', 'faction', 'place', 'pressure', 'world', 'pc', 'divination', 'relationship'];
 
 // Required fields per operation type
 const OP_REQUIRED_FIELDS = {
@@ -343,7 +361,7 @@ function validateTransitions(transactions, state) {
             if (trEntity !== undefined) {
                 const trActual = trEntity?.[trMachineField];
                 // If entity exists but field not yet set, allow only if claimed from == initial state.
-                const INITIAL_STATES = { char: 'UNKNOWN', constraint: 'STABLE', collision: 'ACTIVE', combat: 'ACTIVE' };
+                const INITIAL_STATES = { char: 'UNKNOWN', constraint: 'STABLE', collision: 'ACTIVE', combat: 'ACTIVE', faction: 'KNOWN', relationship: 'active' };
                 const initialState = INITIAL_STATES[tx.e];
                 if ((trActual === undefined || trActual === null) && String(tx.d?.from || '').toUpperCase() !== initialState) {
                     errors.push({
@@ -383,12 +401,302 @@ function validateTransitions(transactions, state) {
     return { valid, errors };
 }
 
+// ─── Relationship Shape Helpers ────────────────────────────────────────────────
+
+function isValidCardObj(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+    const card = typeof obj.card === 'string' ? obj.card.toLowerCase() : '';
+    const orientation = typeof obj.orientation === 'string' ? obj.orientation.toLowerCase() : '';
+    return MAJOR_ARCANA.has(card) && RELATIONSHIP_ORIENTATIONS.has(orientation);
+}
+
+function isValidLastShift(v) {
+    if (v === null) return true;
+    if (typeof v !== 'object' || Array.isArray(v)) return false;
+    if (typeof v.tx !== 'number') return false;
+    if (!('collision_id' in v)) return false;
+    if (typeof v.reason !== 'string') return false;
+    if (v.reason.length > LAST_SHIFT_REASON_MAXLEN) return false;
+    if (!isValidCardObj(v.from)) return false;
+    if (!isValidCardObj(v.to)) return false;
+    return true;
+}
+
+function validateRelationshipId(id) {
+    if (typeof id !== 'string' || !id.startsWith('pc-') || id.length <= 3) {
+        return {
+            field: 'id',
+            message: `relationship id must be "pc-<other_id>", got "${id}"`,
+            fix: 'Use e.g. relationship:pc-lacus (PC is always first in the pair).',
+        };
+    }
+    return null;
+}
+
+function validateRelationshipTx(tx) {
+    const violations = [];
+    const idViolation = validateRelationshipId(tx.id);
+    if (idViolation) violations.push(idViolation);
+
+    if (tx.op === 'CR') {
+        const d = tx.d || {};
+        const card = typeof d.card === 'string' ? d.card.toLowerCase() : d.card;
+        const orientation = typeof d.orientation === 'string' ? d.orientation.toLowerCase() : d.orientation;
+        if (!MAJOR_ARCANA.has(card)) {
+            violations.push({ field: 'card', message: `invalid card slug "${d.card}"`, fix: 'Must be one of the 22 Major Arcana slugs in lowercase-hyphen form.' });
+        }
+        if (!RELATIONSHIP_ORIENTATIONS.has(orientation)) {
+            violations.push({ field: 'orientation', message: `invalid orientation "${d.orientation}"`, fix: '"upright" or "reversed" (lowercase).' });
+        }
+        if (typeof d.nuance !== 'string' || d.nuance.trim() === '') {
+            violations.push({ field: 'nuance', message: 'nuance must be a non-empty string', fix: 'Describe the specific expression of the archetype for this pair.' });
+        }
+        if (d.status !== undefined) {
+            violations.push({ field: 'status', message: 'relationship.status is engine-owned — omit on CR', fix: 'Remove the status field. Status defaults to "active" at birth.' });
+        }
+        if (d.last_shift !== undefined && !isValidLastShift(d.last_shift)) {
+            violations.push({ field: 'last_shift', message: 'last_shift must be null or {tx, collision_id, from: {card, orientation}, to: {card, orientation}, reason}', fix: 'Use null at birth.' });
+        }
+    } else if (tx.op === 'S') {
+        const f = tx.d?.f;
+        const v = tx.d?.v;
+        if (f === 'card') {
+            const card = typeof v === 'string' ? v.toLowerCase() : v;
+            if (!MAJOR_ARCANA.has(card)) {
+                violations.push({ field: 'card', message: `invalid card slug "${v}"`, fix: 'Major Arcana only, lowercase-hyphen.' });
+            }
+        }
+        if (f === 'orientation') {
+            const orientation = typeof v === 'string' ? v.toLowerCase() : v;
+            if (!RELATIONSHIP_ORIENTATIONS.has(orientation)) {
+                violations.push({ field: 'orientation', message: `invalid orientation "${v}"`, fix: '"upright" or "reversed" (lowercase).' });
+            }
+        }
+        if (f === 'nuance') {
+            if (typeof v !== 'string' || v.trim() === '') {
+                violations.push({ field: 'nuance', message: `nuance must be a non-empty string, got ${JSON.stringify(v)}`, fix: 'Nuance must be a non-empty prose string.' });
+            }
+        }
+        if (f === 'status') {
+            violations.push({ field: 'status', message: 'relationship.status is engine-owned and cannot be SET manually', fix: 'Status follows tier automatically.' });
+        }
+        if (f === 'last_shift') {
+            if (v === null) {
+                violations.push({ field: 'last_shift', message: 'S last_shift=null would wipe the audit trail', fix: 'last_shift can only be null at birth (CR).' });
+            } else {
+                if (v && typeof v.reason === 'string' && v.reason.length > LAST_SHIFT_REASON_MAXLEN) {
+                    violations.push({ field: 'last_shift', message: `last_shift.reason is too long (${v.reason.length} chars; max ${LAST_SHIFT_REASON_MAXLEN})`, fix: `Keep reason ≤${LAST_SHIFT_REASON_MAXLEN} chars.` });
+                } else if (!isValidLastShift(v)) {
+                    violations.push({ field: 'last_shift', message: 'last_shift must be {tx, collision_id, from: {card, orientation}, to: {card, orientation}, reason}', fix: 'All five fields required. from/to must be {card, orientation} objects.' });
+                }
+            }
+        }
+    }
+    return violations;
+}
+
+function validateCharTagsTx(tx) {
+    const violations = [];
+    if (tx.op === 'CR' && Array.isArray(tx.d?.tags)) {
+        const tags = tx.d.tags;
+        if (tags.length > CHARACTER_TAGS_MAX) {
+            violations.push({ field: 'tags', message: `char.tags must be ≤ ${CHARACTER_TAGS_MAX} (got ${tags.length})`, fix: 'Trim to the most identity-defining tags.' });
+        }
+        for (const t of tags) {
+            if (typeof t !== 'string') violations.push({ field: 'tags', message: 'tags must be strings', fix: 'Remove non-string entries.' });
+            else if (t.length > CHARACTER_TAG_MAXLEN) violations.push({ field: 'tags', message: `tag too long`, fix: 'Tags should be 1-3 words.' });
+        }
+    } else if (tx.op === 'S' && tx.d?.f === 'tags') {
+        if (!Array.isArray(tx.d.v)) {
+            violations.push({ field: 'tags', message: `S char.tags value must be an array, got ${typeof tx.d.v}`, fix: 'Use an array.' });
+            return violations;
+        }
+        const tags = tx.d.v;
+        if (tags.length > CHARACTER_TAGS_MAX) {
+            violations.push({ field: 'tags', message: `char.tags must be ≤ ${CHARACTER_TAGS_MAX} (got ${tags.length})`, fix: 'Trim to 5.' });
+        }
+        for (const t of tags) {
+            if (typeof t !== 'string') violations.push({ field: 'tags', message: 'tags must be strings', fix: 'Remove non-string entries.' });
+            else if (t.length > CHARACTER_TAG_MAXLEN) violations.push({ field: 'tags', message: `tag too long`, fix: '1-3 words.' });
+        }
+    } else if (tx.op === 'A' && tx.d?.f === 'tags') {
+        const t = tx.d.v;
+        if (typeof t !== 'string') violations.push({ field: 'tags', message: 'appended tag must be a string', fix: 'Tags must be plain text strings.' });
+        else if (t.length > CHARACTER_TAG_MAXLEN) violations.push({ field: 'tags', message: `tag too long`, fix: '1-3 words.' });
+    }
+    return violations;
+}
+
+function validateFactionTierTx(tx) {
+    const violations = [];
+    let tier = null;
+    if (tx.op === 'CR') tier = tx.d?.tier;
+    else if (tx.op === 'S' && tx.d?.f === 'tier') tier = tx.d?.v;
+    if (tier === undefined || tier === null) return violations;
+    if (!FACTION_TIERS_SET.has(tier)) {
+        violations.push({ field: 'tier', message: `invalid faction.tier "${tier}"`, fix: 'Must be KNOWN, TRACKED, or PRINCIPAL.' });
+    }
+    return violations;
+}
+
+function validateSceneCastEntries(refs, state) {
+    const violations = [];
+    for (const ref of refs) {
+        if (typeof ref !== 'string' || !ref.includes(':')) {
+            violations.push({ field: 'scene_cast', message: `invalid cast entry "${ref}" — must be "type:id" format`, fix: 'Use char:lacus or faction:zaft.' });
+            continue;
+        }
+        const colonIdx = ref.indexOf(':');
+        const type = ref.slice(0, colonIdx);
+        const id = ref.slice(colonIdx + 1);
+        if (!state) continue;
+        let exists = false;
+        if (type === 'char') exists = Boolean(state.characters?.[id]);
+        else if (type === 'faction') exists = Boolean(state.factions?.[id]);
+        else {
+            violations.push({ field: 'scene_cast', message: `unsupported entity type "${type}" in cast ref "${ref}"`, fix: 'Only "char:" and "faction:" prefixes allowed.' });
+            continue;
+        }
+        if (!exists) {
+            violations.push({ field: 'scene_cast', message: `cast ref "${ref}" references a non-existent entity`, fix: `Create ${type}:${id} first.` });
+        }
+    }
+    return violations;
+}
+
+/**
+ * Validate a single transaction for shape correctness and semantic rules.
+ * @param {Object} tx - The transaction object
+ * @param {Object|null} state - Current computed state (may be null for stateless checks)
+ * @returns {{ valid: boolean, violations: Array<{field: string, message: string, fix: string}> }}
+ */
+function validateTransaction(tx, state) {
+    const violations = [];
+
+    if (!tx || typeof tx !== 'object' || Array.isArray(tx)) {
+        violations.push({ field: 'root', message: 'Transaction must be an object', fix: 'Each transaction should be {...}' });
+        return { valid: false, violations };
+    }
+
+    // Relationship shape validation
+    if (tx.e === 'relationship' && (tx.op === 'CR' || tx.op === 'S')) {
+        violations.push(...validateRelationshipTx(tx));
+    }
+    // char.tags (CR, A, S)
+    if (tx.e === 'char' && (tx.op === 'CR' || tx.op === 'A' || tx.op === 'S')) {
+        violations.push(...validateCharTagsTx(tx));
+    }
+    // faction.tier (CR, S)
+    if (tx.e === 'faction' && (tx.op === 'CR' || tx.op === 'S')) {
+        violations.push(...validateFactionTierTx(tx));
+    }
+    // pc entity (scene_cast + current_place_id)
+    if (tx.e === 'pc') {
+        let refs = null;
+        if (tx.op === 'S' && tx.d?.f === 'scene_cast' && Array.isArray(tx.d.v)) refs = tx.d.v;
+        if (tx.op === 'A' && tx.d?.f === 'scene_cast') refs = [tx.d.v];
+        if (refs) violations.push(...validateSceneCastEntries(refs, state));
+        if (tx.op === 'S' && tx.d?.f === 'current_place_id') {
+            const v = tx.d.v;
+            if (v !== null && v !== '' && v !== undefined) {
+                if (typeof v !== 'string' || !v.startsWith('place:') || v.length <= 'place:'.length) {
+                    violations.push({ field: 'current_place_id', message: `current_place_id must be "place:<id>", got "${v}"`, fix: 'Use the fully-qualified place id (e.g., place:bridge).' });
+                }
+            }
+        }
+    }
+    // PRINCIPAL uniqueness (state-dependent)
+    if (state && (tx.e === 'char' || tx.e === 'faction')) {
+        let newTier = null;
+        if (tx.op === 'CR' && tx.d?.tier) newTier = tx.d.tier;
+        else if (tx.op === 'TR' && tx.d?.f === 'tier') newTier = tx.d?.to;
+        else if (tx.op === 'S' && tx.d?.f === 'tier') newTier = tx.d?.v;
+        if (newTier === 'PRINCIPAL') {
+            const uniq = checkPrincipalUniqueness(state, tx.e, tx.id, newTier);
+            if (!uniq.valid) {
+                violations.push({ field: 'tier', message: uniq.error, fix: uniq.fix });
+            }
+        }
+    }
+    // CR relationship: target must exist and be TRACKED+
+    if (state && tx.e === 'relationship' && tx.op === 'CR') {
+        const id = tx.id || '';
+        if (id.startsWith('pc-') && id.length > 3) {
+            const otherId = id.slice('pc-'.length);
+            const char = state.characters?.[otherId];
+            const faction = state.factions?.[otherId];
+            const target = char || faction;
+            if (!target) {
+                violations.push({ field: 'id', message: `relationship target "${otherId}" does not exist as char or faction`, fix: `Create the char or faction at TRACKED+ tier first.` });
+            } else {
+                const tier = String(target.tier || '').toUpperCase();
+                if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') {
+                    violations.push({ field: 'id', message: `relationship:pc-${otherId} requires target tier ≥ TRACKED (current: "${tier}")`, fix: `Promote the target to TRACKED first.` });
+                }
+            }
+        }
+    }
+
+    return { valid: violations.length === 0, violations };
+}
+
+/**
+ * Validate a block of transactions using a shadow-state walk.
+ * Catches same-block exploits (e.g. two PRINCIPAL CRs in one block).
+ * @param {Array} txs - Array of transactions to validate
+ * @param {Object|null} baseState - Starting state before these transactions
+ * @returns {{ valid: boolean, violations: Array }}
+ */
+function validateBlock(txs, baseState) {
+    const shadow = {
+        characters:    { ...(baseState?.characters    || {}) },
+        factions:      { ...(baseState?.factions      || {}) },
+        relationships: { ...(baseState?.relationships || {}) },
+        constraints:   { ...(baseState?.constraints   || {}) },
+        collisions:    { ...(baseState?.collisions     || {}) },
+        combats:       { ...(baseState?.combats        || {}) },
+        places:        { ...(baseState?.places         || {}) },
+        pressures:     { ...(baseState?.pressures      || {}) },
+        world:         { ...(baseState?.world          || {}) },
+        divination:    { ...(baseState?.divination     || {}) },
+        pc:            baseState?.pc ? { ...baseState.pc } : {},
+        lastTxId:      baseState?.lastTxId ?? -1,
+        _history:      {},
+    };
+    const violations = [];
+    const droppedTxIds = new Set();
+    const applyTransaction = _applyTransactionFromCompute;
+    for (const tx of txs) {
+        const perTx = validateTransaction(tx, shadow);
+        if (!perTx.valid) {
+            violations.push(...perTx.violations.map(v => ({ ...v, tx: tx.tx })));
+            droppedTxIds.add(tx.tx);
+            continue; // skip applying — keep walking the rest of the block
+        }
+        // Deep-clone the entity being modified so shadow never mutates baseState objects.
+        // Must cover all ops (A, R, MS, MR, etc.) not just TR/S.
+        const coll = ENTITY_TO_COLLECTION[tx.e];
+        if (coll && shadow[coll] && shadow[coll][tx.id] !== undefined) {
+            shadow[coll][tx.id] = structuredClone(shadow[coll][tx.id]);
+        }
+        try {
+            applyTransaction(shadow, tx);
+        } catch (e) {
+            violations.push({ field: '_apply', message: `applyTransaction threw: ${e.message}`, tx: tx.tx });
+            droppedTxIds.add(tx.tx);
+        }
+    }
+    return { valid: violations.length === 0, violations, droppedTxIds };
+}
+
 export {
     validateBatch,
     validateFormat,
     validateTransitions,
     findMissingArchiveEntries,
     formatErrors,
+    validateTransaction,
+    validateBlock,
     VALID_OPS,
     VALID_ENTITIES,
 };

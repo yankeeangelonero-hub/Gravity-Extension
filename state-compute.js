@@ -8,6 +8,7 @@
 // NOTE: spec §2 uses state.chars as shorthand; codebase keeps state.characters (D1 decision).
 const CATEGORY_DISTANCES = { IMMEDIATE: 1, SHORT: 10, MEDIUM: 20, LONG: 50 };
 const MAX_COLLISION_ARCHIVE = 20;
+const CHARACTER_TAGS_MAX = 5;
 
 /**
  * @typedef {Object} ComputedState
@@ -58,6 +59,7 @@ function createEmptyState() {
         factions: {},
         places: {},
         pressures: {},
+        relationships: {},
         world: {
             world_state: '',
             collision_archive: [],
@@ -66,6 +68,8 @@ function createEmptyState() {
             name: '',
             demonstrated_traits: [],
             current_scene: '',
+            current_place_id: '',
+            scene_cast: [],
         },
         divination: {
             active_system: 'arcana',
@@ -279,6 +283,7 @@ function getCollectionName(entityType) {
         world: 'world',
         pc: 'pc',
         divination: 'divination',
+        relationship: 'relationships',
     };
     return map[entityType] || entityType;
 }
@@ -436,6 +441,16 @@ function getEntityHistory(state, entityType, entityId) {
     return result;
 }
 
+function adjustRelationshipStatus(state, entityType, entityId, newStatus) {
+    if (entityType !== 'char' && entityType !== 'faction') return;
+    const relId = `pc-${entityId}`;
+    const rel = state.relationships?.[relId];
+    if (!rel) return;
+    if (rel.status === newStatus) return;
+    if (rel.status === 'archived') return; // terminal — no transitions out
+    rel.status = newStatus;
+}
+
 /**
  * Apply a single transaction to the state.
  */
@@ -479,6 +494,19 @@ function applyTransaction(state, tx) {
                 // Pressure entity: engine stamps created_at_tx from tx.tx (LLM-supplied value overwritten)
                 if (tx.e === 'pressure') {
                     data.created_at_tx = tx.tx;
+                }
+                if (tx.e === 'relationship') {
+                    if (!('last_shift' in data)) data.last_shift = null;
+                    if (!data.status) data.status = 'active';
+                }
+                if (tx.e === 'faction') {
+                    if (!data.tier) data.tier = 'KNOWN';
+                }
+                if (tx.e === 'char' && Array.isArray(data.tags)) {
+                    data.tags = Array.from(new Set(data.tags));
+                    if (data.tags.length > CHARACTER_TAGS_MAX) {
+                        data.tags = data.tags.slice(0, CHARACTER_TAGS_MAX);
+                    }
                 }
                 // Phase 2: distance_category → canonical starting distance
                 if (tx.e === 'collision') {
@@ -533,6 +561,17 @@ function applyTransaction(state, tx) {
                     }
                 }
                 recordHistory(state, tx.e, tx.id, tx.d.f, oldVal, toVal, tx);
+                if ((tx.e === 'char' || tx.e === 'faction') && tx.d.f === 'tier') {
+                    const TIER_ORDER = ['UNKNOWN', 'KNOWN', 'TRACKED', 'PRINCIPAL'];
+                    const fromIdx = TIER_ORDER.indexOf(String(oldVal || '').toUpperCase());
+                    const toIdx = TIER_ORDER.indexOf(String(toVal || '').toUpperCase());
+                    const trackedIdx = TIER_ORDER.indexOf('TRACKED');
+                    if (fromIdx >= trackedIdx && toIdx < trackedIdx) {
+                        adjustRelationshipStatus(state, tx.e, tx.id, 'dormant');
+                    } else if (fromIdx < trackedIdx && toIdx >= trackedIdx) {
+                        adjustRelationshipStatus(state, tx.e, tx.id, 'active');
+                    }
+                }
             }
             break;
         }
@@ -564,6 +603,12 @@ function applyTransaction(state, tx) {
                 if (tx.e === 'collision' && sField === 'status' && newVal === 'CRASHED' && !target.outcome_type) {
                     target.outcome_type = 'CRASHED';
                 }
+                if (tx.e === 'char' && sField === 'tags' && Array.isArray(target.tags)) {
+                    target.tags = Array.from(new Set(target.tags));
+                    if (target.tags.length > CHARACTER_TAGS_MAX) {
+                        target.tags = target.tags.slice(0, CHARACTER_TAGS_MAX);
+                    }
+                }
                 if (oldVal !== newVal) {
                     recordHistory(state, tx.e, tx.id, sField, oldVal, newVal, tx);
                 }
@@ -594,6 +639,12 @@ function applyTransaction(state, tx) {
                         const arr = state.world.collision_archive;
                         if (Array.isArray(arr) && arr.length > MAX_COLLISION_ARCHIVE) {
                             state.world.collision_archive = arr.slice(-MAX_COLLISION_ARCHIVE);
+                        }
+                    }
+                    if (tx.e === 'char' && tx.d.f === 'tags' && Array.isArray(target.tags)) {
+                        target.tags = Array.from(new Set(target.tags));
+                        if (target.tags.length > CHARACTER_TAGS_MAX) {
+                            target.tags = target.tags.slice(0, CHARACTER_TAGS_MAX);
                         }
                     }
                 }
@@ -716,6 +767,25 @@ function applyTransaction(state, tx) {
 
         case 'D': {
             if (!isSingleton) {
+                if (tx.e === 'char' || tx.e === 'faction') {
+                    const entity = state[collection]?.[tx.id];
+
+                    // 1. Stamp display_name BEFORE deleting entity (after D, entity is gone)
+                    const relId = `pc-${tx.id}`;
+                    const rel = state.relationships?.[relId];
+                    if (rel && entity?.name) {
+                        rel.display_name = entity.name;
+                    }
+
+                    // 2. Archive the relationship
+                    adjustRelationshipStatus(state, tx.e, tx.id, 'archived');
+
+                    // 3. Scrub dangling scene_cast reference
+                    const fqId = `${tx.e}:${tx.id}`;
+                    if (state.pc && Array.isArray(state.pc.scene_cast)) {
+                        state.pc.scene_cast = state.pc.scene_cast.filter(ref => ref !== fqId);
+                    }
+                }
                 delete state[collection][tx.id];
             }
             break;
@@ -726,6 +796,13 @@ function applyTransaction(state, tx) {
 
         default:
             break;
+    }
+
+    // Stamp last_active_tx on any char-touching transaction (for KNOWN roll-up sort).
+    // This runs regardless of op; the char may not exist (e.g., after D) — guard with ?.
+    if (tx.e === 'char' && tx.id) {
+        const ch = state.characters?.[tx.id];
+        if (ch) ch.last_active_tx = tx.tx;
     }
 
     state.lastTxId = tx.tx;
@@ -742,6 +819,7 @@ function computeState(snapshot, transactions) {
     if (!state._history) state._history = {};
     if (!state.factions) state.factions = {};
     if (!state.divination) state.divination = { active_system: 'arcana', last_draw: null, readings: [] };
+    if (!state.relationships) state.relationships = {};
 
     // First pass: collect amendments
     const amendments = new Map();
