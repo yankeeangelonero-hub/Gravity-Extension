@@ -664,27 +664,29 @@ function validateBlock(txs, baseState) {
         _history:      {},
     };
     const violations = [];
+    const droppedTxIds = new Set();
     const applyTransaction = _applyTransactionFromCompute;
     for (const tx of txs) {
         const perTx = validateTransaction(tx, shadow);
         if (!perTx.valid) {
             violations.push(...perTx.violations.map(v => ({ ...v, tx: tx.tx })));
-            return { valid: false, violations };
+            droppedTxIds.add(tx.tx);
+            continue; // skip applying — keep walking the rest of the block
         }
-        if ((tx.op === 'TR' || tx.op === 'S') && (tx.e === 'char' || tx.e === 'faction')) {
-            const coll = tx.e === 'char' ? 'characters' : 'factions';
-            if (shadow[coll][tx.id]) {
-                shadow[coll][tx.id] = { ...shadow[coll][tx.id] };
-            }
+        // Deep-clone the entity being modified so shadow never mutates baseState objects.
+        // Must cover all ops (A, R, MS, MR, etc.) not just TR/S.
+        const coll = ENTITY_TO_COLLECTION[tx.e];
+        if (coll && shadow[coll] && shadow[coll][tx.id] !== undefined) {
+            shadow[coll][tx.id] = structuredClone(shadow[coll][tx.id]);
         }
         try {
             applyTransaction(shadow, tx);
         } catch (e) {
             violations.push({ field: '_apply', message: `applyTransaction threw: ${e.message}`, tx: tx.tx });
-            return { valid: false, violations };
+            droppedTxIds.add(tx.tx);
         }
     }
-    return { valid: true, violations: [] };
+    return { valid: violations.length === 0, violations, droppedTxIds };
 }
 
 export {

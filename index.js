@@ -1773,8 +1773,8 @@ async function onMessageReceived(messageId) {
                     raw: rawToken,
                 });
             }
-            console.warn(`${LOG_PREFIX} validateBlock rejected batch: ${blockCheck.violations.length} violation(s); skipping commit.`);
-            validTxns = [];
+            console.warn(`${LOG_PREFIX} validateBlock dropped ${blockCheck.droppedTxIds.size} tx(s): ${blockCheck.violations.length} violation(s).`);
+            validTxns = validTxns.filter(tx => !blockCheck.droppedTxIds.has(tx.tx));
         }
     }
 
@@ -1999,15 +1999,14 @@ async function onMessageReceived(messageId) {
             const relationships = _currentState.relationships || {};
 
             // 5b — missing relationship on TRACKED+ chars
+            // Note: queueCorrections deduplicates by raw key and drops after MAX_CORRECTION_ATTEMPTS;
+            // calling it every turn lets the attempt counter increment naturally (no external gate needed).
             for (const [id, char] of Object.entries(_currentState.characters || {})) {
                 const tier = String(char?.tier || '').toUpperCase();
                 if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') continue;
                 if (relationships[`pc-${id}`]) continue;
-                const key = `missing-relationship:char:${id}`;
-                if (_firedRelationshipCorrections.has(key)) continue;
-                _firedRelationshipCorrections.add(key);
                 queueCorrections([{
-                    raw: `[${key}]`,
+                    raw: `[missing-relationship:char:${id}]`,
                     error: `char:${id} is ${tier} but has no relationship:pc-${id}. Draw the card:\n  CREATE relationship:pc-${id} card="<major-arcana-slug>" orientation="upright|reversed" nuance="<one-sentence bond description>" last_shift=null\n(last_shift must be null at birth)`,
                 }]);
             }
@@ -2016,20 +2015,10 @@ async function onMessageReceived(messageId) {
                 const tier = String(f?.tier || '').toUpperCase();
                 if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') continue;
                 if (relationships[`pc-${id}`]) continue;
-                const key = `missing-relationship:faction:${id}`;
-                if (_firedRelationshipCorrections.has(key)) continue;
-                _firedRelationshipCorrections.add(key);
                 queueCorrections([{
-                    raw: `[${key}]`,
+                    raw: `[missing-relationship:faction:${id}]`,
                     error: `faction:${id} is ${tier} but has no relationship:pc-${id}. Draw the card:\n  CREATE relationship:pc-${id} card="<major-arcana-slug>" orientation="upright|reversed" nuance="<one-sentence bond description>" last_shift=null`,
                 }]);
-            }
-
-            // Clear missing-relationship keys once the relationship exists
-            for (const relId of Object.keys(relationships)) {
-                const otherId = relId.replace(/^pc-/, '');
-                _firedRelationshipCorrections.delete(`missing-relationship:char:${otherId}`);
-                _firedRelationshipCorrections.delete(`missing-relationship:faction:${otherId}`);
             }
 
             // 5c — orphaned relational collisions + missing rel update
@@ -2045,14 +2034,10 @@ async function onMessageReceived(messageId) {
                 const relId = `pc-${bareOther}`;
                 const rel = relationships[relId];
                 if (!rel) {
-                    const key = `orphan-relational:${cid}`;
-                    if (!_firedRelationshipCorrections.has(key)) {
-                        _firedRelationshipCorrections.add(key);
-                        queueCorrections([{
-                            raw: `[${key}]`,
-                            error: `collision:${cid} is tagged ignition_class=relational and ${status.toLowerCase()}, but no relationship:${relId} exists. Either:\n  (A) CREATE the missing relationship:${relId} card="..." orientation="..." nuance="..." last_shift=null\n  (B) If mislabeled, SET collision:${cid} field=ignition_class value=environmental`,
-                        }]);
-                    }
+                    queueCorrections([{
+                        raw: `[orphan-relational:${cid}]`,
+                        error: `collision:${cid} is tagged ignition_class=relational and ${status.toLowerCase()}, but no relationship:${relId} exists. Either:\n  (A) CREATE the missing relationship:${relId} card="..." orientation="..." nuance="..." last_shift=null\n  (B) If mislabeled, SET collision:${cid} field=ignition_class value=environmental`,
+                    }]);
                     continue;
                 }
                 // Relationship exists — was it updated to reference this collision?
@@ -2061,11 +2046,8 @@ async function onMessageReceived(messageId) {
                 const history = _currentState._history?.[histKey] || [];
                 const alreadyPaired = history.some(e => e && e.to && typeof e.to === 'object' && e.to.collision_id === cid);
                 if (alreadyPaired) continue;
-                const key = `missing-rel-update:${cid}`;
-                if (_firedRelationshipCorrections.has(key)) continue;
-                _firedRelationshipCorrections.add(key);
                 queueCorrections([{
-                    raw: `[${key}]`,
+                    raw: `[missing-rel-update:${cid}]`,
                     error: `collision:${cid} resolved but relationship:${relId} was not updated. Commit now:\n  SET relationship:${relId} field=card value="<slug>"\n  SET relationship:${relId} field=orientation value="upright|reversed"\n  SET relationship:${relId} field=nuance value="<updated expression>"\n  SET relationship:${relId} field=last_shift value={tx, collision_id: "${cid}", from:{card,orientation}, to:{card,orientation}, reason}`,
                 }]);
             }

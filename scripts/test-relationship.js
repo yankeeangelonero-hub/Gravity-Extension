@@ -649,6 +649,40 @@ group('consistency: scene_cast entity-ref validation', () => {
         assert(!result.valid, 'CR + TR producing two PRINCIPALs must reject');
     });
 
+    test('validateBlock drops only the offending tx, not the whole block', () => {
+        const baseState = { characters: {}, factions: {}, relationships: {} };
+        const block = [
+            { tx: 1, op: 'CR', e: 'char', id: 'ally', d: { name: 'Ally', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'char', id: 'npc', d: { name: 'NPC', tier: 'TRACKED' } },
+            { tx: 3, op: 'CR', e: 'char', id: 'enemy', d: { name: 'Enemy', tier: 'PRINCIPAL' } },
+        ];
+        const result = consistency.validateBlock(block, baseState);
+        assert(!result.valid, 'block with second PRINCIPAL has violation');
+        assert(result.droppedTxIds.has(3), 'tx 3 (second PRINCIPAL) is in droppedTxIds');
+        assert(!result.droppedTxIds.has(1), 'tx 1 (first PRINCIPAL) is NOT dropped');
+        assert(!result.droppedTxIds.has(2), 'tx 2 (TRACKED) is NOT dropped');
+    });
+
+    test('validateBlock does not mutate baseState entities via A ops', () => {
+        const baseState = { characters: { lacus: { tier: 'TRACKED', tags: ['pilot'] } }, factions: {}, relationships: {} };
+        const block = [
+            { tx: 1, op: 'A', e: 'char', id: 'lacus', d: { f: 'tags', v: 'ace' } },
+        ];
+        consistency.validateBlock(block, baseState);
+        assertEqual(baseState.characters.lacus.tags.length, 1, 'validateBlock must not mutate baseState.tags');
+    });
+
+    test('validateBlock does not crash on CR of non-char/faction entities', () => {
+        const baseState = { characters: {}, factions: {}, relationships: {}, collisions: {} };
+        const block = [
+            { tx: 1, op: 'CR', e: 'collision', id: 'coll1', d: { label: 'The Reckoning', involved_chars: ['pc'], distance: 3 } },
+        ];
+        // Must not throw — the shadow now initialises all collections
+        let threw = false;
+        try { consistency.validateBlock(block, baseState); } catch (e) { threw = true; }
+        assert(!threw, 'validateBlock must not throw on collision CR in block');
+    });
+
     test('CR relationship for KNOWN-tier char rejects', () => {
         const state = {
             characters: { flay: { tier: 'KNOWN' } },
@@ -813,6 +847,46 @@ group('lean phonebook — cast gating', () => {
         const state = computeState(null, txs);
         const rendered = formatStateView(state, { mode: 'regular' });
         assert(rendered.includes('DORMANT (on-stage): Flay'), 'dormant-on-stage re-injects');
+    });
+
+    test('dormant char: bare char.location matches place:-prefixed current_place_id', () => {
+        // char.location is stored as bare id ("bridge"), current_place_id as "place:bridge"
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'flay', d: { name: 'Flay', tier: 'KNOWN' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-flay', d: {
+                card: 'death', orientation: 'upright', nuance: 'g', status: 'dormant', last_shift: null,
+            }},
+            { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'current_place_id', v: 'place:bridge' } },
+            { tx: 4, op: 'S', e: 'char', id: 'flay', d: { f: 'location', v: 'bridge' } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('DORMANT (on-stage): Flay'), 'bare location matches place:-prefixed current_place_id');
+    });
+
+    test('character headers include entity ID token', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'TRACKED' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'upright', nuance: 'n', last_shift: null,
+            }},
+            { tx: 3, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:lacus'] } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('→ id: lacus'), 'entity ID present in prompt for LLM reference');
+    });
+
+    test('KNOWN faction in scene_cast renders lightweight (not full dossier)', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'faction', id: 'alliance', d: { name: 'Alliance', tier: 'KNOWN', agenda: 'patrol the lane' } },
+            { tx: 2, op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['faction:alliance'] } },
+        ];
+        const state = computeState(null, txs);
+        const rendered = formatStateView(state, { mode: 'regular' });
+        assert(rendered.includes('FACTION: Alliance [KNOWN · on-stage]'), 'lightweight faction header for KNOWN in cast');
+        assert(rendered.includes('patrol the lane'), 'agenda present for KNOWN in-cast faction');
+        assert(!rendered.includes('Knowledge asymmetry:'), 'no KA for KNOWN in-cast faction (lightweight only)');
     });
 });
 

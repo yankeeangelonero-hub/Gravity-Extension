@@ -189,7 +189,7 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
     const renderFullCharDossier = (id, char) => {
         const tier = char.tier || 'KNOWN';
         const isPrincipal = tier === 'PRINCIPAL';
-        lines.push(`CHARACTER: ${char.name || id} [${tier}]`);
+        lines.push(`CHARACTER: ${char.name || id} [${tier}] → id: ${id}`);
         if (char.location) lines.push(`    Location: ${char.location}`);
         if (Array.isArray(char.tags) && char.tags.length > 0) {
             lines.push(`    Tags: [${char.tags.join(', ')}]`);
@@ -291,7 +291,7 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
 
     // In-cast KNOWN: mid-weight block
     for (const [id, char] of inCastKnown) {
-        lines.push(`CHARACTER: ${char.name || id} [KNOWN · on-stage]`);
+        lines.push(`CHARACTER: ${char.name || id} [KNOWN · on-stage] → id: ${id}`);
         if (char.location) lines.push(`    Location: ${char.location}`);
         if (Array.isArray(char.tags) && char.tags.length > 0) {
             lines.push(`    Tags: [${char.tags.join(', ')}]`);
@@ -306,7 +306,7 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
             ? ` · Bond (PC): ${formatCardName(rel.card)} · ${rel.orientation}`
             : '';
         const loc = char.location ? ` — last seen ${char.location}` : '';
-        lines.push(`PRINCIPAL (off-stage): ${char.name || id}${loc}${cardFrag}`);
+        lines.push(`PRINCIPAL (off-stage): ${char.name || id}${loc}${cardFrag} → id: ${id}`);
         if (Array.isArray(char.tags) && char.tags.length > 0) {
             lines.push(`    Tags: [${char.tags.join(', ')}]`);
         }
@@ -315,12 +315,12 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
     // Off-stage TRACKED: compact line, no card
     for (const [id, char] of offStageTracked) {
         const loc = char.location ? ` @ ${char.location}` : '';
-        lines.push(`TRACKED (off-stage): ${char.name || id}${loc}`);
+        lines.push(`TRACKED (off-stage): ${char.name || id}${loc} → id: ${id}`);
     }
 
     // Dormant on-stage by location: compact with card (belt-and-suspenders re-injection)
     for (const [id, char, rel] of dormantOnStageByLocation) {
-        lines.push(`DORMANT (on-stage): ${char.name || id} · ${formatCardName(rel.card)} ${rel.orientation}`);
+        lines.push(`DORMANT (on-stage): ${char.name || id} · ${formatCardName(rel.card)} ${rel.orientation} → id: ${id}`);
         if (rel.nuance) lines.push(`    "${rel.nuance}"`);
     }
 
@@ -341,7 +341,7 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
                 : '';
             const fallback = !tagsFrag && char.agenda ? ` — "${normalizeText(char.agenda).slice(0, 80)}"` : '';
             const locFallback = !tagsFrag && !char.agenda && char.location ? ` @ ${char.location}` : '';
-            lines.push(`  • ${char.name || id}${tagsFrag}${fallback}${locFallback}`);
+            lines.push(`  • ${char.name || id}${tagsFrag}${fallback}${locFallback} → id: ${id}`);
         }
         if (older.length > 0) {
             const names = older.map(([, c]) => c.name || '<unnamed>').join(', ');
@@ -493,6 +493,7 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
         };
 
         const inCastFaction = [];
+        const inCastKnownFaction = [];
         const offStagePrincipalFaction = [];
         const offStageTrackedFaction = [];
         const dormantOnStageFaction = [];
@@ -512,8 +513,8 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
             if (onStage && (tier === 'TRACKED' || tier === 'PRINCIPAL')) {
                 inCastFaction.push([id, faction]);
             } else if (onStage && tier === 'KNOWN') {
-                // Mid-weight in-cast KNOWN faction treated like inCast for rendering
-                inCastFaction.push([id, faction]);
+                // Mid-weight in-cast KNOWN: lightweight render (no full KA)
+                inCastKnownFaction.push([id, faction]);
             } else if (tier === 'PRINCIPAL') {
                 offStagePrincipalFaction.push([id, faction]);
             } else if (tier === 'TRACKED') {
@@ -528,18 +529,24 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
         for (const [id, faction] of inCastFaction) {
             renderFullFaction(id, faction);
         }
+        for (const [id, faction] of inCastKnownFaction) {
+            const territoryStr = Array.isArray(faction.territory) ? faction.territory.join(', ') : faction.territory;
+            const territory = territoryStr ? ` @ ${territoryStr}` : '';
+            lines.push(`FACTION: ${faction.name || id} [KNOWN · on-stage]${territory} → id: ${id}`);
+            if (faction.agenda) lines.push(`    Agenda: ${normalizeText(faction.agenda)}`);
+        }
         for (const [id, faction] of offStagePrincipalFaction) {
             const rel = state.relationships?.[`pc-${id}`];
             const cardFrag = rel && rel.status === 'active'
                 ? ` · ${formatCardName(rel.card)} ${rel.orientation}`
                 : '';
-            lines.push(`PRINCIPAL faction (off-stage): ${faction.name || id}${cardFrag}`);
+            lines.push(`PRINCIPAL faction (off-stage): ${faction.name || id}${cardFrag} → id: ${id}`);
         }
         for (const [id, faction] of offStageTrackedFaction) {
-            lines.push(`TRACKED faction (off-stage): ${faction.name || id}`);
+            lines.push(`TRACKED faction (off-stage): ${faction.name || id} → id: ${id}`);
         }
         for (const [id, faction, rel] of dormantOnStageFaction) {
-            lines.push(`DORMANT faction (on-stage): ${faction.name || id} · ${formatCardName(rel.card)} ${rel.orientation}`);
+            lines.push(`DORMANT faction (on-stage): ${faction.name || id} · ${formatCardName(rel.card)} ${rel.orientation} → id: ${id}`);
         }
         // KNOWN factions rendered minimally when present (mirrors pre-refactor behavior of listing all)
         for (const [id, faction] of knownFactionList) {
