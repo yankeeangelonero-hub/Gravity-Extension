@@ -344,7 +344,11 @@ function parseKeyValues(str) {
         // Bare token (whitespace-terminated)
         let j = i;
         while (j < str.length && !/\s/.test(str[j])) j++;
-        result[key] = str.substring(i, j);
+        const token = str.substring(i, j);
+        if (token === 'null') result[key] = null;
+        else if (token === 'true') result[key] = true;
+        else if (token === 'false') result[key] = false;
+        else result[key] = token;
         i = j;
         lastEnd = i;
     }
@@ -405,10 +409,17 @@ function parseStateLine(line, lineNum) {
     if (!cleaned) return { entry: null, error: null, raw };
 
     if (DIRECT_TX_VERB_REGEX.test(cleaned)) {
-        const verb = cleaned.match(/^(\w+)/)?.[1] || '';
+        const verbRaw = cleaned.match(/^(\w+)/)?.[1] || '';
+        const mappedOp = OP_ALIASES[verbRaw.toUpperCase()];
+        if (mappedOp === 'CR') {
+            // CREATE is allowed in STATE blocks — route through LEDGER line parser
+            const { tx, error } = parseLine(cleaned, lineNum);
+            if (tx) return { entry: { kind: 'directTx', tx, raw }, error: null, raw };
+            return { entry: null, error: error || `Line ${lineNum}: Failed to parse CREATE line`, raw };
+        }
         return {
             entry: null,
-            error: `Line ${lineNum}: Verb syntax ("${verb} ...") is not allowed inside ---STATE--- blocks. STATE blocks are compact-only — use dotted-path form (e.g. "collision:id.status: RESOLVED"). Verb syntax (CR/S/TR/A/MS/...) belongs in ---LEDGER--- blocks.`,
+            error: `Line ${lineNum}: Verb syntax ("${verbRaw} ...") is not allowed inside ---STATE--- blocks. STATE blocks are compact-only — use dotted-path form (e.g. "collision:id.status: RESOLVED"). Verb syntax (S/TR/A/MS/...) belongs in ---LEDGER--- blocks.`,
             raw,
         };
     }
