@@ -848,6 +848,9 @@ function renderCharDossier(char, state) {
     if (rel && rel.status === 'active') {
         const orientClass = rel.orientation === 'reversed' ? 'gl-tarot-reversed' : 'gl-tarot-upright';
         parts.push(`<div class="gl-d-row gl-relationship ${orientClass}">&#9829; <b>${esc(formatCardName(rel.card))}</b> &middot; ${esc(rel.orientation)}</div>`);
+        if (typeof rel.distance === 'string' && typeof rel.intensity === 'string') {
+            parts.push(`<div class="gl-d-row gl-relationship-stage">${esc(rel.distance)} &middot; ${esc(rel.intensity)}</div>`);
+        }
         if (rel.nuance) {
             parts.push(`<div class="gl-d-row gl-relationship-nuance">"${esc(rel.nuance)}"</div>`);
         }
