@@ -17,7 +17,14 @@ node -c ledger-store.js
 # etc. for any changed file
 ```
 
-There are no tests, no linter, and no CI. Validate changes by syntax-checking modified files.
+There is no linter and no CI. The relationship module has a test harness at `scripts/test-relationship.js` — run with `node scripts/test-relationship.js` when touching relationship code. For all other files, validate with `node -c`.
+
+## Project Docs
+
+- Use `Documentation/system_architecture_reference.md` as the canonical code map and update/review checklist.
+- Use `Documentation/project_memory.md` as the durable session handoff file.
+- Current active docs live at the top of `Documentation/`.
+- Historical handoffs, plans, audits, and superseded references live under `Deprecated/`.
 
 ## Architecture
 
@@ -101,4 +108,7 @@ The ledger tracks: collisions, constraints, factions, places, pressure points, P
 - The extension imports SillyTavern globals (e.g., `getContext`, `setExtensionPrompt`, `saveMetadataDebounced`) from the ST environment - these are not local dependencies.
 - `index.js` is the central coordinator (~2,250 lines). It wires all modules together and handles the turn lifecycle.
 - `gravity-system-prompt.md` is a legacy reference for the ledger command format. The current preset is `gravity_v15.json`; mode-specific playbooks can be imported from `Gravity World Info.json`. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
+- `Documentation/system_architecture_reference.md` is the canonical maintenance map for cross-system updates and reviews.
+- `Documentation/project_memory.md` is the active durable memory file.
+- Historical prose, handoff, planning, and audit docs live under `Deprecated/`.
 - Divination uses two random tables (Arcana/Classic) defined in `index.js`. Yi Jing (I Ching) has been removed.

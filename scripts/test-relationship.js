@@ -352,7 +352,7 @@ group('consistency: relationship shape', () => {
 
     test('CR relationship with valid fields passes', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-            card: 'the-hermit', orientation: 'reversed', nuance: 'x', last_shift: null,
+            card: 'the-hermit', orientation: 'reversed', nuance: 'x', distance: 'fresh', intensity: 'active', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, null);
         assert(result.valid, 'valid CR should pass');
@@ -384,7 +384,7 @@ group('consistency: relationship shape', () => {
 
     test('CR relationship last_shift=null passes (birth state)', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', distance: 'fresh', intensity: 'active', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, null);
         assert(result.valid, 'null last_shift at birth is legitimate');
@@ -400,7 +400,7 @@ group('consistency: relationship shape', () => {
 
     test('CR relationship with omitted status passes (defaults to active)', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', distance: 'fresh', intensity: 'active', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, null);
         assert(result.valid, 'CR without status should pass (defaulted by engine)');
@@ -440,7 +440,7 @@ group('consistency: relationship shape', () => {
 
     test('CR orientation "Upright" (title-case) passes after normalization', () => {
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-            card: 'the-hermit', orientation: 'Upright', nuance: 'x', last_shift: null,
+            card: 'the-hermit', orientation: 'Upright', nuance: 'x', distance: 'fresh', intensity: 'active', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, null);
         assert(result.valid, 'title-cased orientation should pass after normalization');
@@ -470,8 +470,8 @@ group('consistency: relationship shape', () => {
         const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
             f: 'last_shift', v: {
                 tx: 5, collision_id: 'col:duel',
-                from: { card: 'the-hermit', orientation: 'upright' },
-                to: { card: 'the-tower', orientation: 'reversed' },
+                from: { card: 'the-hermit', orientation: 'upright', distance: 'fresh', intensity: 'active' },
+                to: { card: 'the-tower', orientation: 'reversed', distance: 'forming', intensity: 'electric' },
                 reason: 'betrayal at the hangar',
             }
         }};
@@ -499,8 +499,8 @@ group('consistency: relationship shape', () => {
         const tx = { tx: 1, op: 'S', e: 'relationship', id: 'pc-lacus', d: {
             f: 'last_shift', v: {
                 tx: 5, collision_id: 'col:duel',
-                from: { card: 'the-hermit', orientation: 'upright' },
-                to: { card: 'the-tower', orientation: 'reversed' },
+                from: { card: 'the-hermit', orientation: 'upright', distance: 'fresh', intensity: 'active' },
+                to: { card: 'the-tower', orientation: 'reversed', distance: 'forming', intensity: 'electric' },
                 reason: maxReason,
             }
         }};
@@ -712,7 +712,7 @@ group('consistency: scene_cast entity-ref validation', () => {
             relationships: {},
         };
         const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
-            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', distance: 'fresh', intensity: 'active', last_shift: null,
         }};
         const result = consistency.validateTransaction(tx, state);
         assert(result.valid, 'TRACKED+ target should pass');
