@@ -267,11 +267,11 @@ function createPanel() {
             <button class="gl-cmd-btn gl-cancel-btn" id="gl-setup-cancel">Cancel</button>
         </div>
         <div class="gl-popup-body" id="gl-all-sections"></div>
-        <div class="gl-footer" style="flex-wrap:wrap;">
+        <div class="gl-footer">
             <span id="gl-turn">Turn 0</span>
             <span id="gl-tx">TX 0</span>
-            <div id="gl-debug-summary" style="display:none;width:100%;font-size:10px;opacity:0.6;padding-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
         </div>
+        <div id="gl-debug-summary" style="display:none;flex-shrink:0;font-size:10px;color:#aaa;padding:1px 10px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
     `;
     document.body.appendChild(panel);
 
