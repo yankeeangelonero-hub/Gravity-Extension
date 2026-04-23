@@ -2007,7 +2007,7 @@ async function onMessageReceived(messageId) {
                 if (relationships[`pc-${id}`]) continue;
                 queueCorrections([{
                     raw: `[missing-relationship:char:${id}]`,
-                    error: `char:${id} is ${tier} but has no relationship:pc-${id}. Draw the card:\n  CREATE relationship:pc-${id} card="<major-arcana-slug>" orientation="upright|reversed" nuance="<one-sentence bond description>" last_shift=null\n(last_shift must be null at birth)`,
+                    error: `char:${id} is ${tier} but has no relationship:pc-${id}. Draw the card:\n  CREATE relationship:pc-${id} card="<major-arcana-slug>" orientation="upright|reversed" nuance="<one-sentence bond description>" distance="fresh|forming|established|deep|core" intensity="cold|simmering|active|electric" last_shift=null\n(last_shift must be null at birth)`,
                 }]);
             }
             // 5b — missing relationship on TRACKED+ factions
@@ -2017,7 +2017,7 @@ async function onMessageReceived(messageId) {
                 if (relationships[`pc-${id}`]) continue;
                 queueCorrections([{
                     raw: `[missing-relationship:faction:${id}]`,
-                    error: `faction:${id} is ${tier} but has no relationship:pc-${id}. Draw the card:\n  CREATE relationship:pc-${id} card="<major-arcana-slug>" orientation="upright|reversed" nuance="<one-sentence bond description>" last_shift=null`,
+                    error: `faction:${id} is ${tier} but has no relationship:pc-${id}. Draw the card:\n  CREATE relationship:pc-${id} card="<major-arcana-slug>" orientation="upright|reversed" nuance="<one-sentence bond description>" distance="fresh|forming|established|deep|core" intensity="cold|simmering|active|electric" last_shift=null`,
                 }]);
             }
 
@@ -2048,7 +2048,22 @@ async function onMessageReceived(messageId) {
                 if (alreadyPaired) continue;
                 queueCorrections([{
                     raw: `[missing-rel-update:${cid}]`,
-                    error: `collision:${cid} resolved but relationship:${relId} was not updated. Commit now:\n  SET relationship:${relId} field=card value="<slug>"\n  SET relationship:${relId} field=orientation value="upright|reversed"\n  SET relationship:${relId} field=nuance value="<updated expression>"\n  SET relationship:${relId} field=last_shift value={tx, collision_id: "${cid}", from:{card,orientation}, to:{card,orientation}, reason}`,
+                    error: `collision:${cid} resolved but relationship:${relId} was not updated. Commit now:\n  SET relationship:${relId} field=card value="<slug>"\n  SET relationship:${relId} field=orientation value="upright|reversed"\n  SET relationship:${relId} field=nuance value="<updated expression>"\n  SET relationship:${relId} field=distance value="fresh|forming|established|deep|core"\n  SET relationship:${relId} field=intensity value="cold|simmering|active|electric"\n  SET relationship:${relId} field=last_shift value={tx, collision_id: "${cid}", from:{card,orientation,distance,intensity}, to:{card,orientation,distance,intensity}, reason}`,
+                }]);
+            }
+
+            // 5e — missing distance/intensity on active relationships (legacy migration)
+            for (const [relId, rel] of Object.entries(relationships)) {
+                if (!rel || rel.status !== 'active') continue;
+                const missingDistance = typeof rel.distance !== 'string';
+                const missingIntensity = typeof rel.intensity !== 'string';
+                if (!missingDistance && !missingIntensity) continue;
+                const lines = [`relationship:${relId} is missing the new stage fields. Pick current values and SET them now:`];
+                if (missingDistance) lines.push(`  SET relationship:${relId} field=distance value="fresh|forming|established|deep|core"`);
+                if (missingIntensity) lines.push(`  SET relationship:${relId} field=intensity value="cold|simmering|active|electric"`);
+                queueCorrections([{
+                    raw: `[missing-stage:${relId}]`,
+                    error: lines.join('\n'),
                 }]);
             }
 
