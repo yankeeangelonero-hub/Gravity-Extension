@@ -2506,8 +2506,6 @@ async function handleNewLedger() {
     delete chatMetadata['gravity_cold'];
     delete chatMetadata['gravity_cold_watermarks'];
     delete chatMetadata['gravity_exemplars'];
-    delete chatMetadata['gravity_combat_runtime'];
-    delete chatMetadata['gravity_combat_settings'];
     delete chatMetadata['gravity_challenge_runtime'];
     delete chatMetadata['gravity_challenge_settings'];
     delete chatMetadata[NUDGE_COUNTER_KEY];
@@ -2535,8 +2533,6 @@ async function handleImportData(data) {
     const { chatMetadata } = SillyTavern.getContext();
     delete chatMetadata['gravity_cold'];
     delete chatMetadata['gravity_cold_watermarks'];
-    delete chatMetadata['gravity_combat_runtime'];
-    delete chatMetadata['gravity_combat_settings'];
     delete chatMetadata['gravity_challenge_runtime'];
     delete chatMetadata['gravity_challenge_settings'];
     delete chatMetadata[NUDGE_COUNTER_KEY];

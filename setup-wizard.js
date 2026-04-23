@@ -26,8 +26,7 @@ function cancelSetup() {
 }
 
 /**
- * No-op - the popup handles everything in one shot.
- * Kept for backward compatibility with index.js calls.
+ * Auto-complete setup once any character has been created.
  */
 function checkPhaseCompletion(committedTxns, state) {
     // Auto-complete setup after first successful commit with characters

@@ -23,41 +23,20 @@ function getChallengeCommandBody(rawText, profile) {
 function parseChallengeOptionValue(value, label, profile) {
     const text = decodeHtmlEntities(value);
     const escaped = profile.optionPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const withId = text.match(new RegExp(`^\\*?${escaped}:\\s*option\\s*\\|\\s*([^|]+)\\|\\s*(\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
-    if (withId) {
-        const category = normalizeCategoryForProfile(withId[3], profile);
-        if (!category) return null;
-        return {
-            id: normalizeText(withId[1]),
-            index: Number(withId[2]),
-            category,
-            intent: normalizeText(withId[4]),
-            label: normalizeText(decodeHtmlEntities(label)) || normalizeText(withId[4]),
-        };
-    }
-    const legacy = text.match(new RegExp(`^\\*?${escaped}:\\s*option\\s*\\|\\s*(\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
-    if (!legacy) return null;
-    const category = normalizeCategoryForProfile(legacy[2], profile);
+    const match = text.match(new RegExp(`^\\*?${escaped}:\\s*option\\s*\\|\\s*([^|]+)\\|\\s*(\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
+    if (!match) return null;
+    const category = normalizeCategoryForProfile(match[3], profile);
     if (!category) return null;
     return {
-        id: null,
-        index: Number(legacy[1]),
+        id: normalizeText(match[1]),
+        index: Number(match[2]),
         category,
-        intent: normalizeText(legacy[3]),
-        label: normalizeText(decodeHtmlEntities(label)) || normalizeText(legacy[3]),
+        intent: normalizeText(match[4]),
+        label: normalizeText(decodeHtmlEntities(label)) || normalizeText(match[4]),
     };
 }
 
 function parseChallengeCustomText(rawText, profile, options = {}) {
-    const text = decodeHtmlEntities(rawText);
-    const escaped = profile.inputPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const legacy = text.match(new RegExp(`^\\*?${escaped}:\\s*custom\\s*\\|\\s*([^|]+)\\|\\s*(.+?)\\*?$`, 'i'));
-    if (legacy) {
-        const category = normalizeCategoryForProfile(legacy[1], profile);
-        if (!category) return null;
-        return { category, intent: normalizeText(legacy[2]) };
-    }
-
     const body = getChallengeCommandBody(rawText, profile)
         ?? (options.allowBare ? normalizeText(rawText) : null);
     if (body == null || !body) return null;

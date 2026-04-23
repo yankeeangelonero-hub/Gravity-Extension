@@ -788,6 +788,22 @@ group('consistency: scene_cast entity-ref validation', () => {
     });
 });
 
+const regexIntercept = require('../regex-intercept.js');
+
+group('regex-intercept — command-form parsing', () => {
+    test('timestamped ledger block parses each line as a command', () => {
+        const msg = [
+            '---LEDGER---',
+            '[Day 1 — 22:47] CREATE char:ada name="Ada" tier=PRINCIPAL',
+            '[Day 1 — 22:47] SET pc field=name value="Autumn"',
+            '---END LEDGER---',
+        ].join('\n');
+        const r = regexIntercept.extractLedgerBlock(msg);
+        assertEqual(r.errors.length, 0, 'no parse errors');
+        assertEqual(r.transactions.length, 2, 'both lines parsed');
+    });
+});
+
 const { formatStateView } = require('../state-view.js');
 
 group('state-view render — relationship block', () => {

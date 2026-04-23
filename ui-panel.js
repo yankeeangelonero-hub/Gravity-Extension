@@ -11,13 +11,15 @@
 import { getFieldHistory, getEntityHistory, getArrayItemHistory, CATEGORY_DISTANCES } from './state-compute.js';
 import {
     buildDcTable,
-    getCombatBaseline,
-    getCombatEntity,
-    getCombatRuntime,
-    getCombatSettings,
-    setCombatCustomDcs,
-    setCombatDifficultyMode,
-} from './combat-state.js';
+    getChallengeEntity,
+    getChallengeRuntime,
+    getChallengeSettings,
+    setChallengeCustomDcs,
+    setChallengeDifficultyMode,
+} from './challenge-state.js';
+import { getProfile } from './challenge-profiles.js';
+
+const combatProfile = getProfile('combat');
 
 const PANEL_ID = 'gravity-ledger-panel';
 const TOGGLE_ID = 'gravity-ledger-toggle';
@@ -37,7 +39,7 @@ let _onDivinationChange = null;
 let _onIntimacy = null;
 
 function getCombatThresholdTable(settings) {
-    return buildDcTable(settings);
+    return buildDcTable(settings.mode, combatProfile, settings.custom_dcs);
 }
 
 function renderCombatModeOptions(selectedMode) {
@@ -51,7 +53,7 @@ function renderCombatModeOptions(selectedMode) {
 }
 
 function syncCombatDifficultyControls() {
-    const settings = getCombatSettings();
+    const settings = getChallengeSettings('combat');
     const thresholds = getCombatThresholdTable(settings);
     const commandSelect = document.getElementById('gl-cmd-combat-mode');
     if (commandSelect) commandSelect.value = settings.mode;
@@ -254,7 +256,7 @@ function createPanel() {
             <label class="gl-d-row" style="display:inline-flex;align-items:center;gap:6px;margin:0 6px;" title="Combat difficulty mode">
                 <span style="font-size:11px;opacity:.8;">Difficulty</span>
                 <select class="gl-div-select" id="gl-cmd-combat-mode" style="height:26px;padding:2px 6px;">
-                    ${renderCombatModeOptions(getCombatSettings().mode)}
+                    ${renderCombatModeOptions(getChallengeSettings('combat').mode)}
                 </select>
                 <span class="gl-history-time" id="gl-cmd-combat-thresholds"></span>
             </label>
@@ -281,7 +283,7 @@ function createPanel() {
     document.getElementById('gl-btn-export').addEventListener('click', handleExport);
     document.getElementById('gl-cmd-combat-mode')?.addEventListener('change', async (e) => {
         const value = e.target.value;
-        await setCombatDifficultyMode(value);
+        await setChallengeDifficultyMode('combat', value);
         syncCombatDifficultyControls();
         renderAllSections();
         toastr.info(`Combat difficulty: ${value}`);
@@ -400,7 +402,7 @@ function renderAllSections() {
     const combatModeSelect = container.querySelector('#gl-combat-mode');
     if (combatModeSelect) {
         combatModeSelect.addEventListener('change', async () => {
-            await setCombatDifficultyMode(combatModeSelect.value);
+            await setChallengeDifficultyMode('combat', combatModeSelect.value);
             syncCombatDifficultyControls();
             renderAllSections();
             toastr.info(`Combat difficulty: ${combatModeSelect.value}`);
@@ -414,7 +416,7 @@ function renderAllSections() {
             if (!kind || !Number.isFinite(value)) return;
             const patch = {};
             patch[kind] = value;
-            await setCombatCustomDcs(patch);
+            await setChallengeCustomDcs('combat', patch);
             syncCombatDifficultyControls();
             renderAllSections();
             toastr.info('Custom combat threshold updated');
@@ -1146,11 +1148,11 @@ function renderCollisions(state) {
 }
 
 function renderCombat(state) {
-    const runtime = getCombatRuntime();
-    const settings = getCombatSettings();
+    const runtime = getChallengeRuntime();
+    const settings = getChallengeSettings('combat');
     const thresholds = getCombatThresholdTable(settings);
-    const combat = runtime ? getCombatEntity(state, runtime) : null;
-    const baseline = runtime ? getCombatBaseline(state, runtime, combat) : null;
+    const combat = runtime ? getChallengeEntity(state, runtime) : null;
+    const baseline = runtime && combatProfile ? combatProfile.getBaseline(state, combat) : null;
     const parts = [];
 
     parts.push(`<div class="gl-d-row"><b>Difficulty:</b>

@@ -20,18 +20,7 @@ const LEDGER_BLOCK_PATTERN = /[-—–]{2,3}\s*LEDGER\s*(?:BLOCK)?\s*[-—–]{2
 // Deduction block pattern — stripped from chat display (not parsed, just removed)
 const DEDUCTION_BLOCK_PATTERN = /[-—–]{2,3}\s*DEDUCTION\s*[-—–]{2,3}[\s\S]*?[-—–]{2,3}\s*END\s*DEDUCTION\s*[-—–]{2,3}/i;
 
-const LEDGER_BLOCK_FALLBACKS = [
-    /```ledger\s*\n?([\s\S]*?)```/i,
-    /\[LEDGER\]([\s\S]*?)\[\/LEDGER\]/i,
-    /<!--\s*LEDGER\s*-->([\s\S]*?)<!--\s*END\s*LEDGER\s*-->/i,
-];
-
 const STATE_BLOCK_PATTERN = /[-\u2014\u2013]{2,3}\s*STATE\s*(?:DELTA)?\s*[-\u2014\u2013]{2,3}([\s\S]*?)[-\u2014\u2013]{2,3}\s*END\s*STATE\s*[-\u2014\u2013]{2,3}/i;
-const STATE_BLOCK_FALLBACKS = [
-    /```state\s*\n?([\s\S]*?)```/i,
-    /\[STATE\]([\s\S]*?)\[\/STATE\]/i,
-    /<!--\s*STATE\s*-->([\s\S]*?)<!--\s*END\s*STATE\s*-->/i,
-];
 
 // ─── Compliance Tracking ────────────────────────────────────────────────────────
 
@@ -505,20 +494,10 @@ function parseStateLine(line, lineNum) {
     };
 }
 
-function findBlockCandidate(message, primary, fallbacks, format) {
-    let match = message.match(primary);
-    let drifted = false;
-    if (!match) {
-        for (const pattern of fallbacks) {
-            match = message.match(pattern);
-            if (match) {
-                drifted = true;
-                break;
-            }
-        }
-    }
+function findBlockCandidate(message, primary, format) {
+    const match = message.match(primary);
     if (!match) return null;
-    return { format, match, drifted, index: match.index ?? 0 };
+    return { format, match, drifted: false, index: match.index ?? 0 };
 }
 
 // ─── Block Parser ───────────────────────────────────────────────────────────────
@@ -539,22 +518,21 @@ function findBlockCandidate(message, primary, fallbacks, format) {
  * @param {string} message
  * @returns {ExtractionResult}
  */
-function extractLedgerBlockFromMatch(message, match, drifted) {
+function extractLedgerBlockFromMatch(message, match) {
     const rawContent = match[1].trim();
     let cleanedMessage = message.replace(match[0], '').trim();
     cleanedMessage = cleanedMessage.replace(DEDUCTION_BLOCK_PATTERN, '').trim();
 
-    if (!drifted && match[0]) {
+    // Flag non-canonical fences (em-dashes, two-dash forms) so the reinforcement
+    // layer can nudge the LLM back to ---LEDGER--- / ---END LEDGER---.
+    let drifted = false;
+    if (match[0]) {
         const standard = /^---LEDGER---[\s\S]*---END LEDGER---$/;
         if (!standard.test(match[0].trim())) drifted = true;
     }
 
     if (!rawContent || rawContent === '[]' || rawContent === '(empty)' || rawContent === 'none') {
         return { found: true, format: 'ledger', transactions: [], stateEntries: [], errors: [], drifted, cleanedMessage };
-    }
-
-    if (rawContent.trimStart().startsWith('[') || rawContent.trimStart().startsWith('{')) {
-        return parseLegacyJSON(rawContent, drifted, cleanedMessage);
     }
 
     const lines = rawContent.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
@@ -573,12 +551,13 @@ function extractLedgerBlockFromMatch(message, match, drifted) {
     return { found: true, format: 'ledger', transactions, stateEntries: [], errors, drifted, cleanedMessage };
 }
 
-function extractStateBlockFromMatch(message, match, drifted) {
+function extractStateBlockFromMatch(message, match) {
     const rawContent = match[1].trim();
     let cleanedMessage = message.replace(match[0], '').trim();
     cleanedMessage = cleanedMessage.replace(DEDUCTION_BLOCK_PATTERN, '').trim();
 
-    if (!drifted && match[0]) {
+    let drifted = false;
+    if (match[0]) {
         const standard = /^---STATE---[\s\S]*---END STATE---$/;
         if (!standard.test(match[0].trim())) drifted = true;
     }
@@ -608,8 +587,8 @@ function extractUpdateBlock(message) {
         return { found: false, format: null, transactions: [], stateEntries: [], errors: [], drifted: false, cleanedMessage: message || '' };
     }
 
-    const ledger = findBlockCandidate(message, LEDGER_BLOCK_PATTERN, LEDGER_BLOCK_FALLBACKS, 'ledger');
-    const state = findBlockCandidate(message, STATE_BLOCK_PATTERN, STATE_BLOCK_FALLBACKS, 'state');
+    const ledger = findBlockCandidate(message, LEDGER_BLOCK_PATTERN, 'ledger');
+    const state = findBlockCandidate(message, STATE_BLOCK_PATTERN, 'state');
     const block = (!ledger && !state)
         ? null
         : (!state || (ledger && ledger.index <= state.index) ? ledger : state);
@@ -620,9 +599,9 @@ function extractUpdateBlock(message) {
     }
 
     if (block.format === 'state') {
-        return extractStateBlockFromMatch(message, block.match, block.drifted);
+        return extractStateBlockFromMatch(message, block.match);
     }
-    return extractLedgerBlockFromMatch(message, block.match, block.drifted);
+    return extractLedgerBlockFromMatch(message, block.match);
 }
 
 function extractLedgerBlock(message) {
@@ -630,37 +609,15 @@ function extractLedgerBlock(message) {
         return { found: false, format: null, transactions: [], stateEntries: [], errors: [], drifted: false, cleanedMessage: message || '' };
     }
 
-    const block = findBlockCandidate(message, LEDGER_BLOCK_PATTERN, LEDGER_BLOCK_FALLBACKS, 'ledger');
+    const block = findBlockCandidate(message, LEDGER_BLOCK_PATTERN, 'ledger');
     if (!block) {
         const cleanedMsg = message.replace(DEDUCTION_BLOCK_PATTERN, '').trim();
         return { found: false, format: null, transactions: [], stateEntries: [], errors: [], drifted: false, cleanedMessage: cleanedMsg };
     }
 
-    return extractLedgerBlockFromMatch(message, block.match, block.drifted);
+    return extractLedgerBlockFromMatch(message, block.match);
 }
 
-
-/**
- * Handle legacy JSON format for backwards compatibility.
- */
-function parseLegacyJSON(rawContent, drifted, cleanedMessage) {
-    try {
-        let cleaned = rawContent
-            .replace(/,\s*([}\]])/g, '$1')
-            .replace(/'/g, '"')
-            .replace(/(\{|,)\s*(\w+)\s*:/g, '$1"$2":')
-            .replace(/\/\/.*$/gm, '');
-
-        const parsed = JSON.parse(cleaned);
-        const transactions = Array.isArray(parsed) ? parsed : [parsed];
-        return { found: true, format: 'ledger', transactions, stateEntries: [], errors: [], drifted: true, cleanedMessage };
-    } catch (e) {
-        return {
-            found: true, format: 'ledger', transactions: [], stateEntries: [], drifted: true, cleanedMessage,
-            errors: [{ lineNum: 0, error: `Legacy JSON parse failed: ${e.message}`, raw: rawContent.substring(0, 100) }],
-        };
-    }
-}
 
 // ─── Reinforcement Messages ────────────────────────────────────────────────────
 
@@ -725,11 +682,7 @@ function buildCorrectionInjection(failedLines) {
  */
 function stripLedgerBlock(message) {
     if (!message) return message;
-    let result = message.replace(LEDGER_BLOCK_PATTERN, '');
-    for (const pattern of LEDGER_BLOCK_FALLBACKS) {
-        result = result.replace(pattern, '');
-    }
-    return result.trim();
+    return message.replace(LEDGER_BLOCK_PATTERN, '').trim();
 }
 
 export {
