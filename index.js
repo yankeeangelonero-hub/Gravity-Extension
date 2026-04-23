@@ -2036,7 +2036,7 @@ async function onMessageReceived(messageId) {
                 if (!rel) {
                     queueCorrections([{
                         raw: `[orphan-relational:${cid}]`,
-                        error: `collision:${cid} is tagged ignition_class=relational and ${status.toLowerCase()}, but no relationship:${relId} exists. Either:\n  (A) CREATE the missing relationship:${relId} card="..." orientation="..." nuance="..." last_shift=null\n  (B) If mislabeled, SET collision:${cid} field=ignition_class value=environmental`,
+                        error: `collision:${cid} is tagged ignition_class=relational and ${status.toLowerCase()}, but no relationship:${relId} exists. Either:\n  (A) CREATE the missing relationship:${relId} card="..." orientation="..." nuance="..." distance="fresh|forming|established|deep|core" intensity="cold|simmering|active|electric" last_shift=null\n  (B) If mislabeled, SET collision:${cid} field=ignition_class value=environmental`,
                     }]);
                     continue;
                 }
