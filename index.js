@@ -1230,8 +1230,6 @@ function injectPrompt(mode) {
         } else {
             _setPrompt(`${MODULE_NAME}_challenge`, '');
         }
-        // Clear legacy combat slot if it was previously set
-        _setPrompt(`${MODULE_NAME}_combat`, '');
 
         // Corrections + reinforcement
         let injection = '';
@@ -2049,21 +2047,6 @@ async function onMessageReceived(messageId) {
                 queueCorrections([{
                     raw: `[missing-rel-update:${cid}]`,
                     error: `collision:${cid} resolved but relationship:${relId} was not updated. Commit now:\n  SET relationship:${relId} field=card value="<slug>"\n  SET relationship:${relId} field=orientation value="upright|reversed"\n  SET relationship:${relId} field=nuance value="<updated expression>"\n  SET relationship:${relId} field=distance value="fresh|forming|established|deep|core"\n  SET relationship:${relId} field=intensity value="cold|simmering|active|electric"\n  SET relationship:${relId} field=last_shift value={tx, collision_id: "${cid}", from:{card,orientation,distance,intensity}, to:{card,orientation,distance,intensity}, reason}`,
-                }]);
-            }
-
-            // 5e — missing distance/intensity on active relationships (legacy migration)
-            for (const [relId, rel] of Object.entries(relationships)) {
-                if (!rel || rel.status !== 'active') continue;
-                const missingDistance = typeof rel.distance !== 'string';
-                const missingIntensity = typeof rel.intensity !== 'string';
-                if (!missingDistance && !missingIntensity) continue;
-                const lines = [`relationship:${relId} is missing the new stage fields. Pick current values and SET them now:`];
-                if (missingDistance) lines.push(`  SET relationship:${relId} field=distance value="fresh|forming|established|deep|core"`);
-                if (missingIntensity) lines.push(`  SET relationship:${relId} field=intensity value="cold|simmering|active|electric"`);
-                queueCorrections([{
-                    raw: `[missing-stage:${relId}]`,
-                    error: lines.join('\n'),
                 }]);
             }
 

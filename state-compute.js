@@ -121,150 +121,34 @@ function normalizeArrayFields(state) {
 }
 
 function normalizeCharacterKnowledgeAsymmetry(state) {
-    const STRUCTURAL_KEYS = ['knows', 'unknown', 'hiding', 'misreading'];
     for (const char of Object.values(state.characters || {})) {
         const tier = String(char?.tier || '').toUpperCase();
         if (!['KNOWN', 'TRACKED', 'PRINCIPAL'].includes(tier)) continue;
-        let ka = char.knowledge_asymmetry;
-        if (ka === undefined || ka === null || ka === '') {
+        const ka = char.knowledge_asymmetry;
+        if (!ka || typeof ka !== 'object' || Array.isArray(ka)) {
             char.knowledge_asymmetry = {};
-            ka = char.knowledge_asymmetry;
-        } else if (typeof ka === 'string') {
-            char.knowledge_asymmetry = { legacy: ka };
-            ka = char.knowledge_asymmetry;
-        } else if (typeof ka !== 'object' || Array.isArray(ka)) {
-            char.knowledge_asymmetry = {};
-            ka = char.knowledge_asymmetry;
         }
         if (char.last_seen_at === undefined || char.last_seen_at === null) {
             char.last_seen_at = '';
         }
 
-        for (const bucket of STRUCTURAL_KEYS) {
-            const sub = ka[bucket];
-            if (!sub || typeof sub !== 'object' || Array.isArray(sub)) {
-                delete ka[bucket];
-                continue;
-            }
-            for (const [k, v] of Object.entries(sub)) {
-                if (typeof v !== 'string' || !v.trim()) continue;
-                const flatKey = `${bucket}_${k}`;
-                if (ka[flatKey] === undefined) ka[flatKey] = v.trim();
-            }
-            delete ka[bucket];
-        }
-
-        if (char.reads && typeof char.reads === 'object' && !Array.isArray(char.reads)) {
-            for (const [k, v] of Object.entries(char.reads)) {
-                let str = '';
-                if (typeof v === 'string') {
-                    str = v.trim();
-                } else if (Array.isArray(v) && v.length) {
-                    str = String(v[v.length - 1]).trim();
-                }
-                if (!str) continue;
-                const flatKey = `reads_${k}`;
-                if (ka[flatKey] === undefined) ka[flatKey] = str;
-            }
-        }
-        delete char.reads;
-
-        const flatKeys = Object.keys(ka).filter(k => k !== 'legacy' && typeof ka[k] === 'string');
+        const flatKeys = Object.keys(char.knowledge_asymmetry).filter(k => typeof char.knowledge_asymmetry[k] === 'string');
         if (flatKeys.length > 20) {
-            for (const k of flatKeys.slice(20)) delete ka[k];
+            for (const k of flatKeys.slice(20)) delete char.knowledge_asymmetry[k];
         }
     }
 }
 
-// Phase 2: faction shape is name/members/territory/state/agenda/knowledge_asymmetry.
-// Anything else written by legacy chats must migrate INTO knowledge_asymmetry and then
-// be dropped from the faction entity — `intel_on`, `blindspots`, `false_beliefs`,
-// `comms_latency`, `last_verified_at`, `intel_posture`, `reads`, `stance_toward_pc`,
-// `power`, `momentum`, `leverage`, `vulnerability`, `last_move`, `objective`, `resources`,
-// `relations` are all removed at load time.
-function migrateFactionToPhase2(state) {
-    const LEGACY_FACTION_FIELDS = [
-        'comms_latency', 'last_verified_at', 'intel_posture', 'reads',
-        'stance_toward_pc', 'power', 'momentum', 'leverage', 'vulnerability',
-        'last_move', 'objective', 'resources', 'relations', 'doctrine', 'leadership',
-        'alliances', 'profile',
-    ];
-
+// Faction shape: name/members/territory/state/agenda/knowledge_asymmetry.
+// Ensures KA is a flat string-keyed object and caps at 20 entries (§2.3).
+function normalizeFactionKnowledgeAsymmetry(state) {
     for (const faction of Object.values(state.factions || {})) {
         if (!faction.knowledge_asymmetry || typeof faction.knowledge_asymmetry !== 'object' || Array.isArray(faction.knowledge_asymmetry)) {
             faction.knowledge_asymmetry = {};
         }
-        const ka = faction.knowledge_asymmetry;
-        const setKaKey = (key, value) => {
-            if (typeof value !== 'string' || !value.trim()) return;
-            if (!ka[key]) ka[key] = value.trim();
-        };
-
-        // Migrate intel_on (nested subject → {knows, unknown, hiding, misreading}) into flat keys.
-        if (faction.intel_on && typeof faction.intel_on === 'object' && !Array.isArray(faction.intel_on)) {
-            for (const [subject, si] of Object.entries(faction.intel_on)) {
-                if (typeof si === 'string') {
-                    setKaKey(`knows_${subject}`, si);
-                    continue;
-                }
-                if (!si || typeof si !== 'object') continue;
-                for (const bucket of ['knows', 'unknown', 'hiding', 'misreading']) {
-                    const map = si[bucket];
-                    if (!map || typeof map !== 'object') continue;
-                    for (const [k, v] of Object.entries(map)) {
-                        if (typeof v !== 'string' || !v.trim()) continue;
-                        const flatKey = k === 'legacy' ? `${bucket}_${subject}` : `${bucket}_${subject}_${k}`;
-                        setKaKey(flatKey, v);
-                    }
-                }
-            }
-        }
-        delete faction.intel_on;
-
-        // Migrate false_beliefs (map: subject → belief) into misreading_<subject>.
-        if (faction.false_beliefs && typeof faction.false_beliefs === 'object' && !Array.isArray(faction.false_beliefs)) {
-            for (const [subject, belief] of Object.entries(faction.false_beliefs)) {
-                setKaKey(`misreading_${subject}`, belief);
-            }
-        }
-        delete faction.false_beliefs;
-
-        // Migrate blindspots (string or map) into unknown_<subject> or a rollup legacy key.
-        if (typeof faction.blindspots === 'string') {
-            setKaKey('legacy', faction.blindspots);
-        } else if (faction.blindspots && typeof faction.blindspots === 'object' && !Array.isArray(faction.blindspots)) {
-            for (const [subject, gap] of Object.entries(faction.blindspots)) {
-                setKaKey(`unknown_${subject}`, gap);
-            }
-        }
-        delete faction.blindspots;
-        delete faction.blindspots_legacy;
-
-        // Drop all remaining banned fields.
-        for (const field of LEGACY_FACTION_FIELDS) {
-            delete faction[field];
-        }
-
-        // Bug 1: flatten pre-existing nested buckets in faction.knowledge_asymmetry (same as char path).
-        const STRUCTURAL_KEYS = ['knows', 'unknown', 'hiding', 'misreading'];
-        for (const bucket of STRUCTURAL_KEYS) {
-            const sub = ka[bucket];
-            if (!sub || typeof sub !== 'object' || Array.isArray(sub)) {
-                delete ka[bucket];
-                continue;
-            }
-            for (const [k, v] of Object.entries(sub)) {
-                if (typeof v !== 'string' || !v.trim()) continue;
-                const flatKey = `${bucket}_${k}`;
-                if (ka[flatKey] === undefined) ka[flatKey] = v.trim();
-            }
-            delete ka[bucket];
-        }
-
-        // Cap flat KA at 20 entries (L4 §2.3). Oldest keys win insertion order; drop excess.
-        const kaKeys = Object.keys(ka);
+        const kaKeys = Object.keys(faction.knowledge_asymmetry);
         if (kaKeys.length > 20) {
-            for (const k of kaKeys.slice(20)) delete ka[k];
+            for (const k of kaKeys.slice(20)) delete faction.knowledge_asymmetry[k];
         }
     }
 }
@@ -345,15 +229,9 @@ const CHARACTER_FIELD_ALIASES = {
     want: 'agenda',
 };
 
-// Phase 2 character fields with no canonical replacement — drop unconditionally.
-// `doing` and `cost` duplicate prose context (removed per ledger-scope-reduction).
-// `stance_toward_pc` migrated to knowledge_asymmetry.{knows,hiding,misreading}_pc,
-// a structural change that cannot be expressed as a simple rename.
-const CHARACTER_DEPRECATED_FIELDS = ['doing', 'stance_toward_pc', 'cost'];
-
 /**
  * Normalize aliased field names in a character field-bag (CR d object).
- * Converts: want→agenda. Drops: doing, stance_toward_pc, cost.
+ * Converts: want→agenda.
  */
 function normalizeCharacterFields(fields) {
     if (!fields || typeof fields !== 'object') return fields;
@@ -364,23 +242,16 @@ function normalizeCharacterFields(fields) {
         }
         delete out[alias];
     }
-    for (const dep of CHARACTER_DEPRECATED_FIELDS) {
-        delete out[dep];
-    }
     return out;
 }
 
 /**
  * Normalize a single character field name + value (for S transactions).
- * Returns { field, value } with canonical names applied. Returns field=null
- * to signal a deprecated field whose S should be skipped entirely.
+ * Returns { field, value } with canonical names applied.
  */
 function normalizeCharacterSField(field, value) {
     if (CHARACTER_FIELD_ALIASES[field] !== undefined) {
         return { field: CHARACTER_FIELD_ALIASES[field], value };
-    }
-    if (CHARACTER_DEPRECATED_FIELDS.includes(field)) {
-        return { field: null, value };
     }
     return { field, value };
 }
@@ -458,25 +329,6 @@ function applyTransaction(state, tx) {
     const collection = getCollectionName(tx.e);
     const isSingleton = ['world', 'pc', 'divination'].includes(tx.e);
 
-    // Silently drop legacy transactions on replay of old chats
-    if (tx.e === 'summary' || tx.e === 'chapter') {
-        state.lastTxId = tx.tx;
-        return state;
-    }
-
-    // Silently drop old world.pressure_points array ops (replaced by pressure:<id> entities)
-    if (tx.e === 'world' && (tx.op === 'A' || tx.op === 'R') && tx.d?.f === 'pressure_points') {
-        state.lastTxId = tx.tx;
-        return state;
-    }
-
-    // Phase 2: legacy collision statuses migrate to ACTIVE (SEEDED/SIMMERING/RESOLVING were
-    // removed from the state machine; chats containing them must still replay cleanly).
-    const migrateCollisionStatus = (val) => {
-        if (val === 'SEEDED' || val === 'SIMMERING' || val === 'RESOLVING') return 'ACTIVE';
-        return val;
-    };
-
     switch (tx.op) {
         case 'CR': {
             if (isSingleton) {
@@ -521,7 +373,7 @@ function applyTransaction(state, tx) {
                         data.distance_category = 'SHORT';
                         if (data.distance == null) data.distance = 10;
                     }
-                    data.status = migrateCollisionStatus(data.status) || 'ACTIVE';
+                    if (!data.status) data.status = 'ACTIVE';
                 }
                 state[collection][tx.id] = data;
             }
@@ -535,10 +387,7 @@ function applyTransaction(state, tx) {
             if (!target) { if (tx.tx > 0) console.warn(`[state-compute] TR no-op: entity ${tx.e}:${tx.id} not found (tx ${tx.tx})`); break; }
             if (tx.d.f) {
                 const oldVal = target[tx.d.f];
-                let toVal = tx.d.to;
-                if (tx.e === 'collision' && tx.d.f === 'status') {
-                    toVal = migrateCollisionStatus(toVal);
-                }
+                const toVal = tx.d.to;
                 target[tx.d.f] = toVal;
                 // Phase 2: when collision lands in CRASHED, default outcome_type if absent
                 if (tx.e === 'collision' && tx.d.f === 'status' && toVal === 'CRASHED' && !target.outcome_type) {
@@ -592,12 +441,8 @@ function applyTransaction(state, tx) {
                 else if (tx.e === 'char') sNorm = normalizeCharacterSField(tx.d.f, tx.d.v);
                 else sNorm = { field: tx.d.f, value: tx.d.v };
                 const { field: sField, value: sVal } = sNorm;
-                if (!sField) break; // deprecated character field — drop the S
                 const oldVal = target[sField];
                 let newVal = sVal;
-                if (tx.e === 'collision' && sField === 'status') {
-                    newVal = migrateCollisionStatus(newVal);
-                }
                 // Bug 4(b): coerce null writes to known map-backed fields to empty object.
                 // null on map-backed fields is interpreted as "reset to empty map" — distinguishing explicit-clear from never-had-it is not supported
                 const MAP_BACKED_FIELDS = ['knowledge_asymmetry', 'intimate_history', 'wounds'];
@@ -673,29 +518,12 @@ function applyTransaction(state, tx) {
         case 'MS': {
             const target = isSingleton ? state[collection] : state[collection]?.[tx.id];
             if (target && tx.d.f) {
-                // Reject legacy reads writes by routing into KA as flat keys.
-                if (tx.d.f === 'reads' && tx.e === 'char') {
-                    if (!target.knowledge_asymmetry || typeof target.knowledge_asymmetry !== 'object' || Array.isArray(target.knowledge_asymmetry)) {
-                        target.knowledge_asymmetry = {};
-                    }
-                    const flatKey = `reads_${String(tx.d.k || '').replace(/\./g, '_')}`;
-                    const oldVal = target.knowledge_asymmetry[flatKey];
-                    target.knowledge_asymmetry[flatKey] = tx.d.v;
-                    if (oldVal !== tx.d.v) {
-                        recordHistory(state, tx.e, tx.id, `knowledge_asymmetry.${flatKey}`, oldVal, tx.d.v, tx);
-                    }
-                    break;
-                }
                 const dotted = tx.d.k && tx.d.k.includes('.');
                 let fieldVal = target[tx.d.f];
                 // Bug 4(a): null is typeof 'object' but can't be subscripted — re-initialize to {}.
                 if (fieldVal === null) { target[tx.d.f] = {}; fieldVal = target[tx.d.f]; }
                 if (typeof fieldVal !== 'object' || Array.isArray(fieldVal)) {
-                    if (dotted && typeof fieldVal === 'string' && fieldVal.trim()) {
-                        target[tx.d.f] = { legacy: fieldVal.trim() };
-                    } else {
-                        target[tx.d.f] = {};
-                    }
+                    target[tx.d.f] = {};
                 }
                 // Flatten dotted KA writes (e.g. knows.weapon → knows_weapon) into the top-level KA map.
                 if (dotted && tx.d.f === 'knowledge_asymmetry') {
@@ -710,9 +538,7 @@ function applyTransaction(state, tx) {
                     let obj = target[tx.d.f];
                     for (let i = 0; i < keyParts.length - 1; i++) {
                         const k = keyParts[i];
-                        if (typeof obj[k] === 'string' && obj[k].trim()) {
-                            obj[k] = { legacy: obj[k].trim() };
-                        } else if (typeof obj[k] !== 'object' || Array.isArray(obj[k])) {
+                        if (typeof obj[k] !== 'object' || obj[k] === null || Array.isArray(obj[k])) {
                             obj[k] = {};
                         }
                         obj = obj[k];
@@ -846,7 +672,7 @@ function computeState(snapshot, transactions) {
 
     normalizeArrayFields(state);
     normalizeCharacterKnowledgeAsymmetry(state);
-    migrateFactionToPhase2(state);
+    normalizeFactionKnowledgeAsymmetry(state);
 
     return state;
 }

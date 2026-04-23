@@ -213,16 +213,12 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
             if (typeof ka === 'object' && !Array.isArray(ka)) {
                 const kaLines = [];
                 for (const [k, v] of Object.entries(ka)) {
-                    if (k === 'legacy') continue;
                     if (typeof v === 'string' && v) kaLines.push(`      ${k}: ${v}`);
                 }
-                if (ka.legacy) kaLines.push(`      [legacy] ${ka.legacy}`);
                 if (kaLines.length) {
                     lines.push('    Knowledge asymmetry:');
                     lines.push(...kaLines);
                 }
-            } else if (typeof ka === 'string' && ka) {
-                lines.push(`    Knowledge asymmetry: ${normalizeText(ka)}`);
             }
         }
         if (char.agenda) lines.push(`    Agenda: ${normalizeText(char.agenda)}`);
@@ -492,10 +488,8 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
                 const ka = faction.knowledge_asymmetry;
                 if (ka && typeof ka === 'object' && !Array.isArray(ka)) {
                     for (const [k, v] of Object.entries(ka)) {
-                        if (k === 'legacy') continue;
                         if (typeof v === 'string' && v) lines.push(`    ${k}: ${v}`);
                     }
-                    if (ka.legacy) lines.push(`    [legacy] ${ka.legacy}`);
                 }
             }
         };
@@ -651,10 +645,8 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
             if (ka && typeof ka === 'object' && !Array.isArray(ka)) {
                 const kaLines = [];
                 for (const [k, v] of Object.entries(ka)) {
-                    if (k === 'legacy') continue;
                     if (typeof v === 'string' && v) kaLines.push(`      ${k}: ${v}`);
                 }
-                if (ka.legacy) kaLines.push(`      [legacy] ${ka.legacy}`);
                 if (kaLines.length) {
                     lines.push('    Knowledge asymmetry:');
                     lines.push(...kaLines);
@@ -706,7 +698,6 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
             const pcEntries = [];
             for (const [k, v] of Object.entries(ka)) {
                 if (typeof v !== 'string' || !v) continue;
-                if (k === 'legacy') continue;
                 if (k.endsWith('_pc') || k.includes('_pc_') || k.toLowerCase().includes(state.pc.name.toLowerCase())) {
                     pcEntries.push(`${k}: ${v}`);
                 }
@@ -870,7 +861,7 @@ If a turn gets structurally complicated, switch to a full ---LEDGER--- block ins
 DISCIPLINE:
   Only write what changed materially.
   Keep knowledge_asymmetry current on TRACKED/PRINCIPAL characters when they are active or scene-relevant. knowledge_asymmetry is a FLAT map of semantic keys — pick a short, meaningful key per fact (e.g., weapon_concealed, lying_about_alibi, misreads_pc_as_friendly, owner_already_warned). Add or remove individual keys; never overwrite the whole field.
-  Use misreads_* keys for false beliefs (e.g., misreads_pilot_as_unconfirmed). misreading_* is a legacy prefix; both are accepted by the engine but misreads_* is canonical.
+  Use misreads_* keys for false beliefs (e.g., misreads_pilot_as_unconfirmed).
   KNOWN characters inherit knowledge from their faction's knowledge_asymmetry. Only set individual knowledge_asymmetry keys on a KNOWN character when they learn something their faction does not know yet.
   If the protagonist also exists as char:<pc-id>, treat pc and char:<pc-id> as separate surfaces: pc carries immediate scene/body state, while char:<pc-id> carries the social/knowledge dossier. Updating pc.* does not update the mirrored char dossier.
   Do not globally synchronize off-screen knowledge. Refresh a character's knowledge_asymmetry when they re-enter scene or receive a plausible report, signal, witness account, or sensor update.

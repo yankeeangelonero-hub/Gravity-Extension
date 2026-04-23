@@ -47,8 +47,6 @@ import {
 
 const CHALLENGE_RUNTIME_KEY = 'gravity_challenge_runtime';
 const CHALLENGE_SETTINGS_KEY = 'gravity_challenge_settings';
-const LEGACY_COMBAT_RUNTIME_KEY = 'gravity_combat_runtime';
-const LEGACY_COMBAT_SETTINGS_KEY = 'gravity_combat_settings';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -60,24 +58,10 @@ function getContext() {
 
 function getChallengeSettings(kind) {
     const { chatMetadata } = getContext();
-
-    // Try namespaced key first
     const namespaced = chatMetadata?.[CHALLENGE_SETTINGS_KEY];
     if (namespaced && kind && namespaced[kind]) {
         return clone(namespaced[kind]);
     }
-
-    // Legacy combat settings migration
-    if (kind === 'combat') {
-        const legacy = chatMetadata?.[LEGACY_COMBAT_SETTINGS_KEY];
-        if (legacy) {
-            return {
-                mode: legacy.mode || 'Cinematic',
-                custom_dcs: legacy.custom_dcs || {},
-            };
-        }
-    }
-
     return { mode: null, custom_dcs: {} };
 }
 
@@ -130,15 +114,6 @@ async function setChallengeCustomDcs(kind, customDcs) {
 
 function normalizeRuntime(runtime) {
     if (!runtime || typeof runtime !== 'object') return null;
-    // Phase 2 rename migration: runtime.exchange → runtime.clash
-    if (runtime && runtime.exchange !== undefined && runtime.clash === undefined) {
-        runtime.clash = runtime.exchange;
-        delete runtime.exchange;
-    }
-    if (runtime?.last_resolution && runtime.last_resolution.exchange !== undefined && runtime.last_resolution.clash === undefined) {
-        runtime.last_resolution.clash = runtime.last_resolution.exchange;
-        delete runtime.last_resolution.exchange;
-    }
     const normalized = clone(runtime) || {};
     if (typeof normalized.locked !== 'boolean') {
         normalized.locked = normalized.phase !== 'cleanup_grace';
@@ -168,15 +143,8 @@ function normalizeRuntime(runtime) {
 
 function getChallengeRuntime() {
     const { chatMetadata } = getContext();
-
-    // Try canonical key first
     const canonical = chatMetadata?.[CHALLENGE_RUNTIME_KEY];
     if (canonical) return normalizeRuntime(canonical);
-
-    // Legacy combat runtime migration
-    const legacy = chatMetadata?.[LEGACY_COMBAT_RUNTIME_KEY];
-    if (legacy) return normalizeRuntime(legacy);
-
     return null;
 }
 
@@ -185,13 +153,8 @@ async function setChallengeRuntime(runtime) {
     if (!chatMetadata) return;
     if (runtime) {
         chatMetadata[CHALLENGE_RUNTIME_KEY] = runtime;
-        // Clean up legacy key if migrating
-        if (chatMetadata[LEGACY_COMBAT_RUNTIME_KEY]) {
-            delete chatMetadata[LEGACY_COMBAT_RUNTIME_KEY];
-        }
     } else {
         delete chatMetadata[CHALLENGE_RUNTIME_KEY];
-        delete chatMetadata[LEGACY_COMBAT_RUNTIME_KEY];
     }
     if (saveMetadata) await saveMetadata();
 }

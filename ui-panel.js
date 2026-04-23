@@ -128,8 +128,7 @@ function toObj(v) {
     return {};
 }
 
-// Reads live as an append log (array of entries). Return the latest entry as a string,
-// falling back to string form for legacy data.
+// Reads live as an append log (array of entries). Return the latest entry as a string.
 function latestRead(v) {
     if (Array.isArray(v)) return v.length ? String(v[v.length - 1]) : '';
     return v ? String(v) : '';
@@ -782,7 +781,6 @@ function renderPCDossier(state) {
         const allEntries = [];
         for (const [k, v] of Object.entries(ka)) {
             if (typeof v !== 'string' || !v) continue;
-            if (k === 'legacy') continue;
             allEntries.push({ k, v });
             if (k.endsWith('_pc') || k.includes('_pc_') || (pcNameLowerKA && k.toLowerCase().includes(pcNameLowerKA))) {
                 pcEntries.push({ k, v });
@@ -859,54 +857,40 @@ function renderCharDossier(char, state) {
     }
 
     if (char.agenda) parts.push(`<div class="gl-d-row gl-agenda"><b>Agenda:</b> ${esc(char.agenda)}</div>`);
-    if (char.knowledge_asymmetry) {
-        const ka = char.knowledge_asymmetry;
-        if (typeof ka === 'object' && !Array.isArray(ka)) {
-            const kaItems = [];
-            for (const [k, v] of Object.entries(ka)) {
-                const m = /^(knows|unknown|hiding|misreading)_(.+)$/.exec(k);
-                if (m) {
-                    const label = m[1].charAt(0).toUpperCase() + m[1].slice(1);
-                    const subject = m[2].replace(/_/g, ' ');
-                    kaItems.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(subject)}:</b> ${esc(String(v))}</li>`);
-                } else {
-                    // Semantic flat keys (e.g. weapon_concealed, archangel_status) — render under "Other"
-                    const label = k.replace(/_/g, ' ');
-                    kaItems.push(`<li><span class="gl-ka-bucket">Other</span> <b>${esc(label)}:</b> ${esc(String(v))}</li>`);
-                }
+    const ka = char.knowledge_asymmetry;
+    if (ka && typeof ka === 'object' && !Array.isArray(ka)) {
+        const kaItems = [];
+        for (const [k, v] of Object.entries(ka)) {
+            const m = /^(knows|unknown|hiding|misreading)_(.+)$/.exec(k);
+            if (m) {
+                const label = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+                const subject = m[2].replace(/_/g, ' ');
+                kaItems.push(`<li><span class="gl-ka-bucket">${esc(label)}</span> <b>${esc(subject)}:</b> ${esc(String(v))}</li>`);
+            } else {
+                // Semantic flat keys (e.g. weapon_concealed, archangel_status) — render under "Other"
+                const label = k.replace(/_/g, ' ');
+                kaItems.push(`<li><span class="gl-ka-bucket">Other</span> <b>${esc(label)}:</b> ${esc(String(v))}</li>`);
             }
-            if (kaItems.length) {
-                parts.push(`<div class="gl-d-row"><b>Knowledge:</b><ul class="gl-d-kalist">${kaItems.join('')}</ul></div>`);
-            }
-        } else if (typeof ka === 'string' && ka) {
-            parts.push(`<div class="gl-d-row"><b>Knowledge:</b> ${esc(ka)}</div>`);
+        }
+        if (kaItems.length) {
+            parts.push(`<div class="gl-d-row"><b>Knowledge:</b><ul class="gl-d-kalist">${kaItems.join('')}</ul></div>`);
         }
     }
-    // Reads PC as — sourced from knowledge_asymmetry (authoritative); falls back to relationships.pc for legacy data
+    // Reads PC as — sourced from knowledge_asymmetry keys. Checks misreads_pc_as_<stance>
+    // first (stance encoded in the key), then falls back to knows_pc_<fact>.
     let stanceDisplay = null;
     if (char.knowledge_asymmetry && typeof char.knowledge_asymmetry === 'object') {
         const kaKeys = Object.keys(char.knowledge_asymmetry);
-        // "Reads PC as" extraction:
-        //   misreads_pc_as_<stance>  → uses the suffix (stance lives in the key name)
-        //   misreading_pc             → uses the value (legacy freeform entry)
-        //   knows_pc_<fact>           → uses the suffix
-        // If all miss, falls back to legacy char.relationships.pc.
         const misreadsKey = kaKeys.find(k => /^misreads_pc_as_(.+)$/.test(k));
         if (misreadsKey) {
             stanceDisplay = misreadsKey.replace(/^misreads_pc_as_/, '').replace(/_/g, ' ');
         } else {
-            const misreadingKey = kaKeys.find(k => k === 'misreading_pc');
-            if (misreadingKey) {
-                stanceDisplay = String(char.knowledge_asymmetry[misreadingKey]);
-            } else {
-                const knowsPcKey = kaKeys.find(k => k.startsWith('knows_pc_'));
-                if (knowsPcKey) {
-                    stanceDisplay = knowsPcKey.replace(/^knows_pc_/, '').replace(/_/g, ' ') || String(char.knowledge_asymmetry[knowsPcKey]);
-                }
+            const knowsPcKey = kaKeys.find(k => k.startsWith('knows_pc_'));
+            if (knowsPcKey) {
+                stanceDisplay = knowsPcKey.replace(/^knows_pc_/, '').replace(/_/g, ' ') || String(char.knowledge_asymmetry[knowsPcKey]);
             }
         }
     }
-    if (!stanceDisplay) stanceDisplay = char.relationships?.pc || null; // legacy fallback
     if (stanceDisplay) parts.push(`<div class="gl-d-row"><b>Reads PC as:</b> ${esc(stanceDisplay)}</div>`);
     const charWounds = toObj(char.wounds);
     if (Object.keys(charWounds).length) {
@@ -935,10 +919,8 @@ function renderCharDossier(char, state) {
             parts.push(`<div class="gl-constraint-title"><b>${esc(c.name)}</b> ${badge(c.integrity)}${integrityDesc ? ` <span class="gl-integrity-desc">— ${esc(integrityDesc)}</span>` : ''}</div>`);
 
             if (c.profile) {
-                // New: single profile paragraph
                 parts.push(`<div class="gl-d-detail">${esc(c.profile)}</div>`);
             } else {
-                // Legacy: separate fields
                 if (c.prevents) parts.push(`<div class="gl-d-detail"><b>Prevents:</b> ${esc(c.prevents)}</div>`);
                 if (c.threshold) parts.push(`<div class="gl-d-detail"><b>Threshold:</b> ${esc(c.threshold)}</div>`);
                 if (c.replacement) parts.push(`<div class="gl-d-detail"><b>Replacement (if breached):</b> ${esc(c.replacement)}${c.replacement_type ? ` <i>(${esc(c.replacement_type)})</i>` : ''}</div>`);
