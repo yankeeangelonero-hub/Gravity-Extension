@@ -51,6 +51,8 @@ const MAJOR_ARCANA = new Set([
 ]);
 
 const RELATIONSHIP_ORIENTATIONS = new Set(['upright', 'reversed']);
+const RELATIONSHIP_DISTANCES = new Set(['fresh', 'forming', 'established', 'deep', 'core']);
+const RELATIONSHIP_INTENSITIES = new Set(['cold', 'simmering', 'active', 'electric']);
 const FACTION_TIERS_SET = new Set(['KNOWN', 'TRACKED', 'PRINCIPAL']);
 const CHARACTER_TAGS_MAX = 5;
 const CHARACTER_TAG_MAXLEN = 40;
@@ -407,7 +409,12 @@ function isValidCardObj(obj) {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
     const card = typeof obj.card === 'string' ? obj.card.toLowerCase() : '';
     const orientation = typeof obj.orientation === 'string' ? obj.orientation.toLowerCase() : '';
-    return MAJOR_ARCANA.has(card) && RELATIONSHIP_ORIENTATIONS.has(orientation);
+    const distance = typeof obj.distance === 'string' ? obj.distance.toLowerCase() : '';
+    const intensity = typeof obj.intensity === 'string' ? obj.intensity.toLowerCase() : '';
+    return MAJOR_ARCANA.has(card)
+        && RELATIONSHIP_ORIENTATIONS.has(orientation)
+        && RELATIONSHIP_DISTANCES.has(distance)
+        && RELATIONSHIP_INTENSITIES.has(intensity);
 }
 
 function isValidLastShift(v) {
@@ -451,11 +458,19 @@ function validateRelationshipTx(tx) {
         if (typeof d.nuance !== 'string' || d.nuance.trim() === '') {
             violations.push({ field: 'nuance', message: 'nuance must be a non-empty string', fix: 'Describe the specific expression of the archetype for this pair.' });
         }
+        const distance = typeof d.distance === 'string' ? d.distance.toLowerCase() : d.distance;
+        const intensity = typeof d.intensity === 'string' ? d.intensity.toLowerCase() : d.intensity;
+        if (!RELATIONSHIP_DISTANCES.has(distance)) {
+            violations.push({ field: 'distance', message: `invalid distance "${d.distance}"`, fix: 'Must be one of: fresh, forming, established, deep, core (lowercase).' });
+        }
+        if (!RELATIONSHIP_INTENSITIES.has(intensity)) {
+            violations.push({ field: 'intensity', message: `invalid intensity "${d.intensity}"`, fix: 'Must be one of: cold, simmering, active, electric (lowercase).' });
+        }
         if (d.status !== undefined) {
             violations.push({ field: 'status', message: 'relationship.status is engine-owned — omit on CR', fix: 'Remove the status field. Status defaults to "active" at birth.' });
         }
         if (d.last_shift !== undefined && !isValidLastShift(d.last_shift)) {
-            violations.push({ field: 'last_shift', message: 'last_shift must be null or {tx, collision_id, from: {card, orientation}, to: {card, orientation}, reason}', fix: 'Use null at birth.' });
+            violations.push({ field: 'last_shift', message: 'last_shift must be null or {tx, collision_id, from: {card, orientation, distance, intensity}, to: {card, orientation, distance, intensity}, reason}', fix: 'Use null at birth.' });
         }
     } else if (tx.op === 'S') {
         const f = tx.d?.f;
@@ -477,6 +492,18 @@ function validateRelationshipTx(tx) {
                 violations.push({ field: 'nuance', message: `nuance must be a non-empty string, got ${JSON.stringify(v)}`, fix: 'Nuance must be a non-empty prose string.' });
             }
         }
+        if (f === 'distance') {
+            const distance = typeof v === 'string' ? v.toLowerCase() : v;
+            if (!RELATIONSHIP_DISTANCES.has(distance)) {
+                violations.push({ field: 'distance', message: `invalid distance "${v}"`, fix: 'Must be one of: fresh, forming, established, deep, core (lowercase).' });
+            }
+        }
+        if (f === 'intensity') {
+            const intensity = typeof v === 'string' ? v.toLowerCase() : v;
+            if (!RELATIONSHIP_INTENSITIES.has(intensity)) {
+                violations.push({ field: 'intensity', message: `invalid intensity "${v}"`, fix: 'Must be one of: cold, simmering, active, electric (lowercase).' });
+            }
+        }
         if (f === 'status') {
             violations.push({ field: 'status', message: 'relationship.status is engine-owned and cannot be SET manually', fix: 'Status follows tier automatically.' });
         }
@@ -487,7 +514,7 @@ function validateRelationshipTx(tx) {
                 if (v && typeof v.reason === 'string' && v.reason.length > LAST_SHIFT_REASON_MAXLEN) {
                     violations.push({ field: 'last_shift', message: `last_shift.reason is too long (${v.reason.length} chars; max ${LAST_SHIFT_REASON_MAXLEN})`, fix: `Keep reason ≤${LAST_SHIFT_REASON_MAXLEN} chars.` });
                 } else if (!isValidLastShift(v)) {
-                    violations.push({ field: 'last_shift', message: 'last_shift must be {tx, collision_id, from: {card, orientation}, to: {card, orientation}, reason}', fix: 'All five fields required. from/to must be {card, orientation} objects.' });
+                    violations.push({ field: 'last_shift', message: 'last_shift must be {tx, collision_id, from: {card, orientation, distance, intensity}, to: {card, orientation, distance, intensity}, reason}', fix: 'All five fields required. from/to must be {card, orientation, distance, intensity} objects.' });
                 }
             }
         }
