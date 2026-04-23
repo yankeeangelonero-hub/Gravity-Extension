@@ -65,6 +65,14 @@ function formatPowerTag(entity) {
     return hasCurrent ? ` [power:${entity.power}]` : ` [base:${entity.power_base}]`;
 }
 
+function formatRelationshipStage(rel) {
+    if (!rel) return '';
+    const d = rel.distance;
+    const i = rel.intensity;
+    if (typeof d !== 'string' || typeof i !== 'string') return '';
+    return ` · ${d} / ${i}`;
+}
+
 /**
  * Render the full state view into the always-on lorebook entry.
  * @param {string} bookName
@@ -197,7 +205,7 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
         const rel = state.relationships?.[`pc-${id}`];
         if (rel && rel.status === 'active') {
             const orientLabel = rel.orientation === 'reversed' ? 'reversed' : 'upright';
-            lines.push(`    ♥ Bond (PC): ${formatCardName(rel.card)} · ${orientLabel}`);
+            lines.push(`    ♥ Bond (PC): ${formatCardName(rel.card)} · ${orientLabel}${formatRelationshipStage(rel)}`);
             if (rel.nuance) lines.push(`      "${rel.nuance}"`);
         }
         const ka = char.knowledge_asymmetry;
@@ -303,7 +311,7 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
     for (const [id, char] of offStagePrincipal) {
         const rel = state.relationships?.[`pc-${id}`];
         const cardFrag = rel && rel.status === 'active'
-            ? ` · Bond (PC): ${formatCardName(rel.card)} · ${rel.orientation}`
+            ? ` · Bond (PC): ${formatCardName(rel.card)} · ${rel.orientation}${formatRelationshipStage(rel)}`
             : '';
         const loc = char.location ? ` — last seen ${char.location}` : '';
         lines.push(`PRINCIPAL (off-stage): ${char.name || id}${loc}${cardFrag} → id: ${id}`);
@@ -476,7 +484,7 @@ function formatStateView(state, modeOrOpts = 'full', includeArchiveArg = true) {
             const rel = state.relationships?.[`pc-${id}`];
             if (rel && rel.status === 'active') {
                 const orientLabel = rel.orientation === 'reversed' ? 'reversed' : 'upright';
-                lines.push(`    ♥ Bond (PC): ${formatCardName(rel.card)} · ${orientLabel}`);
+                lines.push(`    ♥ Bond (PC): ${formatCardName(rel.card)} · ${orientLabel}${formatRelationshipStage(rel)}`);
                 if (rel.nuance) lines.push(`      "${rel.nuance}"`);
             }
             // Lite mode: emit compact KA so the model can use faction.knowledge_asymmetry on regular turns
