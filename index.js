@@ -2082,7 +2082,7 @@ async function onMessageReceived(messageId) {
         console.error(`${LOG_PREFIX} Post-commit pipeline error (panel will still update):`, err);
         try { injectPrompt(); } catch (_) { /* best-effort */ }
     } finally {
-        updatePanel(_currentState, _turnCounter, committedTxns.map(tx => tx.tx));
+        updatePanel(_currentState, _turnCounter, committedTxns);
     }
 }
 

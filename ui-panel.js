@@ -319,6 +319,7 @@ let _prevState = null;
 let _lastTurn = 0;
 let _changedKeys = new Set();
 let _staleWarning = false;
+let _lastCommitTxns = [];
 let _lastCommitTxIds = [];
 
 function renderAllSections() {
@@ -470,7 +471,7 @@ function renderAllSections() {
 
 // ─── Update Panel ───────────────────────────────────────────────────────────────
 
-function updatePanel(state, turn, committedTxIds) {
+function updatePanel(state, turn, committedTxns) {
     if (!document.getElementById(PANEL_ID)) createPanel();
 
     const statusEl = document.getElementById('gl-status');
@@ -493,7 +494,10 @@ function updatePanel(state, turn, committedTxIds) {
     _prevState = _lastState ? structuredClone(_lastState) : null;
     _lastState = state;
     _lastTurn = turn;
-    if (committedTxIds) _lastCommitTxIds = committedTxIds;
+    if (committedTxns && committedTxns.length) {
+        _lastCommitTxns = committedTxns;
+        _lastCommitTxIds = committedTxns.map(t => t.tx);
+    }
 
     if (statusEl) statusEl.textContent = _staleWarning ? 'stale — eval recommended' : 'active';
     if (turnEl) turnEl.textContent = `Turn ${turn}`;
