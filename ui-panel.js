@@ -267,9 +267,10 @@ function createPanel() {
             <button class="gl-cmd-btn gl-cancel-btn" id="gl-setup-cancel">Cancel</button>
         </div>
         <div class="gl-popup-body" id="gl-all-sections"></div>
-        <div class="gl-footer">
+        <div class="gl-footer" style="flex-wrap:wrap;">
             <span id="gl-turn">Turn 0</span>
             <span id="gl-tx">TX 0</span>
+            <div id="gl-debug-summary" style="display:none;width:100%;font-size:10px;opacity:0.6;padding-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
         </div>
     `;
     document.body.appendChild(panel);
@@ -471,6 +472,40 @@ function renderAllSections() {
 
 // ─── Update Panel ───────────────────────────────────────────────────────────────
 
+function renderDebugSummary() {
+    const el = document.getElementById('gl-debug-summary');
+    if (!el) return;
+    if (!_lastCommitTxns || _lastCommitTxns.length === 0) {
+        el.style.display = 'none';
+        return;
+    }
+
+    // TX range
+    const first = _lastCommitTxns[0].tx;
+    const last  = _lastCommitTxns[_lastCommitTxns.length - 1].tx;
+    const txRange = first === last ? `TX ${first}` : `TX ${first}–${last}`;
+
+    // Op counts sorted highest-frequency first
+    const opCounts = {};
+    for (const tx of _lastCommitTxns) opCounts[tx.op] = (opCounts[tx.op] || 0) + 1;
+    const opStr = Object.entries(opCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([op, n]) => `${op}\xd7${n}`)
+        .join(' \xb7 ');
+
+    // Unique non-empty entity IDs, max 5
+    const ids = [...new Set(_lastCommitTxns.map(tx => tx.id).filter(Boolean))];
+    const MAX_IDS = 5;
+    const idsStr = ids.length === 0
+        ? ''
+        : ' — ' + (ids.length > MAX_IDS
+            ? ids.slice(0, MAX_IDS).join(' \xb7 ') + ' …'
+            : ids.join(' \xb7 '));
+
+    el.textContent = `Last turn: ${txRange} \xb7 ${opStr}${idsStr}`;
+    el.style.display = '';
+}
+
 function updatePanel(state, turn, committedTxns) {
     if (!document.getElementById(PANEL_ID)) createPanel();
 
@@ -502,6 +537,7 @@ function updatePanel(state, turn, committedTxns) {
     if (statusEl) statusEl.textContent = _staleWarning ? 'stale — eval recommended' : 'active';
     if (turnEl) turnEl.textContent = `Turn ${turn}`;
     if (txEl) txEl.textContent = `TX ${state.lastTxId ?? 0}`;
+    renderDebugSummary();
 
     renderAllSections();
 
