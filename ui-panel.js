@@ -517,6 +517,8 @@ function updatePanel(state, turn, committedTxns) {
         if (statusEl) statusEl.textContent = 'no chat';
         const container = document.getElementById('gl-all-sections');
         if (container) container.innerHTML = '<div class="gl-empty">No active chat</div>';
+        _lastCommitTxns = [];
+        _lastCommitTxIds = [];
         return;
     }
 
