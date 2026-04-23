@@ -458,13 +458,20 @@ function validateRelationshipTx(tx) {
         if (typeof d.nuance !== 'string' || d.nuance.trim() === '') {
             violations.push({ field: 'nuance', message: 'nuance must be a non-empty string', fix: 'Describe the specific expression of the archetype for this pair.' });
         }
-        const distance = typeof d.distance === 'string' ? d.distance.toLowerCase() : d.distance;
-        const intensity = typeof d.intensity === 'string' ? d.intensity.toLowerCase() : d.intensity;
-        if (!RELATIONSHIP_DISTANCES.has(distance)) {
-            violations.push({ field: 'distance', message: `invalid distance "${d.distance}"`, fix: 'Must be one of: fresh, forming, established, deep, core (lowercase).' });
+        // distance/intensity are OPTIONAL on CR — state-compute defaults them to
+        // fresh/simmering for new relationships. Only reject if the LLM supplied
+        // a value that isn't in the allowed vocabulary.
+        if (d.distance !== undefined) {
+            const distance = typeof d.distance === 'string' ? d.distance.toLowerCase() : d.distance;
+            if (!RELATIONSHIP_DISTANCES.has(distance)) {
+                violations.push({ field: 'distance', message: `invalid distance "${d.distance}"`, fix: 'Must be one of: fresh, forming, established, deep, core (lowercase). Omit to default to "fresh".' });
+            }
         }
-        if (!RELATIONSHIP_INTENSITIES.has(intensity)) {
-            violations.push({ field: 'intensity', message: `invalid intensity "${d.intensity}"`, fix: 'Must be one of: cold, simmering, active, electric (lowercase).' });
+        if (d.intensity !== undefined) {
+            const intensity = typeof d.intensity === 'string' ? d.intensity.toLowerCase() : d.intensity;
+            if (!RELATIONSHIP_INTENSITIES.has(intensity)) {
+                violations.push({ field: 'intensity', message: `invalid intensity "${d.intensity}"`, fix: 'Must be one of: cold, simmering, active, electric (lowercase). Omit to default to "simmering".' });
+            }
         }
         if (d.status !== undefined) {
             violations.push({ field: 'status', message: 'relationship.status is engine-owned — omit on CR', fix: 'Remove the status field. Status defaults to "active" at birth.' });
@@ -566,7 +573,7 @@ function validateFactionTierTx(tx) {
     return violations;
 }
 
-function validateSceneCastEntries(refs, state) {
+function validateSceneCastEntries(refs, state, pendingCreations = null) {
     const violations = [];
     for (const ref of refs) {
         if (typeof ref !== 'string' || !ref.includes(':')) {
@@ -585,6 +592,9 @@ function validateSceneCastEntries(refs, state) {
             continue;
         }
         if (!exists) {
+            // Forward-ref tolerance: allow refs to entities CR'd later in the same block.
+            const pending = type === 'char' ? pendingCreations?.char : type === 'faction' ? pendingCreations?.faction : null;
+            if (pending && pending.has(id)) continue;
             violations.push({ field: 'scene_cast', message: `cast ref "${ref}" references a non-existent entity`, fix: `Create ${type}:${id} first.` });
         }
     }
@@ -597,7 +607,7 @@ function validateSceneCastEntries(refs, state) {
  * @param {Object|null} state - Current computed state (may be null for stateless checks)
  * @returns {{ valid: boolean, violations: Array<{field: string, message: string, fix: string}> }}
  */
-function validateTransaction(tx, state) {
+function validateTransaction(tx, state, pendingCreations = null) {
     const violations = [];
 
     if (!tx || typeof tx !== 'object' || Array.isArray(tx)) {
@@ -622,7 +632,7 @@ function validateTransaction(tx, state) {
         let refs = null;
         if (tx.op === 'S' && tx.d?.f === 'scene_cast' && Array.isArray(tx.d.v)) refs = tx.d.v;
         if (tx.op === 'A' && tx.d?.f === 'scene_cast') refs = [tx.d.v];
-        if (refs) violations.push(...validateSceneCastEntries(refs, state));
+        if (refs) violations.push(...validateSceneCastEntries(refs, state, pendingCreations));
         if (tx.op === 'S' && tx.d?.f === 'current_place_id') {
             const v = tx.d.v;
             if (v !== null && v !== '' && v !== undefined) {
@@ -646,6 +656,8 @@ function validateTransaction(tx, state) {
         }
     }
     // CR relationship: target must exist and be TRACKED+
+    // Forward-ref tolerance: if target is CR'd later in the same block,
+    // check the pending CR's tier instead of demanding shadow presence.
     if (state && tx.e === 'relationship' && tx.op === 'CR') {
         const id = tx.id || '';
         if (id.startsWith('pc-') && id.length > 3) {
@@ -653,13 +665,18 @@ function validateTransaction(tx, state) {
             const char = state.characters?.[otherId];
             const faction = state.factions?.[otherId];
             const target = char || faction;
-            if (!target) {
+            let tier = null;
+            if (target) {
+                tier = String(target.tier || '').toUpperCase();
+            } else if (pendingCreations?.char?.has(otherId)) {
+                tier = String(pendingCreations.char.get(otherId) || '').toUpperCase();
+            } else if (pendingCreations?.faction?.has(otherId)) {
+                tier = String(pendingCreations.faction.get(otherId) || '').toUpperCase();
+            }
+            if (tier === null) {
                 violations.push({ field: 'id', message: `relationship target "${otherId}" does not exist as char or faction`, fix: `Create the char or faction at TRACKED+ tier first.` });
-            } else {
-                const tier = String(target.tier || '').toUpperCase();
-                if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') {
-                    violations.push({ field: 'id', message: `relationship:pc-${otherId} requires target tier ≥ TRACKED (current: "${tier}")`, fix: `Promote the target to TRACKED first.` });
-                }
+            } else if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') {
+                violations.push({ field: 'id', message: `relationship:pc-${otherId} requires target tier ≥ TRACKED (current: "${tier}")`, fix: `Promote the target to TRACKED first.` });
             }
         }
     }
@@ -691,13 +708,34 @@ function validateBlock(txs, baseState) {
         _history:      {},
     };
     const violations = [];
-    const droppedTxIds = new Set();
+    // Identify dropped txs by object reference — tx.tx is unassigned pre-commit
+    // (normalizeTransactions stamps it during append), so keying on tx.tx would
+    // collapse every tx in the block to the same `undefined` key and cause the
+    // caller's filter to drop the entire batch on any single violation.
+    const droppedTxs = new Set();
+
+    // Pre-pass: collect entities that will be CR'd in this block so per-tx
+    // validators (scene_cast refs, relationship target) can tolerate forward
+    // references. Maps store tier so the relationship target check can honor
+    // the pending CR's tier instead of falling back to "entity missing".
+    const pendingCreations = {
+        char: new Map(),
+        faction: new Map(),
+        place: new Set(),
+    };
+    for (const tx of txs) {
+        if (tx.op !== 'CR') continue;
+        if (tx.e === 'char') pendingCreations.char.set(tx.id, tx.d?.tier || 'KNOWN');
+        else if (tx.e === 'faction') pendingCreations.faction.set(tx.id, tx.d?.tier || 'KNOWN');
+        else if (tx.e === 'place') pendingCreations.place.add(tx.id);
+    }
+
     const applyTransaction = _applyTransactionFromCompute;
     for (const tx of txs) {
-        const perTx = validateTransaction(tx, shadow);
+        const perTx = validateTransaction(tx, shadow, pendingCreations);
         if (!perTx.valid) {
             violations.push(...perTx.violations.map(v => ({ ...v, tx: tx.tx })));
-            droppedTxIds.add(tx.tx);
+            droppedTxs.add(tx);
             continue; // skip applying — keep walking the rest of the block
         }
         // Deep-clone the entity being modified so shadow never mutates baseState objects.
@@ -710,10 +748,10 @@ function validateBlock(txs, baseState) {
             applyTransaction(shadow, tx);
         } catch (e) {
             violations.push({ field: '_apply', message: `applyTransaction threw: ${e.message}`, tx: tx.tx });
-            droppedTxIds.add(tx.tx);
+            droppedTxs.add(tx);
         }
     }
-    return { valid: violations.length === 0, violations, droppedTxIds };
+    return { valid: violations.length === 0, violations, droppedTxs };
 }
 
 export {

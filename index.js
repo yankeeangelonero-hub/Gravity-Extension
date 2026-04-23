@@ -1773,8 +1773,8 @@ async function onMessageReceived(messageId) {
                     raw: rawToken,
                 });
             }
-            console.warn(`${LOG_PREFIX} validateBlock dropped ${blockCheck.droppedTxIds.size} tx(s): ${blockCheck.violations.length} violation(s).`);
-            validTxns = validTxns.filter(tx => !blockCheck.droppedTxIds.has(tx.tx));
+            console.warn(`${LOG_PREFIX} validateBlock dropped ${blockCheck.droppedTxs.size} tx(s): ${blockCheck.violations.length} violation(s).`);
+            validTxns = validTxns.filter(tx => !blockCheck.droppedTxs.has(tx));
         }
     }
 

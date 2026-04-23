@@ -498,6 +498,10 @@ function applyTransaction(state, tx) {
                 if (tx.e === 'relationship') {
                     if (!('last_shift' in data)) data.last_shift = null;
                     if (!data.status) data.status = 'active';
+                    // Fresh relationships default to fresh/simmering; LLM may
+                    // override on CR, or refine with S ops later.
+                    if (!data.distance) data.distance = 'fresh';
+                    if (!data.intensity) data.intensity = 'simmering';
                 }
                 if (tx.e === 'faction') {
                     if (!data.tier) data.tier = 'KNOWN';

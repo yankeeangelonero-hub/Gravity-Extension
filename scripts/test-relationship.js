@@ -652,15 +652,15 @@ group('consistency: scene_cast entity-ref validation', () => {
     test('validateBlock drops only the offending tx, not the whole block', () => {
         const baseState = { characters: {}, factions: {}, relationships: {} };
         const block = [
-            { tx: 1, op: 'CR', e: 'char', id: 'ally', d: { name: 'Ally', tier: 'PRINCIPAL' } },
-            { tx: 2, op: 'CR', e: 'char', id: 'npc', d: { name: 'NPC', tier: 'TRACKED' } },
-            { tx: 3, op: 'CR', e: 'char', id: 'enemy', d: { name: 'Enemy', tier: 'PRINCIPAL' } },
+            { op: 'CR', e: 'char', id: 'ally', d: { name: 'Ally', tier: 'PRINCIPAL' } },
+            { op: 'CR', e: 'char', id: 'npc', d: { name: 'NPC', tier: 'TRACKED' } },
+            { op: 'CR', e: 'char', id: 'enemy', d: { name: 'Enemy', tier: 'PRINCIPAL' } },
         ];
         const result = consistency.validateBlock(block, baseState);
         assert(!result.valid, 'block with second PRINCIPAL has violation');
-        assert(result.droppedTxIds.has(3), 'tx 3 (second PRINCIPAL) is in droppedTxIds');
-        assert(!result.droppedTxIds.has(1), 'tx 1 (first PRINCIPAL) is NOT dropped');
-        assert(!result.droppedTxIds.has(2), 'tx 2 (TRACKED) is NOT dropped');
+        assert(result.droppedTxs.has(block[2]), 'tx 3 (second PRINCIPAL) is in droppedTxs');
+        assert(!result.droppedTxs.has(block[0]), 'tx 1 (first PRINCIPAL) is NOT dropped');
+        assert(!result.droppedTxs.has(block[1]), 'tx 2 (TRACKED) is NOT dropped');
     });
 
     test('validateBlock does not mutate baseState entities via A ops', () => {
@@ -716,6 +716,75 @@ group('consistency: scene_cast entity-ref validation', () => {
         }};
         const result = consistency.validateTransaction(tx, state);
         assert(result.valid, 'TRACKED+ target should pass');
+    });
+
+    test('CR relationship without distance/intensity passes (defaulted)', () => {
+        const state = { characters: { lacus: { tier: 'PRINCIPAL' } }, factions: {}, relationships: {} };
+        const tx = { op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+        }};
+        const result = consistency.validateTransaction(tx, state);
+        assert(result.valid, 'missing distance/intensity on CR should no longer violate');
+    });
+
+    test('CR relationship with invalid distance still rejects', () => {
+        const state = { characters: { lacus: { tier: 'PRINCIPAL' } }, factions: {}, relationships: {} };
+        const tx = { op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+            card: 'the-hermit', orientation: 'upright', nuance: 'x', distance: 'bananas', intensity: 'simmering',
+        }};
+        const result = consistency.validateTransaction(tx, state);
+        assert(!result.valid, 'invalid distance value must still reject');
+        assert(result.violations.some(v => v.field === 'distance'), 'distance violation present');
+    });
+
+    test('state-compute defaults distance=fresh, intensity=simmering on CR', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'lacus', d: { name: 'Lacus', tier: 'PRINCIPAL' } },
+            { tx: 2, op: 'CR', e: 'relationship', id: 'pc-lacus', d: {
+                card: 'the-hermit', orientation: 'upright', nuance: 'x', last_shift: null,
+            }},
+        ];
+        const state = computeState(null, txs);
+        const rel = state.relationships['pc-lacus'];
+        assertEqual(rel.distance, 'fresh', 'distance defaulted to fresh');
+        assertEqual(rel.intensity, 'simmering', 'intensity defaulted to simmering');
+    });
+
+    test('validateBlock tolerates forward-ref scene_cast when char CR\'d later', () => {
+        const baseState = { characters: {}, factions: {}, relationships: {}, pc: {} };
+        const block = [
+            { op: 'S', e: 'pc', id: '', d: { f: 'scene_cast', v: ['char:ada'] } },
+            { op: 'CR', e: 'char', id: 'ada', d: { name: 'Ada', tier: 'PRINCIPAL' } },
+        ];
+        const result = consistency.validateBlock(block, baseState);
+        assert(result.valid, 'forward-ref scene_cast should pass when char CR follows');
+        assert(result.droppedTxs.size === 0, 'no txs dropped');
+    });
+
+    test('validateBlock tolerates forward-ref relationship target at TRACKED+', () => {
+        const baseState = { characters: {}, factions: {}, relationships: {}, pc: {} };
+        const block = [
+            { op: 'CR', e: 'relationship', id: 'pc-ada', d: {
+                card: 'the-tower', orientation: 'upright', nuance: 'x', last_shift: null,
+            }},
+            { op: 'CR', e: 'char', id: 'ada', d: { name: 'Ada', tier: 'PRINCIPAL' } },
+        ];
+        const result = consistency.validateBlock(block, baseState);
+        assert(result.valid, 'forward-ref relationship target should pass when char CR is PRINCIPAL');
+    });
+
+    test('validateBlock still rejects forward-ref relationship target at KNOWN tier', () => {
+        const baseState = { characters: {}, factions: {}, relationships: {}, pc: {} };
+        const block = [
+            { op: 'CR', e: 'relationship', id: 'pc-ada', d: {
+                card: 'the-tower', orientation: 'upright', nuance: 'x', last_shift: null,
+            }},
+            { op: 'CR', e: 'char', id: 'ada', d: { name: 'Ada', tier: 'KNOWN' } },
+        ];
+        const result = consistency.validateBlock(block, baseState);
+        assert(!result.valid, 'KNOWN pending tier must still reject');
+        assert(result.droppedTxs.has(block[0]), 'relationship CR is the dropped tx');
+        assert(!result.droppedTxs.has(block[1]), 'char CR still commits');
     });
 });
 
