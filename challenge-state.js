@@ -22,7 +22,6 @@ import {
 import {
     normalizeCategoryForProfile,
     categoryStepForProfile,
-    categoryFromStepForProfile,
     buildDcTable,
     describeDcTable,
     describeSuccessThreshold,
@@ -344,25 +343,15 @@ function buildAwaitingChoiceRuntime(runtime, updates = {}) {
     };
 }
 
-function buildOptionAction(option, baselineCategory, profile, options = {}) {
-    const baselineStep = categoryStepForProfile(baselineCategory, profile);
-    const chosenStep = categoryStepForProfile(option.category, profile);
-    const maxStep = profile ? profile.categories.length - 1 : 4;
-    const effectiveStep = options.skipClamp
-        ? chosenStep
-        : (chosenStep != null && baselineStep != null
-            ? Math.min(chosenStep, Math.min(maxStep, baselineStep + 1))
-            : chosenStep);
-    const effectiveCategory = categoryFromStepForProfile(effectiveStep, profile);
+function buildOptionAction(option, baselineCategory) {
     return {
         source: 'option',
         option_index: option.index,
         intent: option.intent,
         label: option.label,
         declared_category: option.category,
-        effective_category: effectiveCategory,
+        effective_category: option.category,
         baseline_category: baselineCategory,
-        clamped: effectiveCategory !== option.category,
         challenge_required: false,
         assessment_only: false,
     };
@@ -379,7 +368,6 @@ function buildCustomAction(intent, declaredCategory, baselineCategory, profile, 
         declared_category: declaredCategory,
         effective_category: declaredCategory,
         baseline_category: baselineCategory,
-        clamped: false,
         challenge_required: options.skipChallenge ? false : (challengeThreshold != null && delta >= challengeThreshold),
         assessment_only: false,
     };
@@ -517,13 +505,7 @@ function buildChallengeTaskBlock(runtime, profile, entity) {
 function formatActionSummary(action) {
     if (!action) return '(none)';
     const parts = [action.intent || '(no intent)'];
-    if (action.declared_category) parts.push(`declared ${action.declared_category}`);
-    if (action.effective_category && action.effective_category !== action.declared_category) {
-        parts.push(`effective ${action.effective_category}`);
-    } else if (action.effective_category) {
-        parts.push(action.effective_category);
-    }
-    if (action.clamped) parts.push('clamped to baseline safety band');
+    if (action.declared_category) parts.push(action.declared_category);
     if (action.challenge_required) parts.push('challenge required');
     if (action.assessment_only) parts.push('assessment only');
     return parts.join(' | ');
@@ -628,7 +610,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
                 return { handled: false, deductionType: profile.deductionType };
             }
             next.last_input = buildResolvedOptionSelectionRecord(rawText, profile, optionText, option);
-            const action = buildOptionAction(option, null, profile, { skipClamp: true });
+            const action = buildOptionAction(option, null);
             next.pending_action = { ...action, setup_buffered: true, baseline_category: null };
             next.phase = 'setup_buffered';
             if (profile.usesD20) {
@@ -678,7 +660,6 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
             declared_category: null,
             effective_category: null,
             baseline_category: null,
-            clamped: false,
             challenge_required: false,
             assessment_only: true,
             setup_buffered: true,
@@ -719,7 +700,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
 
         const action = explicitCustom
             ? buildCustomAction(explicitCustom.intent || next.pending_action?.intent || '', explicitCustom.category, baseline.category, profile)
-            : buildOptionAction(reassessed, baseline.category, profile);
+            : buildOptionAction(reassessed, baseline.category);
 
         action.challenge_required = false;
         next.pending_action = action;
@@ -772,7 +753,7 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
         }
 
         next.last_input = buildResolvedOptionSelectionRecord(rawText, profile, optionText, option);
-        const action = buildOptionAction(option, baseline.category, profile);
+        const action = buildOptionAction(option, baseline.category);
 
         if (profile.usesD20) {
             const roll = buildRollPayload(action.effective_category, dcTable, drawFn, profile);
@@ -830,7 +811,6 @@ async function handleChallengeActionSelection(rawText, state, drawFn) {
         declared_category: null,
         effective_category: null,
         baseline_category: baseline.category,
-        clamped: false,
         challenge_required: false,
         assessment_only: true,
     };
@@ -1140,6 +1120,5 @@ export {
     formatRollSummary,
     normalizeCategoryForProfile,
     categoryStepForProfile,
-    categoryFromStepForProfile,
     buildDcTable,
 };

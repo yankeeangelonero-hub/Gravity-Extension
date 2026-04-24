@@ -283,6 +283,8 @@ const combatProfile = Object.freeze({
         lines.push('OPTION HTML — when combat is waiting for a player choice, output 3-4 clickable options in exactly this format:');
         lines.push('<span class="act" data-value="combat: option | opt-e1-v1-1 | 1 | Highly likely | Break left through the gap and take the nearest rifle offline">1. Break left through the gap (Highly likely)</span>');
         lines.push('The player may answer with `combat:2` to pick option 2, or `combat: Break left through the gap and take the nearest rifle offline DC Highly likely` for a declared custom action.');
+        lines.push('');
+        lines.push('OPTION CATEGORY GUIDANCE: Each option\'s category reflects that option\'s concrete in-fiction difficulty, not an abstract skill rating. The extension no longer clamps categories to the power-gap baseline — whatever you pick stands as the threshold. For direct power contests (trading blows, overpowering, tanking a hit) BASELINE is the natural ceiling: do not offer "Average" against an Impossible baseline unless the option genuinely bypasses the power fight. For non-contest actions (evasion, stealth, navigation, terrain exploitation, social, deception, precision shots that sidestep armor) BASELINE is informational only — judge difficulty from the action itself, the scene, and the scene draw. When an option\'s category is more generous than BASELINE, make the reason legible in the option label (e.g. "Slip through the stairwell (Average — evasion, not contest)").');
 
         // Phase instructions
         switch (runtime.phase) {
