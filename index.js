@@ -1554,6 +1554,26 @@ async function mountDirectorSettings() {
     $model.addEventListener('change', e => setDirectorConfig({ directorModel: e.target.value }));
     $key.addEventListener('change', e => setDirectorConfig({ directorApiKey: e.target.value }));
     $tail.addEventListener('change', e => setDirectorConfig({ directorTailSize: Number(e.target.value) || 20 }));
+
+    const $testBtn = document.getElementById('gd_test_btn');
+    const $testRes = document.getElementById('gd_test_result');
+    $testBtn.addEventListener('click', async () => {
+        $testRes.textContent = 'Calling…';
+        const { proposeTransactions } = await import('./director-client.js');
+        const config = getDirectorConfig();
+        const minimal = {
+            mode: 'regular', reasonMode: 'regular', deductionType: null,
+            userMessage: 'smoke test', assistantMessage: '(no prose; smoke test)',
+            stateView: '(empty)', recentLedgerTail: [],
+            pendingCorrections: null, recentTurns: [], lastDirectorFailed: false,
+        };
+        const result = await proposeTransactions(minimal, config);
+        if (result.ok) {
+            $testRes.textContent = `OK — model=${result.model} dt=${Math.round(result.durationMs)}ms txs=${result.transactions.length} confidence=${result.confidence}`;
+        } else {
+            $testRes.textContent = `FAIL (${result.reason}) — ${String(result.raw).slice(0, 200)}`;
+        }
+    });
 }
 
 // ─── Message Handlers ──────────────────────────────────────────────────────────
