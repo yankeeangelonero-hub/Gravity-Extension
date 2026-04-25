@@ -70,6 +70,54 @@ group('stripUpdateBlock', () => {
     });
 });
 
+// Mirror the implementation contract for node-CommonJS testing.
+function buildDirectorCorrectionPayload(failedLines) {
+    if (!failedLines || failedLines.length === 0) return null;
+    return {
+        kind: 'director_corrections',
+        items: failedLines.map(fl => ({
+            tx: fl.tx || null,                     // actual rejected tx object
+            marker: fl.marker || fl.raw || null,   // debug token, accepts legacy `raw`
+            error: fl.error || '',
+            fix: fl.fix || null,
+            attempts: fl.attempts || 0,
+        })),
+    };
+}
+
+group('buildDirectorCorrectionPayload', () => {
+    test('returns null on empty input', () => {
+        assertEqual(buildDirectorCorrectionPayload([]), null);
+        assertEqual(buildDirectorCorrectionPayload(null), null);
+        assertEqual(buildDirectorCorrectionPayload(undefined), null);
+    });
+    test('shapes a single failure with full tx object', () => {
+        const tx = { op: 'TR', e: 'char', id: 'elena', d: { f: 'tier', from: 'KNOWN', to: 'PRINCIPAL' } };
+        const out = buildDirectorCorrectionPayload([
+            { tx, marker: '[validated tx 0] char:elena', error: 'invalid transition', fix: 'use TRACKED', attempts: 1 }
+        ]);
+        assertEqual(out, {
+            kind: 'director_corrections',
+            items: [{
+                tx,
+                marker: '[validated tx 0] char:elena',
+                error: 'invalid transition',
+                fix: 'use TRACKED',
+                attempts: 1,
+            }]
+        });
+    });
+    test('falls back to legacy raw field when marker is absent', () => {
+        const out = buildDirectorCorrectionPayload([{ raw: 'LEGACY', error: 'oops' }]);
+        assertEqual(out.items[0].marker, 'LEGACY');
+        assertEqual(out.items[0].tx, null);
+    });
+    test('handles missing optional fields', () => {
+        const out = buildDirectorCorrectionPayload([{ error: 'oops' }]);
+        assertEqual(out.items[0], { tx: null, marker: null, error: 'oops', fix: null, attempts: 0 });
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

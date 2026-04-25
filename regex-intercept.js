@@ -676,6 +676,38 @@ function buildCorrectionInjection(failedLines) {
 }
 
 /**
+ * Build a structured corrections payload for the director.
+ * Replaces buildCorrectionInjection() in the director path — that
+ * function emits prose-side text instructing the prose model to
+ * resubmit blocks, which is dead under cutover.
+ *
+ * Each failed-line record should provide:
+ *   tx      — the actual rejected transaction object (preferred)
+ *   marker  — short debug token (e.g., "[validated tx 0] char:elena")
+ *   error   — validator error message
+ *   fix     — optional human-readable fix hint
+ *   attempts — correction-loop attempt counter
+ *
+ * Legacy callers may pass `raw` instead of `marker`; both are accepted.
+ *
+ * @param {Array} failedLines
+ * @returns {object|null}
+ */
+function buildDirectorCorrectionPayload(failedLines) {
+    if (!failedLines || failedLines.length === 0) return null;
+    return {
+        kind: 'director_corrections',
+        items: failedLines.map(fl => ({
+            tx: fl.tx || null,
+            marker: fl.marker || fl.raw || null,
+            error: fl.error || '',
+            fix: fl.fix || null,
+            attempts: fl.attempts || 0,
+        })),
+    };
+}
+
+/**
  * Strip the ledger block from a message for display.
  * @param {string} message
  * @returns {string}
@@ -710,6 +742,7 @@ export {
     parseStateScalar,
     getReinforcement,
     buildCorrectionInjection,
+    buildDirectorCorrectionPayload,
     stripLedgerBlock,
     stripUpdateBlock,
     getComplianceScore,
