@@ -564,6 +564,24 @@ function updatePanel(state, turn, committedTxns) {
         }
     }
 
+    // Disabled-mode banner
+    if (panel) {
+        const bannerEl = panel.querySelector('.gravity-disabled-banner') || (() => {
+            const el = document.createElement('div');
+            el.className = 'gravity-disabled-banner';
+            el.style.cssText = 'background:#fa3;color:#000;padding:.5em;font-weight:bold;text-align:center;';
+            const body = panel.querySelector('.gl-popup-body') || panel;
+            panel.insertBefore(el, body);
+            return el;
+        })();
+        if (window.__gravityDirectorStatus === 'disabled') {
+            bannerEl.textContent = 'Director not configured — Gravity is read-only this session. No structural updates are being committed.';
+            bannerEl.style.display = 'block';
+        } else {
+            bannerEl.style.display = 'none';
+        }
+    }
+
     renderDebugSummary();
 
     renderAllSections();
