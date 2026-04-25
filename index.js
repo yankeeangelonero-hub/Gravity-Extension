@@ -1486,6 +1486,7 @@ async function initialize(force = false) {
         setBookName(chatId);
         injectPrompt();
         updatePanel(_currentState, _turnCounter);
+        await mountDirectorSettings();
         console.log(`${LOG_PREFIX} Initialized for chat ${chatId}. ${txCount} TX loaded.`);
     } catch (err) {
         console.error(`${LOG_PREFIX} Init failed:`, err);
@@ -1519,6 +1520,40 @@ function setDirectorConfig(patch) {
     if (!settings[MODULE_NAME]) settings[MODULE_NAME] = {};
     Object.assign(settings[MODULE_NAME], patch);
     ctx.saveSettingsDebounced?.();
+}
+
+async function mountDirectorSettings() {
+    if (document.getElementById('gd_enabled')) return; // already mounted
+    const ctx = SillyTavern.getContext();
+    const container = document.getElementById('extensions_settings2') || document.getElementById('extensions_settings');
+    if (!container) {
+        console.warn(`${LOG_PREFIX} extensions_settings container not found; director settings drawer not mounted.`);
+        return;
+    }
+    const url = new URL('director-settings.html', import.meta.url).toString();
+    let html;
+    try { html = await (await fetch(url)).text(); }
+    catch (e) { console.warn(`${LOG_PREFIX} failed to load director-settings.html`, e); return; }
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    container.appendChild(wrapper);
+
+    const cfg = getDirectorConfig();
+    const $enabled = document.getElementById('gd_enabled');
+    const $model = document.getElementById('gd_model');
+    const $key = document.getElementById('gd_api_key');
+    const $tail = document.getElementById('gd_tail_size');
+
+    $enabled.checked = cfg.enabled;
+    $model.value = cfg.model;
+    $key.value = cfg.apiKey;
+    $tail.value = String(cfg.tailSize);
+
+    $enabled.addEventListener('change', e => setDirectorConfig({ directorEnabled: e.target.checked }));
+    $model.addEventListener('change', e => setDirectorConfig({ directorModel: e.target.value }));
+    $key.addEventListener('change', e => setDirectorConfig({ directorApiKey: e.target.value }));
+    $tail.addEventListener('change', e => setDirectorConfig({ directorTailSize: Number(e.target.value) || 20 }));
 }
 
 // ─── Message Handlers ──────────────────────────────────────────────────────────
