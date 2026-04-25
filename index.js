@@ -12,7 +12,7 @@ import { initSnapshots, computeCurrentState, createSnapshot, onRollback } from '
 import { validateBatch, formatErrors, validateTransitions, findMissingArchiveEntries, validateBlock } from './consistency.js';
 import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel, CATEGORY_DISTANCES } from './state-compute.js';
 import { formatStateView, formatReadme, computeArchiveVersion } from './state-view.js';
-import { extractUpdateBlock, getReinforcement } from './regex-intercept.js';
+import { extractUpdateBlock } from './regex-intercept.js';
 import { stripUpdateBlock, buildDirectorCorrectionPayload } from './regex-intercept.js';
 import { buildDirectorInput } from './director-input.js';
 import { proposeTransactions } from './director-client.js';
@@ -2024,8 +2024,9 @@ async function onMessageReceived(messageId) {
         }
     }
 
-    // Build reinforcement FIRST — then append size warnings on top
-    _pendingReinforcement = getReinforcement(extraction, _turnCounter);
+    // Reset reinforcement; director now owns parser-compliance corrections.
+    // Only prose-side sources (challenge corrections, size warnings, etc.) populate this.
+    _pendingReinforcement = null;
 
     // Check array sizes and warn if bloated
     const sizeWarnings = checkArraySizes(_currentState);
