@@ -41,6 +41,7 @@ async function callOpenRouter(input, config) {
     const t0 = performance.now();
     const body = {
         model: config.model || 'anthropic/claude-sonnet-4-6',
+        max_tokens: 4096,
         messages: [
             { role: 'system', content: buildDirectorSystemPrompt() },
             { role: 'user', content: renderUserPrompt(input) },
