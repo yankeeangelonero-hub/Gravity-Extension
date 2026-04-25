@@ -73,15 +73,22 @@ This file is now a **doc-drift hotspot of the same class as `state-view.js`** �
 
 `onMessageReceived(messageId)` (index.js:1505) is the seam. Replace `extractUpdateBlock()` (line 1527) with `proposeTransactions()`. Downstream behavior is partly unchanged, partly reworked.
 
+#### Mode snapshot (new requirement)
+
+`onMessageReceived()` resets `_currentInjectMode`, `_currentReasonMode`, and `_pendingDeductionType` to defaults at lines 1512-1514, *before* the commit seam runs. Today only `_currentInjectMode` is snapped (into `_lastCompletedMode`), which is enough for the parser path because the parser doesn't need mode awareness. The director does. Implementation requirement: extend the pre-reset block to snap **all three** fields into locals (e.g., `snappedInjectMode`, `snappedReasonMode`, `snappedDeductionType`) and pass those snapshots into the director call. Reading the live `_currentInjectMode` after reset would misclassify every advance/combat/intimacy turn as `regular` and produce the wrong `stateView` mode argument as well.
+
 #### Retained downstream (truly unchanged)
 - `validateBatch()` per-tx loop
 - Travel/tier gates (index.js:1617+)
 - Cleanup-op cap (`R/MR/D` ≤ 3 outside eval turns)
-- `rewriteDuplicateActiveChallengeCreate()` (index.js:187) — explicitly retained as a post-director normalizer
-- `processChallengeAssistantTurn()` calls — still run on the cleaned assistant message, on both success and failure paths
+- `rewriteDuplicateActiveChallengeCreate()` (index.js:187) — explicitly retained as a **pre-validation** normalizer (same position as today, see §4)
+- `processChallengeAssistantTurn()` calls — still run on the cleaned assistant message on both success and failure paths. Its output (challenge correction text) still flows to the prose side via `_pendingReinforcement` — see the reinforcement split below.
 - `appendTransactions()` + replay + audit
 - Snapshot/rollback, UI refresh
-- `stripLedgerBlock()` (regex-intercept.js:683) — retained for cleaning legacy ledger blocks out of `recentTurns` input to the director (old chats may still contain them) and for display cleaning
+
+#### New helper: `stripUpdateBlock()`
+
+The current `stripLedgerBlock()` (regex-intercept.js:683) only strips `LEDGER_BLOCK_PATTERN`. Migration chats overwhelmingly contain `---STATE---` blocks (`STATE_BLOCK_PATTERN` at line 23), which the helper leaves untouched — so director input would still see raw block text leaking from `recentTurns` and `assistantMessage`. Implementation requirement: introduce a generic `stripUpdateBlock(message)` that strips both `LEDGER_BLOCK_PATTERN` and `STATE_BLOCK_PATTERN` (and any future variants). Replace all uses of `stripLedgerBlock()` in the director input pipeline and display cleaning. Keep `stripLedgerBlock` exported for backward-compat consumers but route the director path through `stripUpdateBlock`.
 
 #### Bypassed
 - `compileStateEntries()` — only relevant to the legacy `---STATE---` format that no longer exists post-cutover
@@ -93,28 +100,40 @@ This file is now a **doc-drift hotspot of the same class as `state-view.js`** �
   - `_pendingCorrections` is passed into the **next** director call as a structured `pendingCorrections` field.
   - The director system prompt teaches the model to consume corrections as: "your previous proposed txs were rejected for these reasons; reissue corrected txs this turn."
   - `buildCorrectionInjection()` is replaced (or renamed) by `buildDirectorCorrectionPayload()` returning a structured object suitable for the director input.
-- **`_pendingReinforcement`.** Today it's parser-compliance scaffolding (e.g., `[STATE/LEDGER: OK]`, malformed-block reminders) injected at index.js:1234. Under cutover:
-  - Drop parser-compliance reinforcement entirely. The director's structured-output guarantee makes "remind the model to emit a block" obsolete.
-  - Add one new reinforcement category: **director-failure flag.** When the previous turn's director call failed, surface that fact in the next director call's input as `lastDirectorFailed: true`, so the director knows the previous turn produced no commits and may have unfinished business.
-  - The `_inject` prompt slot becomes prose-only (or empty) in normal operation.
+- **`_pendingReinforcement` — split by audience, do not gut.** Today this single field carries two distinct classes of content into the next prose turn (index.js:1560-1566):
+  1. **Parser-compliance scaffolding** from `getReinforcement(extraction, ...)` — `[STATE/LEDGER: OK]` style reminders, malformed-block nudges. Parser-specific. Dies under cutover.
+  2. **Challenge correction text** from `processChallengeAssistantTurn()` — runtime recovery instructions for active challenge flows: re-seed the challenge entity, emit clickable options, etc. **These are prose-side guidance, not parser-side.** They must continue to reach the prose model on the next turn or active challenge sessions will regress.
+
+  New behavior:
+  - Drop class (1) entirely. The director's structured-output guarantee makes parser-compliance reinforcement obsolete.
+  - **Keep `_pendingReinforcement` as the prose-side reinforcement channel for class (2).** Continue to populate it from `processChallengeAssistantTurn()` and continue to inject it via the existing `_inject` prompt slot. The renamed/rewritten `buildCorrectionInjection` is no longer involved here.
+  - For director-side runtime signals, do **not** route through `_pendingReinforcement`. Use the dedicated director input field `lastDirectorFailed` (and any future director-bound flags) so prose-side and director-side reinforcement remain cleanly separated.
 
 ## 4. Data flow per turn
+
+Ordering note: the director path mirrors the existing parser path exactly. The current code runs `rewriteDuplicateActiveChallengeCreate` **before** per-tx validation (index.js:1554 vs 1598), so duplicate seeded challenge entities are normalized away rather than becoming validation errors. The director path preserves that ordering.
 
 ### Success path
 
 ```
 LLM prose response arrives → onMessageReceived(messageId)
-  → cleanedAssistantMessage = stripLedgerBlock(message.mes)   // legacy hygiene
-  → director-client.proposeTransactions({mode, userMessage, assistantMessage,
+  → snap mode + reasonMode + deductionType into locals
+  → reset _currentInjectMode / _currentReasonMode / _pendingDeductionType
+  → cleanedAssistantMessage = stripUpdateBlock(message.mes)   // legacy hygiene
+  → director-client.proposeTransactions({mode: snappedInjectMode,
+                                          reasonMode: snappedReasonMode,
+                                          deductionType: snappedDeductionType,
+                                          userMessage, assistantMessage,
                                           stateView, recentLedgerTail,
                                           pendingCorrections, recentTurns,
                                           lastDirectorFailed})
   → returns {ok: true, transactions, ...}
-  → validateBatch loop (per tx)
+  → rewriteDuplicateActiveChallengeCreate     // PRE-validation, as today
   → cleanup-op cap
-  → rewriteDuplicateActiveChallengeCreate
+  → validateBatch loop (per tx)
   → appendTransactions + replay + audit
   → processChallengeAssistantTurn(_currentState, committedTxns, cleanedAssistantMessage)
+       → its return value, if any, populates _pendingReinforcement (prose-side)
   → ui-panel + state-view refresh
   → _lastDirectorFailed = false
 ```
@@ -123,17 +142,20 @@ LLM prose response arrives → onMessageReceived(messageId)
 
 ```
 LLM prose response arrives → onMessageReceived(messageId)
-  → cleanedAssistantMessage = stripLedgerBlock(message.mes)
+  → snap mode + reasonMode + deductionType into locals
+  → reset _currentInjectMode / _currentReasonMode / _pendingDeductionType
+  → cleanedAssistantMessage = stripUpdateBlock(message.mes)
   → director-client.proposeTransactions(...)
   → returns {ok: false, reason, raw}
   → console.error with prefix + reason + truncated raw
   → NO commits, NO append
   → still call processChallengeAssistantTurn(_currentState, [], cleanedAssistantMessage)
-     (challenge progress is independent of director success)
+       → its return value, if any, populates _pendingReinforcement (prose-side)
   → set _lastDirectorFailed = true
   → ui-panel renders red "director failed last turn" badge
-  → injectPrompt() runs as normal (no parser-compliance reinforcement,
-     director-failed flag will surface in next director call instead)
+  → injectPrompt() runs as normal — _pendingReinforcement (challenge corrections only)
+     reaches prose via the _inject slot; lastDirectorFailed surfaces on the next
+     director call, not in the prose prompt
 ```
 
 ## 5. Director input
@@ -142,13 +164,15 @@ Sent on every turn:
 
 | Field | Source | Notes |
 |---|---|---|
-| `mode` | `_currentInjectMode` + active deduction submode | `regular` / `advance` / `integration`, plus `combat` / `intimacy` flags |
+| `mode` | snapshot of `_currentInjectMode` taken **before** the early reset (see §3.3 Mode snapshot) | `regular` / `advance` / `integration`. Sourcing live `_currentInjectMode` after reset would misclassify every turn as `regular`. |
+| `reasonMode` | snapshot of `_currentReasonMode` taken before reset | Same hazard. |
+| `deductionType` | snapshot of `_pendingDeductionType` taken before reset | Same hazard. Drives the active deduction submode (`combat`/`intimacy`/etc.). |
 | `userMessage` | latest user message (raw) | |
-| `assistantMessage` | `cleanedAssistantMessage` | Stripped of any legacy ledger blocks via `stripLedgerBlock()` |
-| `stateView` | `formatStateView(_currentState, mode)` | Same view the prose preset sees |
+| `assistantMessage` | `cleanedAssistantMessage` | Stripped of any legacy update blocks via `stripUpdateBlock()` (handles both `---LEDGER---` and `---STATE---`). |
+| `stateView` | `formatStateView(_currentState, snappedInjectMode)` | Same view the prose preset sees. Mode argument also comes from the snapshot. |
 | `recentLedgerTail` | last 20 committed txs from `ledger-store` | Compact JSON. Resolves the v1 mismatch where the director "owned" the ledger but never saw it. Window size configurable. |
 | `pendingCorrections` | structured array `[{tx, errors, fix}]` | From prior turn's rejected txs |
-| `recentTurns` | last 3 user/assistant pairs | Each assistant pair pre-cleaned via `stripLedgerBlock()` |
+| `recentTurns` | last 3 user/assistant pairs | Each assistant pair pre-cleaned via `stripUpdateBlock()`. |
 | `lastDirectorFailed` | boolean | True iff prior turn's director call returned `ok: false` |
 
 No full transcript. No raw ledger history beyond the tail.
@@ -230,9 +254,10 @@ This is bigger than v1 implied. Targets:
 - `formatStateView()` (line 163) — untouched. Both prose preset and director consume its output.
 
 ### `regex-intercept.js`
-- `buildCorrectionInjection()` (line 665) — replaced by `buildDirectorCorrectionPayload()` (or rewritten to return a structured object). The "resubmit ---STATE--- block" text is dead.
+- `buildCorrectionInjection()` (line 665) — replaced by `buildDirectorCorrectionPayload()` (or rewritten to return a structured object). The "resubmit ---STATE--- block" text is dead. Note: this function is the parser-correction path; it is **not** the channel that carries challenge correction text — that channel is `_pendingReinforcement` and is preserved separately (see §3.3 reinforcement split).
 - `extractUpdateBlock()` — kept exported, no longer wired into main flow.
-- `stripLedgerBlock()` (line 683) — retained, used by both director-input cleaning and display cleaning.
+- `stripLedgerBlock()` (line 683) — retained for backward-compat consumers but **not used by the director path**.
+- `stripUpdateBlock()` — NEW. Strips both `LEDGER_BLOCK_PATTERN` and `STATE_BLOCK_PATTERN`. Used by the director input pipeline (`assistantMessage` cleaning, `recentTurns` cleaning) and by display cleaning. Resolves the migration-chat hazard where old `---STATE---` blocks would otherwise leak into director context.
 
 ## 10. Files touched
 
@@ -240,10 +265,10 @@ This is bigger than v1 implied. Targets:
 |---|---|
 | `director-client.js` | NEW |
 | `director-prompt.js` | NEW (absorbs `formatReadme()` semantic content, examples rewritten as JSON tx) |
-| `index.js` | MODIFY — seam swap; corrections rewired; reinforcement gutted; `_readme` slot removed; settings drawer registered; failure-path challenge processing preserved |
+| `index.js` | MODIFY — seam swap; **mode/reasonMode/deductionType snapshot before reset**; parser-correction path rewired to director input; **reinforcement audience-split (challenge corrections preserved on prose side, director-failed flag goes to director input)**; `_readme` slot removed; settings drawer registered; failure-path challenge processing preserved on both branches |
 | `gravity_v15.json` | MODIFY — full audit; remove/rewrite "Anchor" and "L4 - Phase 2 Commands" entries; audit other entries for ledger-emit references |
 | `state-view.js` | MODIFY — delete `formatReadme*`; `formatStateView` untouched |
-| `regex-intercept.js` | MODIFY — replace `buildCorrectionInjection` with director-input builder; keep `stripLedgerBlock`; keep `extractUpdateBlock` as debug-only export |
+| `regex-intercept.js` | MODIFY — replace `buildCorrectionInjection` with director-input builder; **add `stripUpdateBlock()` covering both LEDGER and STATE patterns**; keep `stripLedgerBlock` (backward-compat only); keep `extractUpdateBlock` as debug-only export |
 | `consistency.js` / `state-machine.js` / `state-compute.js` / `snapshot-mgr.js` / `ledger-store.js` | UNTOUCHED |
 | `ui-panel.js` | MINOR — disabled-mode banner + director-failed badge |
 | `Documentation/system_architecture_reference.md` | MODIFY — add director-prompt + director-client to maintenance checklist; flag director-prompt as a doc-drift hotspot |
