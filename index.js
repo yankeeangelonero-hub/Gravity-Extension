@@ -13,6 +13,9 @@ import { validateBatch, formatErrors, validateTransitions, findMissingArchiveEnt
 import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel, CATEGORY_DISTANCES } from './state-compute.js';
 import { formatStateView, formatReadme, computeArchiveVersion } from './state-view.js';
 import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
+import { stripUpdateBlock, buildDirectorCorrectionPayload } from './regex-intercept.js';
+import { buildDirectorInput } from './director-input.js';
+import { proposeTransactions } from './director-client.js';
 import { processOOC } from './ooc-handler.js';
 import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
 import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
@@ -58,6 +61,7 @@ let _currentReasonMode = 'regular';
 let _lastCompletedMode = 'regular'; // snapshot before reset — used by exemplar flagging
 let _pendingDeductionType = null; // one-shot override for combat, advance, intimacy
 let _pendingManualDivination = null; // one-shot player-supplied divination roll
+let _lastDirectorFailed = false;
 
 // ─── Collision Arrival / Foreshadow Tracking ─────────────────────────────────
 // One-shot dedup: once a collision fires the sanity-check gate it doesn't fire again.
@@ -1605,15 +1609,57 @@ async function onMessageReceived(messageId) {
     if (!message?.mes) return;
     let challengeCorrection = null;
 
+    // Director path replaces parser extraction.
+    const cleanedAssistantMessage = stripUpdateBlock(message.mes);
+
+    const stateViewMode = getStateViewMode(
+        snappedInjectMode === 'regular',
+        snappedInjectMode === 'advance',
+        snappedInjectMode === 'integration',
+        !!getChallengeRuntime?.(),
+        snappedReasonMode,
+    );
+    const stateViewForDirector = formatStateView(_currentState, stateViewMode, true);
+
+    const recentLedgerTail = getAllTransactions().slice(-getDirectorConfig().tailSize);
+    const recentTurns = (context.chat || [])
+        .slice(-7) // up to 3 user+assistant pairs + the current
+        .filter(m => m && m !== message)
+        .map(m => ({
+            user: m.is_user ? stripUpdateBlock(m.mes || '') : null,
+            assistant: !m.is_user ? stripUpdateBlock(m.mes || '') : null,
+        }))
+        .reduce((acc, m) => {
+            if (m.user) acc.push({ user: m.user, assistant: '' });
+            else if (acc.length && !acc[acc.length-1].assistant) acc[acc.length-1].assistant = m.assistant;
+            return acc;
+        }, [])
+        .slice(-3);
+
+    const userMessage = (context.chat || []).slice().reverse().find(m => m && m.is_user)?.mes || '';
+
+    const directorInput = buildDirectorInput({
+        snappedInjectMode, snappedReasonMode, snappedDeductionType,
+        userMessage,
+        assistantMessage: cleanedAssistantMessage,
+        stateView: stateViewForDirector,
+        recentLedgerTail,
+        pendingCorrections: buildDirectorCorrectionPayload(_pendingCorrections),
+        recentTurns,
+        lastDirectorFailed: _lastDirectorFailed,
+    });
+
     _turnCounter++;
 
-    // Extract update block (compact STATE or canonical LEDGER)
-    const extraction = extractUpdateBlock(message.mes);
-    const cleanedAssistantMessage = extraction.found ? extraction.cleanedMessage : message.mes;
+    const result = await proposeTransactions(directorInput, getDirectorConfig());
 
-    // No block found
-    if (!extraction.found) {
-        _pendingReinforcement = getReinforcement(extraction, _turnCounter);
+    let extractedTransactions = [];
+    const extractionErrors = [];
+
+    if (!result.ok) {
+        console.error(`${LOG_PREFIX} director call failed: ${result.reason} — ${String(result.raw).slice(0, 500)}`);
+        _lastDirectorFailed = true;
+        // Still run challenge processing on the cleaned prose.
         challengeCorrection = await processChallengeAssistantTurn(_currentState, [], cleanedAssistantMessage);
         if (challengeCorrection) {
             _pendingReinforcement = _pendingReinforcement
@@ -1624,25 +1670,18 @@ async function onMessageReceived(messageId) {
         updatePanel(_currentState, _turnCounter);
         return;
     }
+    _lastDirectorFailed = false;
+    extractedTransactions = result.transactions;
+    console.log(`${LOG_PREFIX} director ok — model=${result.model} dt=${Math.round(result.durationMs)}ms txs=${extractedTransactions.length} confidence=${result.confidence}`);
 
-    let extractedTransactions = extraction.transactions || [];
     let duplicateChallengeCreateRewriteCount = 0;
-    const extractionErrors = [...(extraction.errors || [])];
-
-    if (extraction.format === 'state') {
-        const compiled = compileStateEntries(extraction.stateEntries || [], _currentState);
-        extractedTransactions = compiled.transactions;
-        extractionErrors.push(...compiled.errors);
-    }
-
     const duplicateCreateRewrite = rewriteDuplicateActiveChallengeCreate(extractedTransactions, _currentState);
     extractedTransactions = duplicateCreateRewrite.transactions;
     duplicateChallengeCreateRewriteCount = duplicateCreateRewrite.rewrittenCount;
 
-    // No transactions at all (empty block or all lines failed)
-    if (extractedTransactions.length === 0 && extractionErrors.length === 0) {
-        _pendingReinforcement = getReinforcement(extraction, _turnCounter);
-        challengeCorrection = await processChallengeAssistantTurn(_currentState, [], message.mes);
+    if (extractedTransactions.length === 0) {
+        // Legit no-op outcome from director. Still process challenge state on cleaned prose.
+        challengeCorrection = await processChallengeAssistantTurn(_currentState, [], cleanedAssistantMessage);
         if (challengeCorrection) {
             _pendingReinforcement = _pendingReinforcement
                 ? `${_pendingReinforcement}\n${challengeCorrection}`
@@ -1692,6 +1731,8 @@ async function onMessageReceived(messageId) {
             validationErrors.push({
                 lineNum: i,
                 error: result.errors.map(e => e.message).join('; '),
+                tx,
+                marker: `[validated tx ${i}] ${entityToken}`,
                 raw: `[validated tx ${i}] ${entityToken}`,
             });
             continue;
@@ -1706,6 +1747,8 @@ async function onMessageReceived(messageId) {
                     lineNum: i,
                     error: `char:${tx.id} is tier ${tier}; location is only tracked for TRACKED/PRINCIPAL chars (§2.1). Promote first or omit location.`,
                     fix: `Remove the location SET, or TR this character to TRACKED first.`,
+                    tx,
+                    marker: `[char:${tx.id} location]`,
                     raw: `[char:${tx.id} location]`,
                 });
                 continue;
@@ -1717,6 +1760,8 @@ async function onMessageReceived(messageId) {
                     lineNum: i,
                     error: travel.error,
                     fix: travel.fix,
+                    tx,
+                    marker: `[char:${tx.id} location]`,
                     raw: `[char:${tx.id} location]`,
                 });
                 continue;
@@ -1733,6 +1778,8 @@ async function onMessageReceived(messageId) {
                     lineNum: i,
                     error: `char:${tx.id} is tier ${tier}; location is only tracked for TRACKED/PRINCIPAL chars (§2.1). Promote first or omit location from CR.`,
                     fix: `Include tier=TRACKED or higher in the CR payload, or create the character first and then set location in a follow-up S op.`,
+                    tx,
+                    marker: `[char:${tx.id} location]`,
                     raw: `[char:${tx.id} location]`,
                 });
                 continue;
@@ -1745,6 +1792,8 @@ async function onMessageReceived(messageId) {
                     lineNum: i,
                     error: travel.error,
                     fix: travel.fix,
+                    tx,
+                    marker: `[char:${tx.id} location]`,
                     raw: `[char:${tx.id} location]`,
                 });
                 continue;
