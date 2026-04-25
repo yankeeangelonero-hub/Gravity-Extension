@@ -1,0 +1,24 @@
+<!-- director-settings.html -->
+<div class="gravity-director-settings">
+  <div class="inline-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header">
+      <b>Gravity — Director (OpenRouter)</b>
+      <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    </div>
+    <div class="inline-drawer-content">
+      <label><input type="checkbox" id="gd_enabled" /> Enable director (uncheck for read-only mode)</label>
+      <label>Model
+        <input type="text" id="gd_model" placeholder="anthropic/claude-sonnet-4-6" />
+        <small>Any OpenRouter slug — e.g. <code>anthropic/claude-sonnet-4-6</code>, <code>openai/gpt-4o</code>, <code>google/gemini-pro-1.5</code>.</small>
+      </label>
+      <label>OpenRouter API key
+        <input type="password" id="gd_api_key" placeholder="sk-or-..." />
+      </label>
+      <label>Recent ledger tail size
+        <input type="number" id="gd_tail_size" value="20" min="0" max="100" />
+      </label>
+      <button id="gd_test_btn">Test director call</button>
+      <div id="gd_test_result" style="margin-top:.5em;font-family:monospace;"></div>
+    </div>
+  </div>
+</div>

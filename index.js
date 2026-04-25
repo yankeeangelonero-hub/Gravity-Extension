@@ -1500,6 +1500,27 @@ async function onChatChanged() {
     await initialize(true);
 }
 
+// ─── Director Config ───────────────────────────────────────────────────────────
+
+// Director config — persisted globally in extension_settings[MODULE_NAME].
+function getDirectorConfig() {
+    const settings = SillyTavern.getContext().extensionSettings || {};
+    const ours = settings[MODULE_NAME] || {};
+    return {
+        enabled: !!ours.directorEnabled,
+        model: ours.directorModel || 'anthropic/claude-sonnet-4-6',
+        apiKey: ours.directorApiKey || '',
+        tailSize: typeof ours.directorTailSize === 'number' ? ours.directorTailSize : 20,
+    };
+}
+function setDirectorConfig(patch) {
+    const ctx = SillyTavern.getContext();
+    const settings = ctx.extensionSettings || {};
+    if (!settings[MODULE_NAME]) settings[MODULE_NAME] = {};
+    Object.assign(settings[MODULE_NAME], patch);
+    ctx.saveSettingsDebounced?.();
+}
+
 // ─── Message Handlers ──────────────────────────────────────────────────────────
 
 async function onMessageReceived(messageId) {
