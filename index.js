@@ -1671,6 +1671,16 @@ async function onMessageReceived(messageId) {
     _lastDirectorFailed = false;
     extractedTransactions = result.transactions;
     console.log(`${LOG_PREFIX} director ok — model=${result.model} dt=${Math.round(result.durationMs)}ms txs=${extractedTransactions.length} confidence=${result.confidence}`);
+    // ── DEBUG (remove after smoke) ─────────────────────────────────────────
+    console.log(`${LOG_PREFIX} [DBG] input shape: mode=${directorInput.mode} reason=${directorInput.reasonMode} deduction=${directorInput.deductionType} stateView=${directorInput.stateView.length}ch ledgerTail=${directorInput.recentLedgerTail.length} recentTurns=${directorInput.recentTurns.length} userMsg=${directorInput.userMessage.length}ch assistantMsg=${directorInput.assistantMessage.length}ch pendingCorr=${directorInput.pendingCorrections ? directorInput.pendingCorrections.items?.length || 0 : 0}`);
+    if (result.notes) {
+        console.log(`${LOG_PREFIX} [DBG] director notes: ${String(result.notes).slice(0, 600)}`);
+    }
+    if (extractedTransactions.length === 0) {
+        console.log(`${LOG_PREFIX} [DBG] stateView preview (first 800ch):\n${directorInput.stateView.slice(0, 800)}`);
+        console.log(`${LOG_PREFIX} [DBG] assistantMsg preview (first 600ch):\n${directorInput.assistantMessage.slice(0, 600)}`);
+    }
+    // ── END DEBUG ──────────────────────────────────────────────────────────
 
     let duplicateChallengeCreateRewriteCount = 0;
     const duplicateCreateRewrite = rewriteDuplicateActiveChallengeCreate(extractedTransactions, _currentState);
