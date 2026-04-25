@@ -179,6 +179,19 @@ group('director-prompt', () => {
     });
 });
 
+group('renderUserPrompt', () => {
+    test('director-client.js renderer mentions all expected sections', () => {
+        const src = fs.readFileSync(path.resolve(__dirname, '..', 'director-client.js'), 'utf8');
+        for (const marker of [
+            'CURRENT STATE VIEW', 'RECENT LEDGER TAIL', 'RECENT TURNS',
+            'USER MESSAGE THIS TURN', 'ASSISTANT RESPONSE THIS TURN',
+            'PENDING CORRECTIONS', 'last turn the director call FAILED',
+        ]) {
+            assert(src.includes(marker), `renderer missing section marker: ${marker}`);
+        }
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
