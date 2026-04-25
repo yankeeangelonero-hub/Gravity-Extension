@@ -37,10 +37,15 @@ Historical handoffs, plans, and audit logs live under `Deprecated/`.
 - `snapshot-mgr.js`
   Snapshots, rollback, rollback listeners, computed-state reconstruction.
 
+### Director Call (Post-Prose, Replaces Parser Path)
+
+- `director-client.js`, `director-prompt.js`, `director-input.js`
+  A separate API call to a configurable OpenRouter model proposes ledger transactions in JSON. Deterministic extension code remains the only thing allowed to commit. The director call fires after the prose model responds and replaces the `regex-intercept.js` parser path for ledger extraction.
+
 ### Parsing And Validation
 
 - `regex-intercept.js`
-  Extracts `---LEDGER---` and `---STATE---`, parses lines, compiles compact state entries.
+  Extracts `---LEDGER---` and `---STATE---`, parses lines, compiles compact state entries. (Legacy path; active when director is disabled.)
 - `consistency.js`
   Transaction shape validation and transition validation gate.
 - `state-machine.js`
@@ -246,6 +251,8 @@ If you change what the model is told to emit or how turns are framed, inspect:
 - `setup-wizard.js`
 - `ooc-handler.js`
 - `challenge-profile-combat.js`
+- `director-prompt.js`
+  When op vocabulary, entity types, state-machine rules, or field contracts change, update `director-prompt.js` alongside `consistency.js`, `state-machine.js`, `state-view.js`, and the operator-facing readmes. **`director-prompt.js` is a doc-drift hotspot** — failure to update it lets the director propose ops the validators reject, surfacing as elevated rejection counts.
 
 ### 5. Challenge Or Combat Changes
 
