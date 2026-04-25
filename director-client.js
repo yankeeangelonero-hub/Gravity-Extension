@@ -46,14 +46,13 @@ async function callOpenRouter(input, config) {
             { role: 'system', content: buildDirectorSystemPrompt() },
             { role: 'user', content: renderUserPrompt(input) },
         ],
-        response_format: {
-            type: 'json_schema',
-            json_schema: {
-                name: 'commit_transactions',
-                strict: true,
-                schema: TX_RESPONSE_SCHEMA,
-            },
-        },
+        // json_object enforces valid JSON without a schema. We use this rather
+        // than json_schema strict mode because Bedrock Claude can emit
+        // degenerate empty objects to "satisfy" a permissive items schema in
+        // strict mode (observed: 1000+ {} entries hit max_tokens, truncated,
+        // parse fails). Our consistency.validateBatch validates tx shape
+        // downstream — the API-level strict schema is redundant.
+        response_format: { type: 'json_object' },
     };
 
     let res;
