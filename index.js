@@ -1582,6 +1582,14 @@ async function onMessageReceived(messageId) {
     if (!_initialized) await initialize();
     // New turn boundary — invalidate the injectPrompt snapshot so one-shot flags are reconsumed.
     _injectFingerprint++;
+
+    // Snap pre-reset mode fields. The director needs the snapshots
+    // because the reset below would otherwise classify every
+    // advance/combat/intimacy turn as `regular`.
+    const snappedInjectMode = _currentInjectMode;
+    const snappedReasonMode = _currentReasonMode;
+    const snappedDeductionType = _pendingDeductionType;
+
     // Snapshot the mode before resetting so exemplar flagging preserves the real turn mode
     _lastCompletedMode = _currentInjectMode;
     // Reset inject mode and clear OOC injection — the special turn is over
