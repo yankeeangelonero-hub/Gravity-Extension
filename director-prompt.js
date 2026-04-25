@@ -38,26 +38,34 @@ Every transaction is a JSON object. The fields:
 - "d":  op-specific data
 - "r":  one-sentence reason for the change
 
+**Field-name conventions (CRITICAL — validator rejects long forms):**
+- \`f\` = field name (string)
+- \`v\` = value (any type)
+- \`k\` = map key (string, only on MS/MR)
+- \`from\`, \`to\` = state-machine endpoints (only on TR)
+
+NEVER use \`field\`, \`value\`, or \`key\` — those are long-form aliases that the validator rejects. Always use the short forms \`f\`, \`v\`, \`k\`.
+
 ### CR — Create entity
 { "op": "CR", "e": "char", "id": "elena", "d": { "name": "Elena Cross", "tier": "TRACKED", "tags": ["smuggler","archangel-contact"] }, "r": "Player named her this turn." }
 
-### S — Set field
-{ "op": "S", "e": "char", "id": "elena", "d": { "f": "location", "value": "place:medbay" }, "r": "Followed PC into the medbay." }
+### S — Set field (uses \`f\`, \`v\`)
+{ "op": "S", "e": "char", "id": "elena", "d": { "f": "location", "v": "place:medbay" }, "r": "Followed PC into the medbay." }
 
-### TR — Transition (state-machine governed)
+### TR — Transition (uses \`f\`, \`from\`, \`to\`; state-machine governed)
 { "op": "TR", "e": "collision", "id": "bridge-confrontation", "d": { "f": "status", "from": "ACTIVE", "to": "RESOLVED" }, "r": "PC forced the confrontation on-screen and it completed." }
 
-### A — Append to a list field
-{ "op": "A", "e": "world", "id": null, "d": { "f": "collision_archive", "value": "[collision] Bridge Confrontation [resolution] direct [hook] residue [aftermath] change" }, "r": "Archive the resolved collision." }
+### A — Append to a list field (uses \`f\`, \`v\`)
+{ "op": "A", "e": "world", "id": null, "d": { "f": "collision_archive", "v": "[collision] Bridge Confrontation [resolution] direct [hook] residue [aftermath] change" }, "r": "Archive the resolved collision." }
 
-### R — Remove from a list (capped at 3 outside eval turns; combine R/MR/D)
-{ "op": "R", "e": "pc", "id": null, "d": { "f": "scene_cast", "value": "char:athrun" }, "r": "Athrun left the scene." }
+### R — Remove from a list (uses \`f\`, \`v\`; capped at 3 outside eval turns; combine R/MR/D)
+{ "op": "R", "e": "pc", "id": null, "d": { "f": "scene_cast", "v": "char:athrun" }, "r": "Athrun left the scene." }
 
-### MS — Map set (object/dict field, e.g., knowledge_asymmetry)
-{ "op": "MS", "e": "char", "id": "elena", "d": { "f": "knowledge_asymmetry", "key": "knows_evidence", "value": "Has seen the documents." }, "r": "She just read them." }
+### MS — Map set (object/dict field, e.g., knowledge_asymmetry; uses \`f\`, \`k\`, \`v\`)
+{ "op": "MS", "e": "char", "id": "elena", "d": { "f": "knowledge_asymmetry", "k": "knows_evidence", "v": "Has seen the documents." }, "r": "She just read them." }
 
-### MR — Map del
-{ "op": "MR", "e": "char", "id": "elena", "d": { "f": "knowledge_asymmetry", "key": "hiding_employer" }, "r": "Cover blown — secret no longer hidden." }
+### MR — Map del (uses \`f\`, \`k\`)
+{ "op": "MR", "e": "char", "id": "elena", "d": { "f": "knowledge_asymmetry", "k": "hiding_employer" }, "r": "Cover blown — secret no longer hidden." }
 
 ### D — Destroy entity (capped at 3 outside eval turns)
 { "op": "D", "e": "pressure", "id": "trade-tension", "r": "Consumed into a collision." }
@@ -151,9 +159,9 @@ Two TRACKED chars are in a quiet scene. Char A reveals research she's been doing
 
 {
   "transactions": [
-    { "op": "MS", "e": "char", "id": "char-a", "d": { "f": "knowledge_asymmetry", "key": "knows_research_topic_x", "value": "Has been investigating topic X — files, citations, evidence chain." }, "r": "She voiced the research aloud this turn." },
-    { "op": "MS", "e": "char", "id": "char-b", "d": { "f": "knowledge_asymmetry", "key": "knows_a_researching_x", "value": "Heard her say she's investigating topic X." }, "r": "He's now read into her research." },
-    { "op": "A", "e": "char", "id": "char-a", "d": { "f": "demonstrated_traits", "value": "willing to share dangerous information without flinching" }, "r": "Demonstrated by voluntary disclosure on a sensitive topic." }
+    { "op": "MS", "e": "char", "id": "char-a", "d": { "f": "knowledge_asymmetry", "k": "knows_research_topic_x", "v": "Has been investigating topic X — files, citations, evidence chain." }, "r": "She voiced the research aloud this turn." },
+    { "op": "MS", "e": "char", "id": "char-b", "d": { "f": "knowledge_asymmetry", "k": "knows_a_researching_x", "v": "Heard her say she's investigating topic X." }, "r": "He's now read into her research." },
+    { "op": "A", "e": "char", "id": "char-a", "d": { "f": "demonstrated_traits", "v": "willing to share dangerous information without flinching" }, "r": "Demonstrated by voluntary disclosure on a sensitive topic." }
   ],
   "notes": "Dialogue turn — knowledge asymmetry + demonstrated trait. No collisions changed.",
   "confidence": "high"
@@ -163,7 +171,7 @@ This is the common shape. Most regular turns produce 1-5 transactions like this 
 
 ## Output contract
 
-Always return exactly this JSON shape:
+Always return exactly this JSON shape, **and nothing else** — no prose explanation, no markdown code fences, no acknowledgement of corrections, no thinking-out-loud. The first character of your response must be \`{\` and the last must be \`}\`. Put any reasoning inside the \`notes\` field of the JSON.
 
 {
   "transactions": [ /* zero or more tx objects */ ],

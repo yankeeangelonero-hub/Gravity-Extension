@@ -95,10 +95,11 @@ async function callOpenRouter(input, config) {
         return { ok: false, reason: 'schema_mismatch', raw: 'No message.content string.',
                  model: parsed.model, durationMs: performance.now() - t0 };
     }
-    let out;
-    try { out = JSON.parse(content); }
-    catch (e) { return { ok: false, reason: 'invalid_json', raw: content.slice(0, 500),
-                          model: parsed.model, durationMs: performance.now() - t0 }; }
+    const out = extractJSON(content);
+    if (out === null) {
+        return { ok: false, reason: 'invalid_json', raw: content.slice(0, 500),
+                 model: parsed.model, durationMs: performance.now() - t0 };
+    }
 
     if (!Array.isArray(out.transactions)) {
         return { ok: false, reason: 'schema_mismatch', raw: 'transactions field missing or not array.',
@@ -112,6 +113,26 @@ async function callOpenRouter(input, config) {
         model: parsed.model,
         durationMs: performance.now() - t0,
     };
+}
+
+/**
+ * Tolerant JSON extraction. Tries direct parse, then markdown-fenced JSON,
+ * then the outermost {...} block. Returns parsed object or null.
+ * Needed because models occasionally prefix prose ("Looking at the
+ * corrections...") or wrap in ```json fences despite being told not to.
+ */
+function extractJSON(content) {
+    try { return JSON.parse(content); } catch {}
+    const fenceMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+    if (fenceMatch) {
+        try { return JSON.parse(fenceMatch[1]); } catch {}
+    }
+    const firstBrace = content.indexOf('{');
+    const lastBrace = content.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try { return JSON.parse(content.slice(firstBrace, lastBrace + 1)); } catch {}
+    }
+    return null;
 }
 
 export function renderUserPrompt(input) {
