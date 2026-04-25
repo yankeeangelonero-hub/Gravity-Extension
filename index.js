@@ -1926,6 +1926,13 @@ async function onMessageReceived(messageId) {
     if (allErrors.length > 0) {
         queueCorrections(allErrors);
         console.warn(`${LOG_PREFIX} ${allErrors.length} errors queued for correction.`);
+        // ── DEBUG (remove after smoke) ─────────────────────────────────
+        for (let i = 0; i < Math.min(allErrors.length, 5); i++) {
+            const e = allErrors[i];
+            console.warn(`${LOG_PREFIX} [DBG] error ${i}: ${e.error}`);
+            if (e.tx) console.warn(`${LOG_PREFIX} [DBG]   rejected tx: ${JSON.stringify(e.tx)}`);
+        }
+        // ── END DEBUG ──────────────────────────────────────────────────
     }
 
     // Commit valid transactions
