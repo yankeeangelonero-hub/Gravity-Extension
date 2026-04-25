@@ -540,6 +540,30 @@ function updatePanel(state, turn, committedTxns) {
     if (statusEl) statusEl.textContent = _staleWarning ? 'stale — eval recommended' : 'active';
     if (turnEl) turnEl.textContent = `Turn ${turn}`;
     if (txEl) txEl.textContent = `TX ${state.lastTxId ?? 0}`;
+
+    // Director status badge
+    const directorStatus = (typeof window !== 'undefined' && window.__gravityDirectorStatus) || 'ok';
+    const panel = document.getElementById(PANEL_ID);
+    if (panel) {
+        const headerStatusEl = panel.querySelector('.gravity-director-status') || (() => {
+            const el = document.createElement('span');
+            el.className = 'gravity-director-status';
+            el.style.marginLeft = '.5em';
+            const header = panel.querySelector('.gl-popup-header') || panel;
+            header.appendChild(el);
+            return el;
+        })();
+        if (directorStatus === 'failed') {
+            headerStatusEl.textContent = '⚠ director failed last turn';
+            headerStatusEl.style.color = '#e55';
+        } else if (directorStatus === 'disabled') {
+            headerStatusEl.textContent = '⚠ director disabled — read-only session';
+            headerStatusEl.style.color = '#fa3';
+        } else {
+            headerStatusEl.textContent = '';
+        }
+    }
+
     renderDebugSummary();
 
     renderAllSections();

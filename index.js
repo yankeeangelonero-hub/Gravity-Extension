@@ -1469,6 +1469,8 @@ async function initialize(force = false) {
 
     if (!chatId) {
         console.log(`${LOG_PREFIX} No active chat.`);
+        window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+            : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
         updatePanel(null, 0);
         return;
     }
@@ -1483,6 +1485,8 @@ async function initialize(force = false) {
         const txCount = getAllTransactions().length;
         setBookName(chatId);
         injectPrompt();
+        window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+            : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
         updatePanel(_currentState, _turnCounter);
         await mountDirectorSettings();
         console.log(`${LOG_PREFIX} Initialized for chat ${chatId}. ${txCount} TX loaded.`);
@@ -1661,6 +1665,8 @@ async function onMessageReceived(messageId) {
                 : challengeCorrection;
         }
         injectPrompt();
+        window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+            : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
         updatePanel(_currentState, _turnCounter);
         return;
     }
@@ -1682,6 +1688,8 @@ async function onMessageReceived(messageId) {
                 : challengeCorrection;
         }
         injectPrompt();
+        window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+            : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
         updatePanel(_currentState, _turnCounter);
         return;
     }
@@ -2208,6 +2216,8 @@ async function onMessageReceived(messageId) {
         console.error(`${LOG_PREFIX} Post-commit pipeline error (panel will still update):`, err);
         try { injectPrompt(); } catch (_) { /* best-effort */ }
     } finally {
+        window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+            : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
         updatePanel(_currentState, _turnCounter, committedTxns);
     }
 }
@@ -2234,6 +2244,8 @@ async function onUserMessage(messageId) {
             _pendingDeductionType = challengeResult.deductionType || getActiveChallengeDeductionType() || 'combat';
             _pendingReinforcement = null;
             injectPrompt('advance');
+            window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+                : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
             updatePanel(_currentState, _turnCounter);
             return;
         }
@@ -2244,12 +2256,16 @@ async function onUserMessage(messageId) {
             _pendingDeductionType = getActiveChallengeDeductionType() || 'combat';
             _pendingReinforcement = `[CHALLENGE RUNTIME]\nThe player sent "${rawText.slice(0, 80)}" but the extension could not resolve it to a stored option or recognized command. Output ${getActiveProfile()?.optionCount?.[0] || 3}-${getActiveProfile()?.optionCount?.[1] || 4} clickable options using the exact HTML format so the player can choose.`;
             injectPrompt('advance');
+            window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+                : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
             updatePanel(_currentState, _turnCounter);
             return;
         }
         if (challengePrefix) {
             _pendingDeductionType = challengePrefix.deductionType || 'combat';
             injectPrompt('advance');
+            window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+                : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
             updatePanel(_currentState, _turnCounter);
             return;
         }
@@ -2283,6 +2299,8 @@ Then write prose, render the choices, and end with a compact STATE block.`,
         // Rollback runtime-state cleanup is handled by the onRollback listener
         // registered at module init (PHASE2-SPEC §8 step 8b).
         injectPrompt();
+        window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+            : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
         updatePanel(_currentState, _turnCounter);
     }
 }
@@ -2374,6 +2392,8 @@ async function applyAdvanceTick() {
     const healthNudge = buildNudge_collisionHealth(_currentState);
     if (healthNudge) _pendingNudgeText = healthNudge;
 
+    window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+        : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
     updatePanel(_currentState, _turnCounter);
 }
 
@@ -2450,6 +2470,8 @@ async function handleCombatButton() {
         _currentState = computeCurrentState();
         _pendingDeductionType = 'combat';
         injectPrompt('advance');
+        window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+            : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
         updatePanel(_currentState, _turnCounter);
     }
     insertChatMessage('combat: ');
@@ -2705,6 +2727,8 @@ async function handleImportData(data) {
     setPhaseCallback((phase) => {
         showSetupPhase(phase > 0 ? getPhaseLabel() : null);
         injectPrompt(phase > 0 ? 'integration' : 'regular');
+        window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
+            : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
         updatePanel(_currentState, _turnCounter);
         if (phase === 0 && _lastPhase > 0) {
             toastr.success('Setup complete!');
