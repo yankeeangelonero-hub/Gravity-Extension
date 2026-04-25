@@ -11,7 +11,7 @@ import { init as initLedger, reset as resetLedger, append, getAllTransactions, g
 import { initSnapshots, computeCurrentState, createSnapshot, onRollback } from './snapshot-mgr.js';
 import { validateBatch, formatErrors, validateTransitions, findMissingArchiveEntries, validateBlock } from './consistency.js';
 import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel, CATEGORY_DISTANCES } from './state-compute.js';
-import { formatStateView, formatReadme, computeArchiveVersion } from './state-view.js';
+import { formatStateView, computeArchiveVersion } from './state-view.js';
 import { extractUpdateBlock } from './regex-intercept.js';
 import { stripUpdateBlock, buildDirectorCorrectionPayload } from './regex-intercept.js';
 import { buildDirectorInput } from './director-input.js';
@@ -1205,10 +1205,6 @@ function injectPrompt(mode) {
             if (includeArchive) _archiveInjectedVersion = archiveVersion;
         }
 
-        // Format readme — core on regular/advance, full on integration
-        const readme = formatReadme(isIntegration ? 'full' : 'core');
-        _setPrompt(`${MODULE_NAME}_readme`, readme);
-
         // Setup wizard phase prompt (overrides corrections when active)
         const setupPrompt = getPhasePrompt();
         _setPrompt(`${MODULE_NAME}_setup`, setupPrompt || '');
@@ -1484,6 +1480,8 @@ async function initialize(force = false) {
 
         const txCount = getAllTransactions().length;
         setBookName(chatId);
+        const context = SillyTavern.getContext();
+        context.setExtensionPrompt?.(`${MODULE_NAME}_readme`, '', PROMPT_NONE, 0);
         injectPrompt();
         window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
             : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
