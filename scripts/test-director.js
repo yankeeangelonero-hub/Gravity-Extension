@@ -118,6 +118,54 @@ group('buildDirectorCorrectionPayload', () => {
     });
 });
 
+// Mirror the contract; production module is loaded when CommonJS-bridge added in step 3.
+function buildDirectorInput({
+    snappedInjectMode, snappedReasonMode, snappedDeductionType,
+    userMessage, assistantMessage, stateView,
+    recentLedgerTail, pendingCorrections, recentTurns,
+    lastDirectorFailed
+} = {}) {
+    return {
+        mode: snappedInjectMode || 'regular',
+        reasonMode: snappedReasonMode || 'regular',
+        deductionType: snappedDeductionType || null,
+        userMessage: userMessage || '',
+        assistantMessage: assistantMessage || '',
+        stateView: stateView || '',
+        recentLedgerTail: Array.isArray(recentLedgerTail) ? recentLedgerTail : [],
+        pendingCorrections: pendingCorrections || null,
+        recentTurns: Array.isArray(recentTurns) ? recentTurns : [],
+        lastDirectorFailed: !!lastDirectorFailed,
+    };
+}
+
+group('buildDirectorInput', () => {
+    test('all fields default cleanly when input is sparse', () => {
+        const out = buildDirectorInput({});
+        assertEqual(out, {
+            mode: 'regular', reasonMode: 'regular', deductionType: null,
+            userMessage: '', assistantMessage: '', stateView: '',
+            recentLedgerTail: [], pendingCorrections: null, recentTurns: [],
+            lastDirectorFailed: false,
+        });
+    });
+    test('passes through full payload', () => {
+        const out = buildDirectorInput({
+            snappedInjectMode: 'advance', snappedReasonMode: 'combat',
+            snappedDeductionType: 'combat',
+            userMessage: 'u', assistantMessage: 'a', stateView: 's',
+            recentLedgerTail: [{ op: 'CR' }], pendingCorrections: { kind: 'director_corrections', items: [] },
+            recentTurns: [{ user: 'u1', assistant: 'a1' }],
+            lastDirectorFailed: true,
+        });
+        assertEqual(out.mode, 'advance');
+        assertEqual(out.reasonMode, 'combat');
+        assertEqual(out.deductionType, 'combat');
+        assertEqual(out.lastDirectorFailed, true);
+        assertEqual(out.recentLedgerTail.length, 1);
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
