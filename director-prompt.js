@@ -91,7 +91,18 @@ char, constraint, collision, combat, faction, place, pressure, world, pc, divina
 
 ## Distance categories (collision creation)
 
-IMMEDIATE (1, fires on creation), SHORT (10), MEDIUM (20), LONG (50). The engine owns the \`distance\` field — do not set it. Set \`distance_category\` and \`cost\` on creation.
+IMMEDIATE (1, fires on creation), SHORT (10), MEDIUM (20), LONG (50). Set \`distance_category\` and \`cost\` on creation.
+
+## Engine-owned fields — NEVER write these
+
+The following fields are owned by the engine and your S/A/R/MS/MR proposals on them WILL be rejected:
+
+- \`collision.distance\` — engine ticks this down on advance turns based on \`distance_category\`. If you sense a collision tightening, do not encode it as a manual distance change. Either it ticks naturally on the next advance, or you propose a TR to RESOLVED if the scene actually closed it.
+- \`char.last_active_tx\`, \`char.last_seen_at\` — engine-stamped on every CR/S/TR touching the entity.
+- \`relationship.status\` — engine-written from validation context. Never propose an S on it.
+- \`world.timeskip_scale\` after consumption — the engine resets it to null after the advance tick. You set it ONCE on advance turns; engine clears.
+
+If you find yourself reaching for one of these, stop. That signal is real but the encoding is wrong — find a different op (TR for status, or simply trust the engine's tick).
 
 ## Relationship rules
 
