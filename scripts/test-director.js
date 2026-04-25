@@ -32,6 +32,44 @@ group('harness sanity', () => {
     test('1+1=2', () => { assertEqual(1 + 1, 2); });
 });
 
+// Note: regex-intercept.js uses ES module exports. For node-CommonJS tests,
+// we import the patterns directly via the file's exports if it provides
+// CommonJS-compatible exports, or we mirror the pattern definitions here.
+// Mirror approach used to keep tests independent of module-system mismatch.
+
+const LEDGER_BLOCK_PATTERN = /[-—–]{2,3}\s*LEDGER\s*(?:BLOCK)?\s*[-—–]{2,3}([\s\S]*?)[-—–]{2,3}\s*END\s*LEDGER\s*[-—–]{2,3}/i;
+const STATE_BLOCK_PATTERN = /[-—–]{2,3}\s*STATE\s*(?:DELTA)?\s*[-—–]{2,3}([\s\S]*?)[-—–]{2,3}\s*END\s*STATE\s*[-—–]{2,3}/i;
+
+function stripUpdateBlock(message) {
+    if (!message) return message;
+    return message
+        .replace(LEDGER_BLOCK_PATTERN, '')
+        .replace(STATE_BLOCK_PATTERN, '')
+        .trim();
+}
+
+group('stripUpdateBlock', () => {
+    test('strips ---LEDGER--- block', () => {
+        const msg = 'prose before\n---LEDGER---\nCR char:elena\n---END LEDGER---\nprose after';
+        assertEqual(stripUpdateBlock(msg), 'prose before\n\nprose after');
+    });
+    test('strips ---STATE--- block', () => {
+        const msg = 'prose\n---STATE---\nat: [Day 1 - 12:00]\n---END STATE---\ntail';
+        assertEqual(stripUpdateBlock(msg), 'prose\n\ntail');
+    });
+    test('strips both LEDGER and STATE in the same message', () => {
+        const msg = '---STATE---\nfoo\n---END STATE---\nmid\n---LEDGER---\nCR a\n---END LEDGER---';
+        assertEqual(stripUpdateBlock(msg), 'mid');
+    });
+    test('returns input unchanged if no block present', () => {
+        assertEqual(stripUpdateBlock('plain prose'), 'plain prose');
+    });
+    test('handles null/undefined', () => {
+        assertEqual(stripUpdateBlock(null), null);
+        assertEqual(stripUpdateBlock(undefined), undefined);
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

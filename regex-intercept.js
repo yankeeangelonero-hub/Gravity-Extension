@@ -685,6 +685,22 @@ function stripLedgerBlock(message) {
     return message.replace(LEDGER_BLOCK_PATTERN, '').trim();
 }
 
+/**
+ * Strip both LEDGER and STATE update blocks from a message.
+ * Used by the director input pipeline (assistantMessage cleaning,
+ * recentTurns cleaning) and display cleaning. Migration chats
+ * frequently contain ---STATE--- blocks that stripLedgerBlock misses.
+ * @param {string} message
+ * @returns {string}
+ */
+function stripUpdateBlock(message) {
+    if (!message) return message;
+    return message
+        .replace(LEDGER_BLOCK_PATTERN, '')
+        .replace(STATE_BLOCK_PATTERN, '')
+        .trim();
+}
+
 export {
     extractUpdateBlock,
     extractLedgerBlock,
@@ -695,6 +711,8 @@ export {
     getReinforcement,
     buildCorrectionInjection,
     stripLedgerBlock,
+    stripUpdateBlock,
     getComplianceScore,
     LEDGER_BLOCK_PATTERN,
+    STATE_BLOCK_PATTERN,
 };
