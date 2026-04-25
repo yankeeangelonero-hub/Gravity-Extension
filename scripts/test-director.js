@@ -166,6 +166,19 @@ group('buildDirectorInput', () => {
     });
 });
 
+const fs = require('fs');
+const path = require('path');
+group('director-prompt', () => {
+    test('director-prompt.js contains required sections', () => {
+        const src = fs.readFileSync(path.resolve(__dirname, '..', 'director-prompt.js'), 'utf8');
+        assert(src.includes('You are the Gravity Director'), 'role framing present');
+        assert(src.includes('"op": "TR"'), 'TR JSON example present');
+        assert(src.includes('"transactions"'), 'output contract present');
+        assert(src.includes('Behavioral priorities'), 'priorities section present');
+        assert(src.includes('State machines'), 'state machines section present');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

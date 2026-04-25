@@ -94,6 +94,33 @@ PC ↔ TRACKED+ char/faction. id format \`relationship:pc-<other_id>\`. \`status
 Four prefixes: \`knows_\`, \`unknown_\`, \`hiding_\`, \`misreading_\`. Cap: 20 entries combined across all four.
 `;
 
+const FULL_TURN_EXAMPLE = `## Full-turn example
+
+Imagine an advance turn in which the PC took a week to recover, a constraint was tested and held, and a new pressure point seeded. Output:
+
+{
+  "transactions": [
+    { "op": "S", "e": "world", "id": null, "d": { "f": "timeskip_scale", "value": "WEEKS" }, "r": "PC took a week to recover." },
+    { "op": "TR", "e": "constraint", "id": "c1", "d": { "f": "integrity", "from": "STRESSED", "to": "HELD" }, "r": "PC held the line under pressure." },
+    { "op": "CR", "e": "pressure", "id": "lacus-distance", "d": { "name": "Lacus growing distant", "source": "Her silence after the medbay scene." }, "r": "New tension surfaced this advance." }
+  ],
+  "notes": "Conservative — no collision changes this advance.",
+  "confidence": "high"
+}
+
+## Output contract
+
+Always return exactly this JSON shape:
+
+{
+  "transactions": [ /* zero or more tx objects */ ],
+  "notes": "optional free-text reasoning, ignored by extension",
+  "confidence": "high" | "medium" | "low"
+}
+
+Empty transactions is a valid, encouraged outcome when nothing structural happened.
+`;
+
 export function buildDirectorSystemPrompt() {
-    return [ROLE, OP_VOCABULARY, ENTITIES_AND_STATE_MACHINES].join('\n\n');
+    return [ROLE, OP_VOCABULARY, ENTITIES_AND_STATE_MACHINES, FULL_TURN_EXAMPLE].join('\n\n');
 }
