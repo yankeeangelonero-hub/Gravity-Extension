@@ -159,6 +159,19 @@ Durable working memory for Codex sessions in this repository. Update this file w
 - Clean up remaining mojibake in docs and some source comments when it becomes worth a dedicated pass.
 - Live-test the duplicated-CoT cleanup and verify every mode path (`regular`, `combat`, `advance`, `intimacy`, and integration flows) enters the preset CoT once with the correct mode.
 
+## Director architecture (2026-04-25)
+
+The director-call architecture replaces parser-led ledger extraction. Key facts:
+
+- A separate API call to a configurable OpenRouter model proposes ledger transactions in JSON. Deterministic extension code remains the only thing allowed to commit.
+- `formatReadme()` content has migrated to `director-prompt.js`, with all examples reissued in JSON tx form.
+- `_readme` injection slot is removed.
+- `_pendingCorrections` no longer flows to prose-side `_inject`; it routes to the next director call via `buildDirectorCorrectionPayload`.
+- `_pendingReinforcement` is now prose-side only (challenge corrections, size warnings); parser-compliance reinforcement is gone.
+- Disabled-mode is hard off — visible banner, no commits, no parser fallback.
+- Settings live in `extension_settings[MODULE_NAME]` (global, not per-chat).
+- Spec: `docs/superpowers/specs/2026-04-25-gravity-director-design.md`. Plan: `docs/superpowers/plans/2026-04-25-gravity-director.md`.
+
 ## Update Rule
 
 When major behavior changes land, update this file in the same change if the new behavior would matter to a future Codex session.

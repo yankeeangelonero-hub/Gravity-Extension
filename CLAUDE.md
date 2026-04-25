@@ -53,7 +53,6 @@ Failed ledger lines are queued as corrections -> injected into next prompt so LL
 
 All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user message). Injection slots:
 - **`_state`** - Entity registry + dossiers (full state view every turn)
-- **`_readme`** - Command format reference (core on regular/advance, full on integration)
 - **`_inject`** - Corrections + reinforcement prompts
 - **`_nudge`** - Active deduction-mode flag (regular/combat/advance/intimacy)
 - **`_nudge_maintenance`** - Array-size hygiene warnings (pressure/collision/etc. over cap)
@@ -68,6 +67,8 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_faction`** - Faction heartbeat (every 10 regular turns)
 - **`_dormant`** - Dormant character nudge (every 15 regular turns)
 - **`_exemplars`** - Last 5 good prose paragraphs for style reference
+
+The director (configured via extension settings) owns ledger emission. The prose model writes prose only. See `docs/superpowers/specs/2026-04-25-gravity-director-design.md` and `director-prompt.js`.
 
 Turn modes: `regular` (player prose), `advance` (world moves), `integration` (setup, timeskip).
 
