@@ -47,21 +47,31 @@ Two hard gates from spec §12. If either fails, stop and revisit the spec before
 
 Pick N ≥ 20 turns from exported chats in `Tests/`. Pick a mix of regular, advance, combat, and intimacy turns from real play sessions. Record source chat name and message indices in the metrics doc.
 
-- [ ] **Step 2: Add temporary instrumentation**
+- [ ] **Step 2: Add temporary instrumentation (three insertion sites)**
 
-In `index.js` `onMessageReceived()`, immediately after `const extraction = extractUpdateBlock(message.mes);` (line 1527), add:
+`committedTxns` is populated only after `appendTransactions(...)` succeeds, so logging it directly after the validate loop will undercount or flatline. Use three sites:
+
+**Site A** — immediately after `const extraction = extractUpdateBlock(message.mes);` (line 1527):
 
 ```js
 const __t0 = performance.now();
 console.log(`[BASELINE] turn=${_turnCounter} extracted=${extraction.transactions?.length || 0} found=${extraction.found} format=${extraction.format || 'none'}`);
 ```
 
-After the `validateBatch` loop completes (around line 1700+ where `committedTxns` is final), add:
+**Site B** — immediately after the validateBatch loop closes (where `validTxns` and `validationErrors` are final, but before append):
+
+```js
+console.log(`[BASELINE] turn=${_turnCounter} validated=${validTxns.length} rejected=${validationErrors.length}`);
+```
+
+**Site C** — immediately after the `appendTransactions(...)` call returns (where `committedTxns` is finalized). Locate the post-append site by searching for `committedTxns =` or `committedTxns.push`:
 
 ```js
 const __dt = performance.now() - __t0;
-console.log(`[BASELINE] turn=${_turnCounter} committed=${committedTxns.length} rejected=${validationErrors.length} dt_ms=${__dt.toFixed(1)}`);
+console.log(`[BASELINE] turn=${_turnCounter} committed=${committedTxns.length} dt_ms=${__dt.toFixed(1)}`);
 ```
+
+If a turn returns early (e.g., no block found), Site C is skipped and `committed=0` is implicit from the absence of a Site C line. Site B will likewise be absent for early-return paths; treat absence as "0 validated".
 
 - [ ] **Step 3: Replay the picked turns**
 
@@ -119,55 +129,127 @@ git commit -m "docs: capture parser-path baseline metrics for director compariso
 <html>
 <head><meta charset="utf-8"><title>Gravity Director — fetch spike</title></head>
 <body style="font-family: system-ui; max-width: 720px; margin: 2em auto;">
-<h2>Anthropic / OpenAI direct-browser-fetch spike</h2>
-<p>Goal: confirm both providers accept direct browser fetch from a SillyTavern extension page context.</p>
+<h2>Anthropic / OpenAI structured-output direct-browser-fetch spike</h2>
+<p>Goal: confirm both providers accept direct browser fetch from a SillyTavern
+   extension page context, <strong>using the same structured-output request
+   shapes the production director will use</strong> — Anthropic
+   <code>tool_use</code> with <code>input_schema</code>, and OpenAI
+   <code>response_format: json_schema</code>. A plain-text smoke test would
+   pass even if the structured-output path later fails for browser/CORS/schema
+   reasons, so the gate must exercise the real shapes.</p>
+
 <input id="anth-key" type="password" placeholder="Anthropic API key" style="width:100%;margin:.5em 0;" />
-<button onclick="testAnth()">Test Anthropic (claude-sonnet-4-6)</button>
+<button onclick="testAnthPlain()">Anthropic plain (smoke)</button>
+<button onclick="testAnthTool()">Anthropic tool_use (production shape)</button>
 <input id="openai-key" type="password" placeholder="OpenAI API key" style="width:100%;margin:.5em 0;" />
-<button onclick="testOpenAI()">Test OpenAI (gpt-4o-mini)</button>
+<button onclick="testOpenAIPlain()">OpenAI plain (smoke)</button>
+<button onclick="testOpenAISchema()">OpenAI json_schema (production shape)</button>
 <pre id="out" style="background:#222;color:#eee;padding:1em;white-space:pre-wrap;"></pre>
 <script>
-async function testAnth() {
-  const key = document.getElementById('anth-key').value.trim();
-  const out = document.getElementById('out');
-  out.textContent = 'Calling Anthropic...';
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 64,
-        messages: [{ role: 'user', content: 'Reply with the JSON {"ok":true} and nothing else.' }]
-      })
-    });
-    out.textContent = `Anthropic HTTP ${r.status}\n\n` + await r.text();
-  } catch (e) { out.textContent = 'Anthropic ERROR: ' + e.message + '\n(likely CORS)'; }
+const TX_SCHEMA = {
+    type: 'object',
+    properties: {
+        transactions: { type: 'array', items: { type: 'object' } },
+        notes: { type: 'string' },
+        confidence: { type: 'string', enum: ['high', 'medium', 'low'] }
+    },
+    required: ['transactions']
+};
+async function postJSON(url, headers, body) {
+    const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    return { status: r.status, text: await r.text() };
 }
-async function testOpenAI() {
-  const key = document.getElementById('openai-key').value.trim();
-  const out = document.getElementById('out');
-  out.textContent = 'Calling OpenAI...';
-  try {
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'Authorization': 'Bearer ' + key
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: 'Reply with the JSON {"ok":true} and nothing else.' }],
-        response_format: { type: 'json_object' }
-      })
-    });
-    out.textContent = `OpenAI HTTP ${r.status}\n\n` + await r.text();
-  } catch (e) { out.textContent = 'OpenAI ERROR: ' + e.message + '\n(likely CORS)'; }
+function show(label, res) {
+    document.getElementById('out').textContent = `${label} HTTP ${res.status}\n\n${res.text}`;
+}
+async function testAnthPlain() {
+    const key = document.getElementById('anth-key').value.trim();
+    document.getElementById('out').textContent = 'Calling Anthropic (plain)...';
+    try {
+        const res = await postJSON('https://api.anthropic.com/v1/messages', {
+            'content-type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+        }, {
+            model: 'claude-sonnet-4-6',
+            max_tokens: 64,
+            messages: [{ role: 'user', content: 'Reply with the JSON {"ok":true} and nothing else.' }]
+        });
+        show('Anthropic plain', res);
+    } catch (e) { show('Anthropic plain', { status: 'ERR', text: e.message + '\n(likely CORS)' }); }
+}
+async function testAnthTool() {
+    const key = document.getElementById('anth-key').value.trim();
+    document.getElementById('out').textContent = 'Calling Anthropic (tool_use)...';
+    try {
+        const res = await postJSON('https://api.anthropic.com/v1/messages', {
+            'content-type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+        }, {
+            model: 'claude-sonnet-4-6',
+            max_tokens: 256,
+            tools: [{
+                name: 'commit_transactions',
+                description: 'Propose ledger transactions to commit for this turn.',
+                input_schema: TX_SCHEMA
+            }],
+            tool_choice: { type: 'tool', name: 'commit_transactions' },
+            messages: [{ role: 'user', content: 'Smoke test — return an empty transactions array with a brief note.' }]
+        });
+        show('Anthropic tool_use', res);
+    } catch (e) { show('Anthropic tool_use', { status: 'ERR', text: e.message + '\n(likely CORS or schema)' }); }
+}
+async function testOpenAIPlain() {
+    const key = document.getElementById('openai-key').value.trim();
+    document.getElementById('out').textContent = 'Calling OpenAI (plain)...';
+    try {
+        const res = await postJSON('https://api.openai.com/v1/chat/completions', {
+            'content-type': 'application/json',
+            'Authorization': 'Bearer ' + key
+        }, {
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: 'Reply with the JSON {"ok":true} and nothing else.' }],
+            response_format: { type: 'json_object' }
+        });
+        show('OpenAI plain', res);
+    } catch (e) { show('OpenAI plain', { status: 'ERR', text: e.message + '\n(likely CORS)' }); }
+}
+async function testOpenAISchema() {
+    const key = document.getElementById('openai-key').value.trim();
+    document.getElementById('out').textContent = 'Calling OpenAI (json_schema)...';
+    try {
+        const res = await postJSON('https://api.openai.com/v1/chat/completions', {
+            'content-type': 'application/json',
+            'Authorization': 'Bearer ' + key
+        }, {
+            model: 'gpt-4o',
+            messages: [
+                { role: 'system', content: 'You are a smoke-test bot.' },
+                { role: 'user', content: 'Return an empty transactions array.' }
+            ],
+            response_format: {
+                type: 'json_schema',
+                json_schema: {
+                    name: 'commit_transactions',
+                    strict: true,
+                    schema: {
+                        type: 'object',
+                        additionalProperties: false,
+                        properties: {
+                            transactions: { type: 'array', items: { type: 'object' } },
+                            notes: { type: 'string' },
+                            confidence: { type: 'string', enum: ['high','medium','low'] }
+                        },
+                        required: ['transactions','notes','confidence']
+                    }
+                }
+            }
+        });
+        show('OpenAI json_schema', res);
+    } catch (e) { show('OpenAI json_schema', { status: 'ERR', text: e.message + '\n(likely CORS or schema)' }); }
 }
 </script>
 </body>
@@ -178,14 +260,18 @@ async function testOpenAI() {
 
 Place the file at `scripts/spike-director-fetch.html`. Open it in the browser via SillyTavern's static-file path (typically `/scripts/extensions/third-party/<ext-name>/scripts/spike-director-fetch.html`). The same-origin trust posture matches what the real director call will face.
 
-- [ ] **Step 3: Run both providers**
+- [ ] **Step 3: Run all four buttons**
 
-Use a real key for each. Record outcome. Required: HTTP 200 with valid JSON body for both.
+Use a real key for each provider. Record outcomes per button. The structured-output buttons (`tool_use`, `json_schema`) are the gate-critical ones — the plain buttons are just sanity checks.
+
+Required for each provider:
+- Plain test: HTTP 200 with parseable JSON body.
+- Structured-output test: HTTP 200, body parses, and the structured field is present (`content[].type === "tool_use"` for Anthropic, `choices[0].message.content` is JSON-parseable matching the schema for OpenAI).
 
 - [ ] **Step 4: Decide gate**
 
-- Both PASS → continue plan.
-- Either FAIL → STOP. Document failure in the metrics doc. Spec must be revisited (likely flips "no relay" decision).
+- Both providers' structured-output tests PASS → continue plan.
+- Either provider's structured-output test FAILS (CORS preflight rejection on the schema-bearing request, schema-validation 4xx, etc.) → STOP. Document failure in the metrics doc. Spec must be revisited (likely flips "no relay" decision). A passing plain test is **not** sufficient — it does not prove the production request shape will work.
 
 - [ ] **Step 5: Commit the spike file**
 
@@ -395,6 +481,8 @@ git commit -m "feat(regex-intercept): add stripUpdateBlock covering LEDGER and S
 - Modify: `regex-intercept.js`
 - Modify: `scripts/test-director.js`
 
+**Important shape note:** the existing validation loop at `index.js:1606-1612` pushes records with a `raw` field that is a *debug marker* (e.g., `[validated tx 0] char:elena`), not the actual rejected transaction. The director needs the rejected tx object itself to repair it. So the corrections-queue record shape is being **extended** as part of this work: each failed-line now carries both `tx` (the actual rejected tx object, or null if not available) and `marker` (the debug token). The director input field `tx` reflects the actual op/field/value tuple; `marker` is preserved only for human-readable debug logs. The corresponding push in `index.js` is updated in Task 5.2.
+
 - [ ] **Step 1: Write the failing tests**
 
 Append to `scripts/test-director.js`:
@@ -406,7 +494,8 @@ function buildDirectorCorrectionPayload(failedLines) {
     return {
         kind: 'director_corrections',
         items: failedLines.map(fl => ({
-            tx: fl.raw || null,
+            tx: fl.tx || null,                     // actual rejected tx object
+            marker: fl.marker || fl.raw || null,   // debug token, accepts legacy `raw`
             error: fl.error || '',
             fix: fl.fix || null,
             attempts: fl.attempts || 0,
@@ -420,18 +509,30 @@ group('buildDirectorCorrectionPayload', () => {
         assertEqual(buildDirectorCorrectionPayload(null), null);
         assertEqual(buildDirectorCorrectionPayload(undefined), null);
     });
-    test('shapes a single failure', () => {
+    test('shapes a single failure with full tx object', () => {
+        const tx = { op: 'TR', e: 'char', id: 'elena', d: { f: 'tier', from: 'KNOWN', to: 'PRINCIPAL' } };
         const out = buildDirectorCorrectionPayload([
-            { raw: '[char:elena tier]', error: 'invalid transition', fix: 'use TRACKED', attempts: 1 }
+            { tx, marker: '[validated tx 0] char:elena', error: 'invalid transition', fix: 'use TRACKED', attempts: 1 }
         ]);
         assertEqual(out, {
             kind: 'director_corrections',
-            items: [{ tx: '[char:elena tier]', error: 'invalid transition', fix: 'use TRACKED', attempts: 1 }]
+            items: [{
+                tx,
+                marker: '[validated tx 0] char:elena',
+                error: 'invalid transition',
+                fix: 'use TRACKED',
+                attempts: 1,
+            }]
         });
+    });
+    test('falls back to legacy raw field when marker is absent', () => {
+        const out = buildDirectorCorrectionPayload([{ raw: 'LEGACY', error: 'oops' }]);
+        assertEqual(out.items[0].marker, 'LEGACY');
+        assertEqual(out.items[0].tx, null);
     });
     test('handles missing optional fields', () => {
         const out = buildDirectorCorrectionPayload([{ error: 'oops' }]);
-        assertEqual(out.items[0], { tx: null, error: 'oops', fix: null, attempts: 0 });
+        assertEqual(out.items[0], { tx: null, marker: null, error: 'oops', fix: null, attempts: 0 });
     });
 });
 ```
@@ -449,10 +550,20 @@ Insert after `buildCorrectionInjection` (line 676), before `stripLedgerBlock`:
 ```js
 /**
  * Build a structured corrections payload for the director.
- * Replaces buildCorrectionInjection() in the director path —
- * that function emits prose-side text instructing the prose
- * model to resubmit blocks, which is dead under cutover.
- * @param {Array} failedLines - { lineNum, error, raw, fix, attempts }
+ * Replaces buildCorrectionInjection() in the director path — that
+ * function emits prose-side text instructing the prose model to
+ * resubmit blocks, which is dead under cutover.
+ *
+ * Each failed-line record should provide:
+ *   tx      — the actual rejected transaction object (preferred)
+ *   marker  — short debug token (e.g., "[validated tx 0] char:elena")
+ *   error   — validator error message
+ *   fix     — optional human-readable fix hint
+ *   attempts — correction-loop attempt counter
+ *
+ * Legacy callers may pass `raw` instead of `marker`; both are accepted.
+ *
+ * @param {Array} failedLines
  * @returns {object|null}
  */
 function buildDirectorCorrectionPayload(failedLines) {
@@ -460,7 +571,8 @@ function buildDirectorCorrectionPayload(failedLines) {
     return {
         kind: 'director_corrections',
         items: failedLines.map(fl => ({
-            tx: fl.raw || null,
+            tx: fl.tx || null,
+            marker: fl.marker || fl.raw || null,
             error: fl.error || '',
             fix: fl.fix || null,
             attempts: fl.attempts || 0,
@@ -1518,7 +1630,10 @@ After existing `import { extractUpdateBlock, getReinforcement, buildCorrectionIn
 import { stripUpdateBlock, buildDirectorCorrectionPayload } from './regex-intercept.js';
 import { buildDirectorInput } from './director-input.js';
 import { proposeTransactions } from './director-client.js';
+import { getAllTransactions } from './ledger-store.js';
 ```
+
+(Verify `getAllTransactions` is the correct export name — grep `ledger-store.js` if unsure. The plan elsewhere assumes this is the store's "read all committed transactions" accessor; if the export differs, adjust the import without changing the call site.)
 
 Also add module-state for the director-failed flag, near other flags (after line 90):
 
@@ -1566,7 +1681,7 @@ Replace with:
     );
     const stateViewForDirector = formatStateView(_currentState, stateViewMode, true);
 
-    const recentLedgerTail = getLedger().slice(-getDirectorConfig().tailSize);
+    const recentLedgerTail = getAllTransactions().slice(-getDirectorConfig().tailSize);
     const recentTurns = (context.chat || [])
         .slice(-7) // up to 3 user+assistant pairs + the current
         .filter(m => m && m !== message)
@@ -1650,13 +1765,41 @@ The current block at lines 1559-1570 (`if (extractedTransactions.length === 0 &&
     }
 ```
 
-- [ ] **Step 6: node -c**
+- [ ] **Step 6: Capture the actual rejected tx in the validation loop**
+
+In the validation loop (currently around index.js:1606-1612), the failed-line push uses `raw` as a debug marker. The director correction payload needs the actual rejected tx object too. Replace the existing push:
+
+```js
+            validationErrors.push({
+                lineNum: i,
+                error: result.errors.map(e => e.message).join('; '),
+                raw: `[validated tx ${i}] ${entityToken}`,
+            });
+```
+
+with:
+
+```js
+            validationErrors.push({
+                lineNum: i,
+                error: result.errors.map(e => e.message).join('; '),
+                tx,                                                          // actual rejected tx
+                marker: `[validated tx ${i}] ${entityToken}`,                // debug token (was `raw`)
+                raw: `[validated tx ${i}] ${entityToken}`,                   // backward-compat alias
+            });
+```
+
+Apply the same change to the second push site at index.js:1621-1626 (the travel-plausibility/tier-gate path) — add `tx` and `marker` fields, keep `raw` as alias.
+
+`buildDirectorCorrectionPayload` already accepts both `marker` and legacy `raw`, so downstream consumers do not need additional changes. The `raw` alias allows any other consumer (e.g., the now-debug-only `buildCorrectionInjection`) to keep working.
+
+- [ ] **Step 7: node -c**
 
 ```bash
 node -c index.js
 ```
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add index.js
