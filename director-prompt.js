@@ -94,9 +94,46 @@ PC ↔ TRACKED+ char/faction. id format \`relationship:pc-<other_id>\`. \`status
 Four prefixes: \`knows_\`, \`unknown_\`, \`hiding_\`, \`misreading_\`. Cap: 20 entries combined across all four.
 `;
 
-const FULL_TURN_EXAMPLE = `## Full-turn example
+const COMMIT_THRESHOLD = `## Commit threshold — when to write txs
 
-Imagine an advance turn in which the PC took a week to recover, a constraint was tested and held, and a new pressure point seeded. Output:
+Empty transaction sets ARE valid for genuinely quiet beats. But Gravity's normal rhythm is small frequent updates, not massive infrequent ones. Don't over-rotate on conservatism — \`txs=0\` on every dialogue turn means the engine isn't tracking anything.
+
+The "earned change" priority is meant to gate big state-machine transitions (collision RESOLVED, constraint BROKEN, char tier promotion). It is NOT meant to gate the high-frequency updates below.
+
+### High-frequency — update often
+
+**Knowledge asymmetry (MS).** Whenever a character says something in dialogue that another character would now know about (or whenever the prose reveals what a character believes/hides/misreads), MS-update the appropriate map. Even partial information counts: if Autumn mentions "a 500-year-old grave," Ada now has a \`knows_autumn_grave_research\` entry — the grave's *specific contents* don't have to be confirmed for "she knows he's investigating it" to be a real fact. Waiting for fully-confirmed facts will starve the asymmetry maps. Cap is 20 entries combined; until you're near that cap, prefer adding over withholding.
+
+**Demonstrated traits (A).** When a character demonstrates a trait through action or speech (clever, brutal, kind, calculating, hesitant, etc.), APPEND to \`char.<id>.demonstrated_traits\`. These accumulate across the chat as the character's evidence-base.
+
+**Scene cast (A/R on pc.scene_cast).** When a character enters or leaves the scene the PC is in, update \`pc.scene_cast\`. On regular turns, APPEND on entry. On advance turns, the cast is replaced wholesale.
+
+**Location (S on char.location).** When a TRACKED/PRINCIPAL char moves between places, S the location field. Don't track location for KNOWN-tier chars.
+
+**last_seen_at / last_active_tx are engine-stamped — don't write them manually.**
+
+### Medium-frequency — update when earned
+
+- **Pressure points (CR).** Seed a \`pressure\` when the prose introduces a new tension that isn't yet a collision. Cap is 5 active.
+- **Place creation (CR).** When the prose discovers a new location, CR a place.
+- **Char promotions (TR on tier).** When a previously-KNOWN char takes a TRACKED/PRINCIPAL role.
+- **Constraint integrity changes (TR).** UNTESTED → STRESSED → STRAINED → BROKEN, or testing into HELD.
+
+### Low-frequency — only when earned
+
+- **Collision status TR (ACTIVE → RESOLVED / CRASHED).** Only when the scene actually closes the collision.
+- **Faction creation (CR), faction state changes (S).** Significant world events.
+
+### Sanity check
+
+If the prose has 1500+ characters of dialogue or action involving multiple characters and you proposed 0 transactions, look harder. There is almost always a knowledge_asymmetry, demonstrated_traits, or scene_cast update buried in there. Returning \`{"transactions": []}\` on a substantive scene means the engine learns nothing new — that's a failure mode, not a virtue.
+`;
+
+const FULL_TURN_EXAMPLE = `## Examples
+
+### Example 1 — advance turn
+
+PC took a week to recover, a constraint was tested and held, and a new pressure point seeded. Output:
 
 {
   "transactions": [
@@ -104,9 +141,25 @@ Imagine an advance turn in which the PC took a week to recover, a constraint was
     { "op": "TR", "e": "constraint", "id": "c1", "d": { "f": "integrity", "from": "STRESSED", "to": "HELD" }, "r": "PC held the line under pressure." },
     { "op": "CR", "e": "pressure", "id": "lacus-distance", "d": { "name": "Lacus growing distant", "source": "Her silence after the medbay scene." }, "r": "New tension surfaced this advance." }
   ],
-  "notes": "Conservative — no collision changes this advance.",
+  "notes": "Advance closed quietly — no collision changes.",
   "confidence": "high"
 }
+
+### Example 2 — dialogue turn (the common case)
+
+Two TRACKED chars are in a quiet scene. Char A reveals research she's been doing on a topic relevant to a future collision. Char B asks one careful question and reframes. No collisions tick, no state-machine transitions — just disclosed knowledge. Output:
+
+{
+  "transactions": [
+    { "op": "MS", "e": "char", "id": "char-a", "d": { "f": "knowledge_asymmetry", "key": "knows_research_topic_x", "value": "Has been investigating topic X — files, citations, evidence chain." }, "r": "She voiced the research aloud this turn." },
+    { "op": "MS", "e": "char", "id": "char-b", "d": { "f": "knowledge_asymmetry", "key": "knows_a_researching_x", "value": "Heard her say she's investigating topic X." }, "r": "He's now read into her research." },
+    { "op": "A", "e": "char", "id": "char-a", "d": { "f": "demonstrated_traits", "value": "willing to share dangerous information without flinching" }, "r": "Demonstrated by voluntary disclosure on a sensitive topic." }
+  ],
+  "notes": "Dialogue turn — knowledge asymmetry + demonstrated trait. No collisions changed.",
+  "confidence": "high"
+}
+
+This is the common shape. Most regular turns produce 1-5 transactions like this — knowledge updates, trait accumulation, occasional scene_cast or location moves. Don't write txs=0 on a turn like this.
 
 ## Output contract
 
@@ -118,9 +171,9 @@ Always return exactly this JSON shape:
   "confidence": "high" | "medium" | "low"
 }
 
-Empty transactions is a valid, encouraged outcome when nothing structural happened.
+Empty transactions is valid for genuinely quiet beats — but see the commit threshold above. The bar for high-frequency updates (knowledge_asymmetry, demonstrated_traits, scene_cast) is intentionally low.
 `;
 
 export function buildDirectorSystemPrompt() {
-    return [ROLE, OP_VOCABULARY, ENTITIES_AND_STATE_MACHINES, FULL_TURN_EXAMPLE].join('\n\n');
+    return [ROLE, OP_VOCABULARY, ENTITIES_AND_STATE_MACHINES, COMMIT_THRESHOLD, FULL_TURN_EXAMPLE].join('\n\n');
 }
