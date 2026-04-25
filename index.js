@@ -12,7 +12,7 @@ import { initSnapshots, computeCurrentState, createSnapshot, onRollback } from '
 import { validateBatch, formatErrors, validateTransitions, findMissingArchiveEntries, validateBlock } from './consistency.js';
 import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel, CATEGORY_DISTANCES } from './state-compute.js';
 import { formatStateView, formatReadme, computeArchiveVersion } from './state-view.js';
-import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
+import { extractUpdateBlock, getReinforcement } from './regex-intercept.js';
 import { stripUpdateBlock, buildDirectorCorrectionPayload } from './regex-intercept.js';
 import { buildDirectorInput } from './director-input.js';
 import { proposeTransactions } from './director-client.js';
@@ -1235,16 +1235,10 @@ function injectPrompt(mode) {
             _setPrompt(`${MODULE_NAME}_challenge`, '');
         }
 
-        // Corrections + reinforcement
-        let injection = '';
-        if (_pendingCorrections.length > 0) {
-            injection = buildCorrectionInjection(_pendingCorrections) || '';
-        }
-        if (_pendingReinforcement) {
-            injection = injection ? injection + '\n' + _pendingReinforcement : _pendingReinforcement;
-        }
-
-        _setPrompt(`${MODULE_NAME}_inject`, injection || '');
+        // Reinforcement (prose-side only — challenge corrections etc.).
+        // _pendingCorrections no longer flows through this slot; it's
+        // routed into the next director call via buildDirectorCorrectionPayload.
+        _setPrompt(`${MODULE_NAME}_inject`, _pendingReinforcement || '');
 
         // Style exemplars — inject mode-matched good paragraphs (skip on integration turns — no prose)
         const { chatMetadata } = SillyTavern.getContext();
