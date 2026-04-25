@@ -4,20 +4,20 @@
 
 **Goal:** Replace `---LEDGER---` / `---STATE---` parsing with a separate API call to a director model that proposes ledger transactions in JSON, while keeping deterministic validation and commit authority in the SillyTavern extension.
 
-**Architecture:** Browser-side `fetch` from the extension to a configurable provider (Anthropic or OpenAI). New `director-client.js` (provider abstraction + structured-output enforcement) and `director-prompt.js` (system prompt + JSON op vocabulary). Existing `onMessageReceived` seam in `index.js` swaps `extractUpdateBlock()` for `proposeTransactions()`. Pre-validation pipeline (mode snapshot, duplicate-challenge rewrite) preserved exactly. Reinforcement split by audience: challenge corrections stay on prose-side via `_pendingReinforcement`, director-failure flows to director-side via `lastDirectorFailed`. Preset and `formatReadme()` content migrate into `director-prompt.js` with examples reissued in JSON tx form. Reference: `docs/superpowers/specs/2026-04-25-gravity-director-design.md`.
+**Architecture:** Browser-side `fetch` from the extension to **OpenRouter** as a single unified API (one endpoint, one key, free-form model id like `anthropic/claude-sonnet-4-6`). New `director-client.js` (single OpenRouter implementation + structured-output enforcement) and `director-prompt.js` (system prompt + JSON op vocabulary). Existing `onMessageReceived` seam in `index.js` swaps `extractUpdateBlock()` for `proposeTransactions()`. Pre-validation pipeline (mode snapshot, duplicate-challenge rewrite) preserved exactly. Reinforcement split by audience: challenge corrections stay on prose-side via `_pendingReinforcement`, director-failure flows to director-side via `lastDirectorFailed`. Preset and `formatReadme()` content migrate into `director-prompt.js` with examples reissued in JSON tx form. Reference: `docs/superpowers/specs/2026-04-25-gravity-director-design.md`.
 
-**Tech Stack:** JavaScript ES modules (extension code, browser context), Node.js + CommonJS (tests, mirroring `scripts/test-relationship.js`), Anthropic Messages API (tool_use), OpenAI Chat Completions API (response_format json_schema).
+**Tech Stack:** JavaScript ES modules (extension code, browser context), Node.js + CommonJS (tests, mirroring `scripts/test-relationship.js`), OpenRouter API (`https://openrouter.ai/api/v1/chat/completions`, OpenAI-compatible request shape, `response_format: json_schema` for strict structured output).
 
 ---
 
 ## File Structure
 
 **New files:**
-- `director-client.js` — provider abstraction, fetch wrapper, structured-output enforcement. Exposes `proposeTransactions(input)`.
+- `director-client.js` — single OpenRouter `fetch` wrapper, structured-output enforcement. Exposes `proposeTransactions(input, config)`.
 - `director-prompt.js` — system prompt + op vocabulary readme for director. Absorbs `formatReadme()` semantic content with all examples reissued as JSON tx objects.
 - `director-input.js` — pure helper: snap mode + assemble director payload. Kept separate from `index.js` so it's node-testable.
 - `scripts/test-director.js` — node-runnable test harness mirroring `scripts/test-relationship.js`.
-- `scripts/spike-director-fetch.html` — pre-prototype CORS / direct-browser-fetch spike.
+- `scripts/spike-director-fetch.html` — pre-prototype CORS / direct-browser-fetch spike against OpenRouter.
 - `docs/superpowers/plans/2026-04-25-baseline-metrics.md` — pre-prototype baseline output.
 
 **Modified files:**
@@ -127,33 +127,31 @@ git commit -m "docs: capture parser-path baseline metrics for director compariso
 ```html
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><title>Gravity Director — fetch spike</title></head>
+<head><meta charset="utf-8"><title>Gravity Director — OpenRouter fetch spike</title></head>
 <body style="font-family: system-ui; max-width: 720px; margin: 2em auto;">
-<h2>Anthropic / OpenAI structured-output direct-browser-fetch spike</h2>
-<p>Goal: confirm both providers accept direct browser fetch from a SillyTavern
+<h2>OpenRouter structured-output direct-browser-fetch spike</h2>
+<p>Goal: confirm OpenRouter accepts direct browser fetch from a SillyTavern
    extension page context, <strong>using the same structured-output request
-   shapes the production director will use</strong> — Anthropic
-   <code>tool_use</code> with <code>input_schema</code>, and OpenAI
-   <code>response_format: json_schema</code>. A plain-text smoke test would
-   pass even if the structured-output path later fails for browser/CORS/schema
-   reasons, so the gate must exercise the real shapes.</p>
-
-<input id="anth-key" type="password" placeholder="Anthropic API key" style="width:100%;margin:.5em 0;" />
-<button onclick="testAnthPlain()">Anthropic plain (smoke)</button>
-<button onclick="testAnthTool()">Anthropic tool_use (production shape)</button>
-<input id="openai-key" type="password" placeholder="OpenAI API key" style="width:100%;margin:.5em 0;" />
-<button onclick="testOpenAIPlain()">OpenAI plain (smoke)</button>
-<button onclick="testOpenAISchema()">OpenAI json_schema (production shape)</button>
+   shape the production director will use</strong> —
+   <code>response_format: { type: "json_schema", strict: true }</code>.
+   A plain-text smoke test would pass even if the structured-output path
+   later fails for browser/CORS/schema reasons, so the gate must exercise
+   the real shape.</p>
+<input id="or-key" type="password" placeholder="OpenRouter API key (sk-or-...)" style="width:100%;margin:.5em 0;" />
+<input id="or-model" type="text" value="anthropic/claude-sonnet-4-6" placeholder="OpenRouter model slug" style="width:100%;margin:.5em 0;" />
+<button onclick="testPlain()">OpenRouter plain (smoke)</button>
+<button onclick="testSchema()">OpenRouter json_schema (production shape)</button>
 <pre id="out" style="background:#222;color:#eee;padding:1em;white-space:pre-wrap;"></pre>
 <script>
 const TX_SCHEMA = {
     type: 'object',
+    additionalProperties: false,
     properties: {
         transactions: { type: 'array', items: { type: 'object' } },
         notes: { type: 'string' },
         confidence: { type: 'string', enum: ['high', 'medium', 'low'] }
     },
-    required: ['transactions']
+    required: ['transactions', 'notes', 'confidence']
 };
 async function postJSON(url, headers, body) {
     const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
@@ -162,94 +160,44 @@ async function postJSON(url, headers, body) {
 function show(label, res) {
     document.getElementById('out').textContent = `${label} HTTP ${res.status}\n\n${res.text}`;
 }
-async function testAnthPlain() {
-    const key = document.getElementById('anth-key').value.trim();
-    document.getElementById('out').textContent = 'Calling Anthropic (plain)...';
+function commonHeaders(key) {
+    return {
+        'content-type': 'application/json',
+        'Authorization': 'Bearer ' + key,
+        'HTTP-Referer': location.origin || 'http://localhost',
+        'X-Title': 'Gravity Director Spike',
+    };
+}
+async function testPlain() {
+    const key = document.getElementById('or-key').value.trim();
+    const model = document.getElementById('or-model').value.trim();
+    document.getElementById('out').textContent = 'Calling OpenRouter (plain)...';
     try {
-        const res = await postJSON('https://api.anthropic.com/v1/messages', {
-            'content-type': 'application/json',
-            'x-api-key': key,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true'
-        }, {
-            model: 'claude-sonnet-4-6',
-            max_tokens: 64,
+        const res = await postJSON('https://openrouter.ai/api/v1/chat/completions', commonHeaders(key), {
+            model,
             messages: [{ role: 'user', content: 'Reply with the JSON {"ok":true} and nothing else.' }]
         });
-        show('Anthropic plain', res);
-    } catch (e) { show('Anthropic plain', { status: 'ERR', text: e.message + '\n(likely CORS)' }); }
+        show('OpenRouter plain', res);
+    } catch (e) { show('OpenRouter plain', { status: 'ERR', text: e.message + '\n(likely CORS)' }); }
 }
-async function testAnthTool() {
-    const key = document.getElementById('anth-key').value.trim();
-    document.getElementById('out').textContent = 'Calling Anthropic (tool_use)...';
+async function testSchema() {
+    const key = document.getElementById('or-key').value.trim();
+    const model = document.getElementById('or-model').value.trim();
+    document.getElementById('out').textContent = 'Calling OpenRouter (json_schema)...';
     try {
-        const res = await postJSON('https://api.anthropic.com/v1/messages', {
-            'content-type': 'application/json',
-            'x-api-key': key,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true'
-        }, {
-            model: 'claude-sonnet-4-6',
-            max_tokens: 256,
-            tools: [{
-                name: 'commit_transactions',
-                description: 'Propose ledger transactions to commit for this turn.',
-                input_schema: TX_SCHEMA
-            }],
-            tool_choice: { type: 'tool', name: 'commit_transactions' },
-            messages: [{ role: 'user', content: 'Smoke test — return an empty transactions array with a brief note.' }]
-        });
-        show('Anthropic tool_use', res);
-    } catch (e) { show('Anthropic tool_use', { status: 'ERR', text: e.message + '\n(likely CORS or schema)' }); }
-}
-async function testOpenAIPlain() {
-    const key = document.getElementById('openai-key').value.trim();
-    document.getElementById('out').textContent = 'Calling OpenAI (plain)...';
-    try {
-        const res = await postJSON('https://api.openai.com/v1/chat/completions', {
-            'content-type': 'application/json',
-            'Authorization': 'Bearer ' + key
-        }, {
-            model: 'gpt-4o-mini',
-            messages: [{ role: 'user', content: 'Reply with the JSON {"ok":true} and nothing else.' }],
-            response_format: { type: 'json_object' }
-        });
-        show('OpenAI plain', res);
-    } catch (e) { show('OpenAI plain', { status: 'ERR', text: e.message + '\n(likely CORS)' }); }
-}
-async function testOpenAISchema() {
-    const key = document.getElementById('openai-key').value.trim();
-    document.getElementById('out').textContent = 'Calling OpenAI (json_schema)...';
-    try {
-        const res = await postJSON('https://api.openai.com/v1/chat/completions', {
-            'content-type': 'application/json',
-            'Authorization': 'Bearer ' + key
-        }, {
-            model: 'gpt-4o',
+        const res = await postJSON('https://openrouter.ai/api/v1/chat/completions', commonHeaders(key), {
+            model,
             messages: [
-                { role: 'system', content: 'You are a smoke-test bot.' },
-                { role: 'user', content: 'Return an empty transactions array.' }
+                { role: 'system', content: 'You are a smoke-test bot. Return only valid JSON matching the schema.' },
+                { role: 'user', content: 'Return an empty transactions array, notes "smoke test", confidence "high".' }
             ],
             response_format: {
                 type: 'json_schema',
-                json_schema: {
-                    name: 'commit_transactions',
-                    strict: true,
-                    schema: {
-                        type: 'object',
-                        additionalProperties: false,
-                        properties: {
-                            transactions: { type: 'array', items: { type: 'object' } },
-                            notes: { type: 'string' },
-                            confidence: { type: 'string', enum: ['high','medium','low'] }
-                        },
-                        required: ['transactions','notes','confidence']
-                    }
-                }
+                json_schema: { name: 'commit_transactions', strict: true, schema: TX_SCHEMA }
             }
         });
-        show('OpenAI json_schema', res);
-    } catch (e) { show('OpenAI json_schema', { status: 'ERR', text: e.message + '\n(likely CORS or schema)' }); }
+        show('OpenRouter json_schema', res);
+    } catch (e) { show('OpenRouter json_schema', { status: 'ERR', text: e.message + '\n(likely CORS or schema)' }); }
 }
 </script>
 </body>
@@ -260,18 +208,18 @@ async function testOpenAISchema() {
 
 Place the file at `scripts/spike-director-fetch.html`. Open it in the browser via SillyTavern's static-file path (typically `/scripts/extensions/third-party/<ext-name>/scripts/spike-director-fetch.html`). The same-origin trust posture matches what the real director call will face.
 
-- [ ] **Step 3: Run all four buttons**
+- [ ] **Step 3: Run both buttons**
 
-Use a real key for each provider. Record outcomes per button. The structured-output buttons (`tool_use`, `json_schema`) are the gate-critical ones — the plain buttons are just sanity checks.
+Use a real OpenRouter key (`sk-or-...`). The structured-output button is the gate-critical one — the plain button is a sanity check.
 
-Required for each provider:
+Required:
 - Plain test: HTTP 200 with parseable JSON body.
-- Structured-output test: HTTP 200, body parses, and the structured field is present (`content[].type === "tool_use"` for Anthropic, `choices[0].message.content` is JSON-parseable matching the schema for OpenAI).
+- Structured-output test: HTTP 200, body parses, and `choices[0].message.content` is JSON-parseable matching the schema (transactions + notes + confidence).
 
 - [ ] **Step 4: Decide gate**
 
-- Both providers' structured-output tests PASS → continue plan.
-- Either provider's structured-output test FAILS (CORS preflight rejection on the schema-bearing request, schema-validation 4xx, etc.) → STOP. Document failure in the metrics doc. Spec must be revisited (likely flips "no relay" decision). A passing plain test is **not** sufficient — it does not prove the production request shape will work.
+- Structured-output test PASSES → continue plan.
+- Structured-output test FAILS (CORS preflight rejection on the schema-bearing request, schema-validation 4xx, etc.) → STOP. Document failure in the metrics doc. Spec must be revisited (likely flips back to running our own relay). A passing plain test is **not** sufficient — it does not prove the production request shape will work.
 
 - [ ] **Step 5: Commit the spike file**
 
@@ -996,55 +944,63 @@ git commit -m "feat(director-prompt): full-turn example + content sanity test"
 
 ---
 
-## Phase 3 — Director Client
+## Phase 3 — Director Client (OpenRouter)
 
-Provider-agnostic client. Browser fetch, structured-output enforcement, normalized failure modes.
+Single OpenRouter implementation. Browser fetch, structured-output enforcement (`response_format: json_schema, strict: true`), normalized failure modes.
 
-### Task 3.1: `director-client.js` entry + provider dispatch
+### Task 3.1: `director-client.js` skeleton + entry guard
 
 **Files:**
 - Create: `director-client.js`
 
-- [ ] **Step 1: Write the entry-point module**
+- [ ] **Step 1: Write the skeleton**
 
 ```js
 // director-client.js
-// Provider-abstracted client for the Gravity director model.
+// OpenRouter client for the Gravity director model.
 // Browser-side fetch, structured-output enforcement, normalized
-// failure modes. Single async function: proposeTransactions(input).
+// failure modes. Single async function: proposeTransactions(input, config).
 //
 // Spec: docs/superpowers/specs/2026-04-25-gravity-director-design.md §3.1.
 
 import { buildDirectorSystemPrompt } from './director-prompt.js';
 
-const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
+const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const REQUEST_TIMEOUT_MS = 30000;
 
+const TX_RESPONSE_SCHEMA = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+        transactions: { type: 'array', items: { type: 'object' } },
+        notes: { type: 'string' },
+        confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+    },
+    required: ['transactions', 'notes', 'confidence'],
+};
+
 /**
- * @param {object} input  director payload (see director-input.js)
- * @param {object} config { provider, model, apiKey }
+ * @param {object} input   director payload (see director-input.js)
+ * @param {object} config  { enabled, model, apiKey }
  * @returns {Promise<{ok:true, transactions, notes, confidence, model, durationMs}
  *                 | {ok:false, reason, raw, model?, durationMs?}>}
  */
 export async function proposeTransactions(input, config) {
-    if (!config || !config.provider || config.provider === 'disabled') {
-        return { ok: false, reason: 'disabled', raw: 'Director provider not configured.' };
+    if (!config || !config.enabled) {
+        return { ok: false, reason: 'disabled', raw: 'Director not enabled in settings.' };
     }
     if (!config.apiKey) {
-        return { ok: false, reason: 'auth', raw: 'No API key configured.' };
+        return { ok: false, reason: 'auth', raw: 'No OpenRouter API key configured.' };
     }
-    if (config.provider === 'anthropic') return callAnthropic(input, config);
-    if (config.provider === 'openai') return callOpenAI(input, config);
-    return { ok: false, reason: 'unknown_provider', raw: `Unknown provider: ${config.provider}` };
+    return callOpenRouter(input, config);
 }
 
-// callAnthropic and callOpenAI defined in subsequent tasks.
-async function callAnthropic(input, config) {
-    return { ok: false, reason: 'unimplemented', raw: 'callAnthropic not yet implemented' };
+async function callOpenRouter(input, config) {
+    return { ok: false, reason: 'unimplemented', raw: 'callOpenRouter not yet implemented' };
 }
-async function callOpenAI(input, config) {
-    return { ok: false, reason: 'unimplemented', raw: 'callOpenAI not yet implemented' };
+
+export function renderUserPrompt(input) {
+    return '';  // implemented in Task 3.2
 }
 ```
 
@@ -1058,57 +1014,46 @@ node -c director-client.js
 
 ```bash
 git add director-client.js
-git commit -m "feat(director-client): module skeleton with provider dispatch"
+git commit -m "feat(director-client): OpenRouter skeleton + entry guard"
 ```
 
-### Task 3.2: Anthropic provider — tool_use enforcement
+### Task 3.2: OpenRouter implementation + user-prompt renderer
 
 **Files:**
 - Modify: `director-client.js`
 
-- [ ] **Step 1: Replace the `callAnthropic` stub**
+- [ ] **Step 1: Replace the `callOpenRouter` stub and the `renderUserPrompt` stub**
 
 ```js
-const TX_INPUT_SCHEMA = {
-    type: 'object',
-    properties: {
-        transactions: {
-            type: 'array',
-            items: { type: 'object' },
-        },
-        notes: { type: 'string' },
-        confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-    },
-    required: ['transactions'],
-};
-
-async function callAnthropic(input, config) {
+async function callOpenRouter(input, config) {
     const t0 = performance.now();
-    const userPrompt = renderUserPrompt(input);
     const body = {
-        model: config.model || 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        system: buildDirectorSystemPrompt(),
-        tools: [{
-            name: 'commit_transactions',
-            description: 'Propose ledger transactions to commit for this turn.',
-            input_schema: TX_INPUT_SCHEMA,
-        }],
-        tool_choice: { type: 'tool', name: 'commit_transactions' },
-        messages: [{ role: 'user', content: userPrompt }],
+        model: config.model || 'anthropic/claude-sonnet-4-6',
+        messages: [
+            { role: 'system', content: buildDirectorSystemPrompt() },
+            { role: 'user', content: renderUserPrompt(input) },
+        ],
+        response_format: {
+            type: 'json_schema',
+            json_schema: {
+                name: 'commit_transactions',
+                strict: true,
+                schema: TX_RESPONSE_SCHEMA,
+            },
+        },
     };
 
     let res;
     try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-        res = await fetch(ANTHROPIC_ENDPOINT, {
+        res = await fetch(OPENROUTER_ENDPOINT, {
             method: 'POST',
             headers: {
                 'content-type': 'application/json',
-                'x-api-key': config.apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true',
+                'Authorization': 'Bearer ' + config.apiKey,
+                'HTTP-Referer': location.origin || 'http://localhost',
+                'X-Title': 'Gravity Director',
             },
             body: JSON.stringify(body),
             signal: ctrl.signal,
@@ -1133,12 +1078,16 @@ async function callAnthropic(input, config) {
     catch (e) { return { ok: false, reason: 'invalid_json', raw: text.slice(0, 500),
                           durationMs: performance.now() - t0 }; }
 
-    const toolBlock = (parsed.content || []).find(b => b.type === 'tool_use' && b.name === 'commit_transactions');
-    if (!toolBlock) {
-        return { ok: false, reason: 'schema_mismatch', raw: 'No tool_use block in response.',
+    const content = parsed.choices?.[0]?.message?.content;
+    if (typeof content !== 'string') {
+        return { ok: false, reason: 'schema_mismatch', raw: 'No message.content string.',
                  model: parsed.model, durationMs: performance.now() - t0 };
     }
-    const out = toolBlock.input || {};
+    let out;
+    try { out = JSON.parse(content); }
+    catch (e) { return { ok: false, reason: 'invalid_json', raw: content.slice(0, 500),
+                          model: parsed.model, durationMs: performance.now() - t0 }; }
+
     if (!Array.isArray(out.transactions)) {
         return { ok: false, reason: 'schema_mismatch', raw: 'transactions field missing or not array.',
                  model: parsed.model, durationMs: performance.now() - t0 };
@@ -1153,7 +1102,7 @@ async function callAnthropic(input, config) {
     };
 }
 
-function renderUserPrompt(input) {
+export function renderUserPrompt(input) {
     return [
         `MODE: ${input.mode}${input.deductionType ? ' (' + input.deductionType + ')' : ''}`,
         `REASON_MODE: ${input.reasonMode}`,
@@ -1186,111 +1135,7 @@ function renderUserPrompt(input) {
 }
 ```
 
-- [ ] **Step 2: node -c**
-
-```bash
-node -c director-client.js
-```
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add director-client.js
-git commit -m "feat(director-client): Anthropic tool_use provider implementation"
-```
-
-### Task 3.3: OpenAI provider — response_format json_schema
-
-**Files:**
-- Modify: `director-client.js`
-
-- [ ] **Step 1: Replace the `callOpenAI` stub**
-
-```js
-async function callOpenAI(input, config) {
-    const t0 = performance.now();
-    const userPrompt = renderUserPrompt(input);
-    const body = {
-        model: config.model || 'gpt-4o',
-        messages: [
-            { role: 'system', content: buildDirectorSystemPrompt() },
-            { role: 'user', content: userPrompt },
-        ],
-        response_format: {
-            type: 'json_schema',
-            json_schema: {
-                name: 'commit_transactions',
-                strict: true,
-                schema: {
-                    type: 'object',
-                    additionalProperties: false,
-                    properties: {
-                        transactions: { type: 'array', items: { type: 'object' } },
-                        notes: { type: 'string' },
-                        confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-                    },
-                    required: ['transactions', 'notes', 'confidence'],
-                },
-            },
-        },
-    };
-
-    let res;
-    try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-        res = await fetch(OPENAI_ENDPOINT, {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                'Authorization': 'Bearer ' + config.apiKey,
-            },
-            body: JSON.stringify(body),
-            signal: ctrl.signal,
-        });
-        clearTimeout(timer);
-    } catch (e) {
-        return { ok: false, reason: e.name === 'AbortError' ? 'timeout' : 'network',
-                 raw: e.message, durationMs: performance.now() - t0 };
-    }
-
-    const text = await res.text();
-    if (!res.ok) {
-        const reason = res.status === 401 || res.status === 403 ? 'auth'
-                     : res.status === 429 ? 'ratelimit'
-                     : 'http_error';
-        return { ok: false, reason, raw: `HTTP ${res.status}: ${text.slice(0, 500)}`,
-                 durationMs: performance.now() - t0 };
-    }
-    let parsed;
-    try { parsed = JSON.parse(text); }
-    catch (e) { return { ok: false, reason: 'invalid_json', raw: text.slice(0, 500),
-                          durationMs: performance.now() - t0 }; }
-
-    const content = parsed.choices?.[0]?.message?.content;
-    if (typeof content !== 'string') {
-        return { ok: false, reason: 'schema_mismatch', raw: 'No message.content string.',
-                 model: parsed.model, durationMs: performance.now() - t0 };
-    }
-    let out;
-    try { out = JSON.parse(content); }
-    catch (e) { return { ok: false, reason: 'invalid_json', raw: content.slice(0, 500),
-                          model: parsed.model, durationMs: performance.now() - t0 }; }
-
-    if (!Array.isArray(out.transactions)) {
-        return { ok: false, reason: 'schema_mismatch', raw: 'transactions field missing or not array.',
-                 model: parsed.model, durationMs: performance.now() - t0 };
-    }
-    return {
-        ok: true,
-        transactions: out.transactions,
-        notes: out.notes || '',
-        confidence: out.confidence || 'medium',
-        model: parsed.model,
-        durationMs: performance.now() - t0,
-    };
-}
-```
+(`renderUserPrompt` was declared exported in Task 3.1; this step replaces the stub body. The duplicate `export` keyword should not appear twice — keep the export only at the live definition site.)
 
 - [ ] **Step 2: node -c**
 
@@ -1302,10 +1147,10 @@ node -c director-client.js
 
 ```bash
 git add director-client.js
-git commit -m "feat(director-client): OpenAI response_format json_schema provider"
+git commit -m "feat(director-client): OpenRouter call + user-prompt renderer"
 ```
 
-### Task 3.4: Renderer-shape test
+### Task 3.3: Renderer-shape test
 
 **Files:**
 - Modify: `scripts/test-director.js`
@@ -1367,22 +1212,17 @@ Independent of seam swap. Can land in any order before Phase 5. Persists directo
 <div class="gravity-director-settings">
   <div class="inline-drawer">
     <div class="inline-drawer-toggle inline-drawer-header">
-      <b>Gravity — Director</b>
+      <b>Gravity — Director (OpenRouter)</b>
       <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
     </div>
     <div class="inline-drawer-content">
-      <label>Provider
-        <select id="gd_provider">
-          <option value="disabled">disabled</option>
-          <option value="anthropic">Anthropic</option>
-          <option value="openai">OpenAI</option>
-        </select>
-      </label>
+      <label><input type="checkbox" id="gd_enabled" /> Enable director (uncheck for read-only mode)</label>
       <label>Model
-        <input type="text" id="gd_model" placeholder="claude-sonnet-4-6" />
+        <input type="text" id="gd_model" placeholder="anthropic/claude-sonnet-4-6" />
+        <small>Any OpenRouter slug — e.g. <code>anthropic/claude-sonnet-4-6</code>, <code>openai/gpt-4o</code>, <code>google/gemini-pro-1.5</code>.</small>
       </label>
-      <label>API key
-        <input type="password" id="gd_api_key" />
+      <label>OpenRouter API key
+        <input type="password" id="gd_api_key" placeholder="sk-or-..." />
       </label>
       <label>Recent ledger tail size
         <input type="number" id="gd_tail_size" value="20" min="0" max="100" />
@@ -1404,8 +1244,8 @@ function getDirectorConfig() {
     const settings = SillyTavern.getContext().extensionSettings || {};
     const ours = settings[MODULE_NAME] || {};
     return {
-        provider: ours.directorProvider || 'disabled',
-        model: ours.directorModel || 'claude-sonnet-4-6',
+        enabled: !!ours.directorEnabled,
+        model: ours.directorModel || 'anthropic/claude-sonnet-4-6',
         apiKey: ours.directorApiKey || '',
         tailSize: typeof ours.directorTailSize === 'number' ? ours.directorTailSize : 20,
     };
@@ -1461,17 +1301,17 @@ async function mountDirectorSettings() {
     container.appendChild(wrapper);
 
     const cfg = getDirectorConfig();
-    const $provider = document.getElementById('gd_provider');
+    const $enabled = document.getElementById('gd_enabled');
     const $model = document.getElementById('gd_model');
     const $key = document.getElementById('gd_api_key');
     const $tail = document.getElementById('gd_tail_size');
 
-    $provider.value = cfg.provider;
+    $enabled.checked = cfg.enabled;
     $model.value = cfg.model;
     $key.value = cfg.apiKey;
     $tail.value = String(cfg.tailSize);
 
-    $provider.addEventListener('change', e => setDirectorConfig({ directorProvider: e.target.value }));
+    $enabled.addEventListener('change', e => setDirectorConfig({ directorEnabled: e.target.checked }));
     $model.addEventListener('change', e => setDirectorConfig({ directorModel: e.target.value }));
     $key.addEventListener('change', e => setDirectorConfig({ directorApiKey: e.target.value }));
     $tail.addEventListener('change', e => setDirectorConfig({ directorTailSize: Number(e.target.value) || 20 }));
@@ -1542,7 +1382,7 @@ node -c index.js
 
 - [ ] **Step 3: Manual smoke**
 
-Configure provider + key, click "Test director call". Expect either OK with a model name and tx count (probably 0 — no real state) or a clean FAIL with a specific reason.
+Tick "Enable director", paste your OpenRouter key, set a model slug, click "Test director call". Expect either OK with a model name and tx count (probably 0 — no real state) or a clean FAIL with a specific reason.
 
 - [ ] **Step 4: Commit**
 
@@ -1936,7 +1776,7 @@ After the director result branch (Task 5.2), set:
 
 ```js
 window.__gravityDirectorStatus = _lastDirectorFailed ? 'failed'
-    : (getDirectorConfig().provider === 'disabled' ? 'disabled' : 'ok');
+    : (!getDirectorConfig().enabled ? 'disabled' : 'ok');
 ```
 
 Place this right before each `updatePanel(...)` call in `onMessageReceived`.

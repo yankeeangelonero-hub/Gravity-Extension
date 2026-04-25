@@ -21,7 +21,7 @@ Supersedes (sequencing only): `2026-04-21-gravity-marinara-port-design.md` is pa
 |---|---|
 | 1 | Director-first. Marinara design parked. |
 | 2 | Personal-use only. Browser-side `fetch` direct to provider. No relay, no auth proxy. |
-| 3 | Director provider/model is configurable via extension settings (provider picker + model id + API key). Defaults: Anthropic / `claude-sonnet-4-6`. |
+| 3 | Director uses **OpenRouter** as the unified API — one endpoint, one key, free-form model id (e.g., `anthropic/claude-sonnet-4-6`, `openai/gpt-4o`, `google/gemini-pro-1.5`). OpenRouter is effectively the "relay-of-record" we use without running our own server; in exchange for ~5% cost markup we get any-model coverage with zero per-provider code. Default model: `anthropic/claude-sonnet-4-6`. |
 | 4 | Full cutover. Strip ledger-emit instructions from `gravity_v15.json` and remove the `_readme` prompt slot. Prose model writes prose only. |
 | 5 | Director output is direct Gravity tx objects — same shape `consistency.js` validates today. No translation layer. |
 
@@ -31,10 +31,10 @@ Three new/changed components in the existing extension repo.
 
 ### 3.1 `director-client.js` (new)
 
-Provider abstraction (`anthropic` | `openai`). One async function:
+Single OpenRouter implementation. One async function:
 
 ```js
-proposeTransactions(input) -> {
+proposeTransactions(input, config) -> {
   ok: true,
   transactions: [...],   // Gravity tx objects
   notes: "...",          // free-text reasoning, logged only
@@ -43,12 +43,20 @@ proposeTransactions(input) -> {
   durationMs: 1234
 } | {
   ok: false,
-  reason: "network" | "timeout" | "auth" | "ratelimit" | "invalid_json" | "schema_mismatch",
+  reason: "disabled" | "auth" | "network" | "timeout" | "ratelimit"
+        | "http_error" | "invalid_json" | "schema_mismatch",
   raw: "..."             // raw response for debugging
 }
 ```
 
-Anthropic call uses `tool_use` with a strict input schema. OpenAI call uses `response_format: json_schema`. Both providers therefore guarantee parseable JSON; if parsing still fails, that's a `reason: "invalid_json"` failure (loud, not silent — see §7).
+Single endpoint: `https://openrouter.ai/api/v1/chat/completions`. OpenAI-compatible request shape (so the same code path serves Claude, GPT, Gemini, etc. through OpenRouter). Structured output via `response_format: { type: 'json_schema', json_schema: {...} }` — OpenRouter routes that to the underlying provider's strict-mode equivalent. If parsing still fails, that's a `reason: "invalid_json"` failure (loud, not silent — see §7).
+
+Required request headers:
+- `Authorization: Bearer <api_key>`
+- `Content-Type: application/json`
+- `HTTP-Referer: <site>` and `X-Title: Gravity Director` — recommended by OpenRouter for analytics/attribution; optional but cheap to include.
+
+No provider-dispatch branch. No second SDK or auth scheme to maintain.
 
 ### 3.2 `director-prompt.js` (new)
 
@@ -215,22 +223,21 @@ No full transcript. No raw ledger history beyond the tail.
 
 ### Persistence
 
-`extension_settings[MODULE_NAME]` — global per-installation, not per-chat. API key, provider, model id, and recent-ledger-tail size all live there. Per-chat persistence is explicitly wrong for credentials.
+`extension_settings[MODULE_NAME]` — global per-installation, not per-chat. API key, model id, and recent-ledger-tail size all live there. Per-chat persistence is explicitly wrong for credentials.
 
 ### UI
 
 No general settings form exists in this repo today (UI wiring at index.js:2557 is panel-action callbacks, not a settings panel). The director introduces a **new HTML settings drawer** registered via SillyTavern's standard extensions settings injection point.
 
 Fields:
-- Director provider — dropdown (`anthropic` | `openai` | `disabled`)
-- Director model — text field (default `claude-sonnet-4-6`)
-- Director API key — password field
-- Recent-ledger-tail size — number, default 20
-- "Test director call" button — sends a minimal smoke ping with a fixed payload, surfaces success/error inline
+- Director model — text field, free-form OpenRouter slug (default `anthropic/claude-sonnet-4-6`). An **enable** checkbox sits next to it; unchecked = hard-off (see Disabled mode below).
+- Director API key — password field, OpenRouter key.
+- Recent-ledger-tail size — number, default 20.
+- "Test director call" button — sends a minimal smoke ping with a fixed payload, surfaces success/error inline.
 
 ### Disabled mode
 
-When provider is `disabled` (or no API key configured): **hard off with a visible banner** in the Gravity panel:
+When the enable checkbox is unchecked or no API key is configured: **hard off with a visible banner** in the Gravity panel:
 
 > *"Director not configured — Gravity is read-only this session. No structural updates are being committed."*
 
@@ -304,16 +311,17 @@ If 2+ of "missed updates / rejected / latency" regress relative to baseline, kil
 These can run concurrently and gate the implementation plan:
 
 1. **Baseline capture** (§11). Without it, the success criteria are hand-wavy.
-2. **Browser-fetch feasibility spike.** "No relay" is locked, so CORS / browser-direct calls to Anthropic and OpenAI from the SillyTavern extension context are now a hard architectural dependency, not just an implementation detail. Spike: minimal smoke call from a SillyTavern extension page to both providers, confirm the required headers (`anthropic-dangerous-direct-browser-access` for Anthropic, plus standard `Authorization`), confirm streaming-vs-non-streaming behavior, confirm error surfaces. If this fails, the locked decisions are wrong and the spec needs to revisit a relay.
+2. **Browser-fetch feasibility spike.** "No own relay" + "OpenRouter as relay-of-record" is locked, so CORS / browser-direct calls to OpenRouter from the SillyTavern extension context are a hard architectural dependency. Spike: minimal smoke call from a SillyTavern extension page to OpenRouter using both plain and structured-output (`response_format: json_schema`) request shapes. Confirm the required headers (`Authorization: Bearer`, plus `HTTP-Referer` / `X-Title`), confirm error surfaces. If structured output fails, the locked decisions are wrong and the spec needs to revisit (likely flips to running our own relay or switching back to direct provider SDKs).
 3. **Settings drawer scaffolding.** Separable from the director itself; can land first as a no-op drawer to de-risk the persistence path.
 
 ## 13. Out of scope (explicit)
 
 - Swipe/retry idempotency fix
-- Relay service / multi-user / shippable build
-- Provider beyond Anthropic + OpenAI
+- Own relay service / multi-user / shippable build (OpenRouter is the relay-of-record)
+- Direct provider calls beyond OpenRouter (Anthropic SDK, OpenAI SDK, OpenAI-compatible local servers)
 - A/B shadow mode against the parser
 - Marinara port
 - Higher-level intent schema with a translator
 - Local/sidecar models
 - Streaming director responses (non-streaming JSON only for v1)
+- Anthropic prompt caching via OpenRouter (`cache_control` passthrough — out of scope for v1; revisit if cost matters)
