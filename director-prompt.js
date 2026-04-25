@@ -28,7 +28,72 @@ You should EXPLICITLY NOT optimize for:
 
 Those belong to the prose model and the host extension.`;
 
+const OP_VOCABULARY = `## Transaction Operations
+
+Every transaction is a JSON object. The fields:
+
+- "op": one of CR, S, TR, A, R, MS, MR, D, SNAP, ROLL, AMEND
+- "e":  entity type (char, constraint, collision, combat, faction, place, pressure, world, pc, divination, relationship)
+- "id": entity id (kebab-case slug)
+- "d":  op-specific data
+- "r":  one-sentence reason for the change
+
+### CR — Create entity
+{ "op": "CR", "e": "char", "id": "elena", "d": { "name": "Elena Cross", "tier": "TRACKED", "tags": ["smuggler","archangel-contact"] }, "r": "Player named her this turn." }
+
+### S — Set field
+{ "op": "S", "e": "char", "id": "elena", "d": { "f": "location", "value": "place:medbay" }, "r": "Followed PC into the medbay." }
+
+### TR — Transition (state-machine governed)
+{ "op": "TR", "e": "collision", "id": "bridge-confrontation", "d": { "f": "status", "from": "ACTIVE", "to": "RESOLVED" }, "r": "PC forced the confrontation on-screen and it completed." }
+
+### A — Append to a list field
+{ "op": "A", "e": "world", "id": null, "d": { "f": "collision_archive", "value": "[collision] Bridge Confrontation [resolution] direct [hook] residue [aftermath] change" }, "r": "Archive the resolved collision." }
+
+### R — Remove from a list (capped at 3 outside eval turns; combine R/MR/D)
+{ "op": "R", "e": "pc", "id": null, "d": { "f": "scene_cast", "value": "char:athrun" }, "r": "Athrun left the scene." }
+
+### MS — Map set (object/dict field, e.g., knowledge_asymmetry)
+{ "op": "MS", "e": "char", "id": "elena", "d": { "f": "knowledge_asymmetry", "key": "knows_evidence", "value": "Has seen the documents." }, "r": "She just read them." }
+
+### MR — Map del
+{ "op": "MR", "e": "char", "id": "elena", "d": { "f": "knowledge_asymmetry", "key": "hiding_employer" }, "r": "Cover blown — secret no longer hidden." }
+
+### D — Destroy entity (capped at 3 outside eval turns)
+{ "op": "D", "e": "pressure", "id": "trade-tension", "r": "Consumed into a collision." }
+
+### Other ops
+- SNAP, ROLL, AMEND — operator-only ops. The director does not propose these.
+
+## Cleanup cap
+
+Outside eval turns, the engine drops R/MR/D ops past the 3rd. Don't propose more than 3 cleanup ops per turn unless an eval is active.
+`;
+
+const ENTITIES_AND_STATE_MACHINES = `## Entity types
+
+char, constraint, collision, combat, faction, place, pressure, world, pc, divination, relationship.
+
+## State machines
+
+### Char tier: KNOWN → TRACKED → PRINCIPAL (one-way, no demotion in normal play).
+### Constraint integrity: UNTESTED → STRESSED → STRAINED → BROKEN (one-way; HELD is a terminal state for tested-and-survived).
+### Collision status: ACTIVE → RESOLVED | CRASHED. No SEEDED/SIMMERING/RESOLVING.
+### Combat status: handled by the challenge runtime — do not propose combat status transitions directly; use combat-entity ops only when the runtime explicitly emits them.
+
+## Distance categories (collision creation)
+
+IMMEDIATE (1, fires on creation), SHORT (10), MEDIUM (20), LONG (50). The engine owns the \`distance\` field — do not set it. Set \`distance_category\` and \`cost\` on creation.
+
+## Relationship rules
+
+PC ↔ TRACKED+ char/faction. id format \`relationship:pc-<other_id>\`. \`status\` is engine-written — never propose. Every content change MUST occur inside a resolving relational collision (the same tx batch that contains the collision TR).
+
+## Knowledge asymmetry keys
+
+Four prefixes: \`knows_\`, \`unknown_\`, \`hiding_\`, \`misreading_\`. Cap: 20 entries combined across all four.
+`;
+
 export function buildDirectorSystemPrompt() {
-    // Subsequent tasks append op vocabulary, state-machine rules, and examples.
-    return ROLE;
+    return [ROLE, OP_VOCABULARY, ENTITIES_AND_STATE_MACHINES].join('\n\n');
 }
