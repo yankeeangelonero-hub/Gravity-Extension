@@ -19,12 +19,16 @@ node -c ledger-store.js
 
 There is no linter and no CI. The relationship module has a test harness at `scripts/test-relationship.js` — run with `node scripts/test-relationship.js` when touching relationship code. For all other files, validate with `node -c`.
 
+## Repo Position
+
+This file lives at `ST/CLAUDE.md`. The repository root has its own `CLAUDE.md` that maps the wider repo (sibling areas: `Marinara Engine/` reference clone, `docs/superpowers/` specs and plans, root preset assets). All extension code lives under `ST/`; paths in this file are relative to `ST/` unless absolute.
+
 ## Project Docs
 
 - Use `Documentation/system_architecture_reference.md` as the canonical code map and update/review checklist.
 - Use `Documentation/project_memory.md` as the durable session handoff file.
 - Current active docs live at the top of `Documentation/`.
-- Historical handoffs, plans, audits, and superseded references live under `Deprecated/`.
+- Historical handoffs, plans, audits, and superseded references live under `Documentation/archive/` (subfolders: `phase2/`, `plans/`, `stale/`).
 
 ## Architecture
 
@@ -99,10 +103,14 @@ The ledger tracks: collisions, constraints, factions, places, pressure points, P
 
 ## Branch Context
 
-- `combat` - Combat system features (power, power_base, power_basis, abilities, wounds, combat collisions)
-- `prose` - Prose/narrative quality features
-- `main` - Stable releases
-- `preset-migration` - Three-layer injection architecture work
+- `mari-integration` — current active branch. Marinara Engine integration work (engine extraction → embedded port). Branched from `director-prototype` on 2026-04-26.
+- `director-prototype` — director-LLM prototype (separate ledger-emission model). Most recent prior working branch.
+- `preset-migration` — three-layer injection architecture work (preset + lorebook + extension prompts).
+- `combat` — combat system features (power, power_base, power_basis, abilities, wounds, combat collisions).
+- `prose` — prose/narrative quality features.
+- `main` — stable releases.
+
+Always check `git branch --show-current` before assuming which architecture is in play; this list ages quickly.
 
 ## Important Patterns
 
@@ -111,5 +119,5 @@ The ledger tracks: collisions, constraints, factions, places, pressure points, P
 - `gravity-system-prompt.md` is a legacy reference for the ledger command format. The current preset is `gravity_v15.json`; mode-specific playbooks can be imported from `Gravity World Info.json`. The extension injects runtime state, readmes, nudges, and mode triggers via `setExtensionPrompt()`.
 - `Documentation/system_architecture_reference.md` is the canonical maintenance map for cross-system updates and reviews.
 - `Documentation/project_memory.md` is the active durable memory file.
-- Historical prose, handoff, planning, and audit docs live under `Deprecated/`.
+- Historical prose, handoff, planning, and audit docs live under `Documentation/archive/`.
 - Divination uses two random tables (Arcana/Classic) defined in `index.js`. Yi Jing (I Ching) has been removed.

@@ -3,3 +3,7 @@ node_modules/
 Thumbs.db
 .claude/
 .worktrees/
+
+# Local read-only reference clone of Marinara Engine — see Documentation/superpowers specs.
+# Treat as vendored source. Real Marinara fork happens in a separate clone.
+Marinara Engine/

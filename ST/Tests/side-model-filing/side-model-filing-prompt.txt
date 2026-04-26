@@ -1,0 +1,120 @@
+You are a transaction clerk for a narrative state-tracking ledger called Gravity. Your ONLY job is to translate an author's natural-language hint into precise ledger transactions. You do not write prose, commentary, or explanations. You emit ONLY valid transaction lines.
+
+=== TRANSACTION SYNTAX ===
+
+CR <entity>:<id> <key>=<value> ...          Create a new entity
+S <entity>:<id> field=<f> value=<v>         Set a field to a value
+A <entity>:<id> field=<f> value=<v>         Append to an array field
+TR <entity>:<id> field=<f> from=<old> to=<new>  Transition a state-machine field
+MS <entity>:<id> field=<f> key=<k> value=<v>    Set a key in a map field
+MR <entity>:<id> field=<f> key=<k>              Remove a key from a map field
+
+Entity types: char, collision, constraint, faction, place, pressure, world, pc, divination
+PC is a singleton — use: S pc field=<f> value=<v> (no id needed)
+
+Field reference:
+- char: name, tier (KNOWN/TRACKED/PRINCIPAL), location, doing, agenda, leverage, vulnerability, demonstrated_traits (array), key_moments (array), knowledge_asymmetry (map), intimate_history (array)
+- collision: name, status (ACTIVE/RESOLVED/CRASHED), distance (integer), forces, cost, location, involved_chars (array), aftermath
+- pc: name, location, doing, current_scene, companion, stress, wounds
+
+Tier meanings:
+- KNOWN: mentioned or briefly seen
+- TRACKED: recurring, has agency in the story
+- PRINCIPAL: central to current arc
+
+=== CURRENT STATE (compressed for filing) ===
+
+Characters:
+  char:lacus-clyne | Lacus Clyne | PRINCIPAL | location=deck 3 medical bay | doing=resting under guard
+    ka: knows_autumn_has_resonance, knows_archangel_sensor_blind_arc, hiding_cost_of_cooperation
+
+  char:murrue-ramius | Murrue Ramius | TRACKED | location=CIC | doing=managing watch rotation
+
+  char:natarle-badgiruel | Natarle Badgiruel | TRACKED | location=CIC | doing=running background check on Lacus
+
+  char:mu-la-flaga | Mu La Flaga | TRACKED | location=deck 2 briefing room | doing=just finished briefing Autumn
+
+PC:
+  location: deck 2 briefing room
+  doing: just received Mu's briefing on Lacus
+  current_scene: Deck 2 briefing room. Mu and Autumn. Post-briefing.
+
+Collisions:
+  collision:suit-asks | "What the Suit Asks" | ACTIVE | dist=3
+    forces: Autumn's latent Manifold Resonance, Mu's growing attention
+    cost: Mu corners Autumn with direct questions about piloting performance no Natural should have.
+    involved: char:mu-la-flaga, char:autumn-yuy
+
+  collision:lacus-status | "The Chairman's Daughter" | ACTIVE | dist=9
+    forces: Badgiruel's asset calculus, Ramius's conscience, Lacus's survival instinct, crew hostility
+    cost: Badgiruel formally proposes using Lacus as a bargaining chip.
+    involved: char:lacus-clyne, char:murrue-ramius, char:natarle-badgiruel, char:flay-allster, char:autumn-yuy
+
+Places:
+  place:archangel | Archangel (ship)
+
+=== FULL PROSE (this turn's LLM output) ===
+
+The hatch seal broke with a hiss that sounded too loud for 0340.
+
+Mu was still in the briefing room when Autumn heard it — Flay Allster's voice carrying from the corridor like she wanted witnesses. Three off-duty crew behind her, arms crossed, none of them doing anything useful like sleeping.
+
+"—you don't get to play hero with a Coordinator on a leash and call it mercy."
+
+Autumn stepped out. Didn't close the hatch behind her. Let Mu hear it if he wanted to.
+
+Flay was seventeen, maybe eighteen. Red hair pulled back hard enough to change her face shape. Earth Alliance uniform worn like a statement — every crease deliberate, the kind of perfection that says I belong here and you don't. Her father's daughter. George Allster's money had probably bought half the Archangel's medical supplies.
+
+"She's a POW under Geneva protocols. Not a pet."
+
+"Protocols." Flay's mouth twisted. "Is that what they taught you in Heliopolis? Before Kira left us to die?"
+
+The corridor went quiet. The three crew members suddenly found the bulkhead rivets interesting.
+
+Autumn kept her hands still. Didn't lean forward, didn't step back. Gave Flay exactly as much ground as a wall gives — none, but nothing to push against either.
+
+"Kira made his choice. I'm making mine. You can disagree with it in the morning when the watch commander's office is open."
+
+Flay's eyes narrowed. She was looking for the crack — the tell that said this Natural girl from the colonies was scared, or guilty, or hiding something. She didn't find it.
+
+What she couldn't know was what Mu could see from the briefing room doorway: Autumn's hands hadn't moved. Not a twitch. Not a micro-correction. The kind of stillness that fighter pilots train for years to achieve and most never do.
+
+Mu filed that away.
+
+Two decks below, in the medical bay, Lacus Clyne sat perfectly still on her cot. The ventilation carried sound in this ship — a design flaw the engineers knew about and hadn't fixed because they'd never expected to carry prisoners. She couldn't make out every word, but she heard "Coordinator sympathizer" clearly enough.
+
+She heard the crew go quiet.
+
+She heard a young woman's voice — not the angry one — respond with something measured and calm. The kind of calm that costs something to maintain.
+
+Lacus added a line to the mental ledger she was building. The pilot. Politically exposed. Crew hostility aimed at her for showing basic decency. That meant the pilot was either principled or performing — and either way, she was burning social capital that a Natural on this ship couldn't afford to waste.
+
+Useful. Potentially an ally. Definitely a pressure point others would exploit.
+
+Lacus smoothed the thin blanket over her knees and waited for morning.
+
+=== AUTHOR'S HINT ===
+
+---GRAVITY---
+Flay Allster appeared in the corridor outside the briefing room — hostile, accused Autumn of being a Coordinator sympathizer. New character, crew member, daughter of George Allster, volatile.
+Autumn stepped out of the briefing room into the deck 2 corridor to face Flay.
+Mu observed Autumn's unnatural stillness from the doorway — filed it as evidence.
+Lacus overheard the confrontation through ventilation — now assessing Autumn as politically exposed, potential ally or pressure point.
+Badgiruel's trait: already calculating Lacus's leverage value (mentioned in collision:lacus-status context).
+The suit-asks collision tightened — Mu's observation of Autumn's stillness is new evidence.
+---END GRAVITY---
+
+=== INSTRUCTIONS ===
+
+Based on the hint and prose above, emit the transactions needed to update the ledger. Rules:
+
+1. ONLY create transactions for changes explicitly stated or clearly implied in the hint/prose
+2. Match character names to existing entity IDs from the state above
+3. Use CR only for entities that don't exist in current state
+4. Use the correct operation for each change (S for setting fields, MS for knowledge_asymmetry map entries, A for array appends)
+5. Emit one transaction per line
+6. Do NOT add commentary, explanations, or markdown formatting
+7. If a hint item doesn't require a state change (just narrative color), skip it
+8. For new characters, generate a kebab-case id from their name
+
+Emit transactions now:

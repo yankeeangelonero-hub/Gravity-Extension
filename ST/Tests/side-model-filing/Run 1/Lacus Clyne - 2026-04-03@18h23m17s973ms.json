@@ -1,0 +1,5382 @@
+{
+  "transactions": [
+    {
+      "tx": 0,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Archangel port corridor outside medical. Lacus on stretcher. Murrue and Natarle present. Armed petty officer. Crew lingering. Post-recovery tension."
+      },
+      "r": ""
+    },
+    {
+      "tx": 1,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "CR",
+      "e": "char",
+      "id": "autumn-yuy",
+      "d": {
+        "name": "Autumn Yuy",
+        "tier": "PRINCIPAL",
+        "location": "Port corridor, Archangel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 2,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "char",
+      "id": "autumn-yuy",
+      "d": {
+        "f": "doing",
+        "v": "Facing Lacus's counter-read after categorizing her aloud | Cost: revealed strategic thinking in front of the asset"
+      },
+      "r": ""
+    },
+    {
+      "tx": 3,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "char",
+      "id": "autumn-yuy",
+      "d": {
+        "f": "condition",
+        "v": "Post-sortie fatigue, bruises hidden under flight suit, stimulant edge wearing off"
+      },
+      "r": ""
+    },
+    {
+      "tx": 4,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "CR",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "name": "Lacus Clyne",
+        "tier": "PRINCIPAL",
+        "location": "Port corridor medical stretcher, Archangel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 5,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "doing",
+        "v": "Reading Autumn, testing whether honesty lives under the pragmatism | Cost: exposing her own perceptiveness to a room full of hostiles"
+      },
+      "r": ""
+    },
+    {
+      "tx": 6,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "condition",
+        "v": "Impact bruise collarbone to shoulder, dehydrated, composure load-bearing"
+      },
+      "r": ""
+    },
+    {
+      "tx": 7,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "MS",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "reads",
+        "k": "pc",
+        "v": "Dangerous — not because he's hostile, but because he's smart enough to see her as a piece and honest enough to say it aloud"
+      },
+      "r": ""
+    },
+    {
+      "tx": 8,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "CR",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "name": "Murrue Ramius",
+        "tier": "TRACKED",
+        "location": "Port corridor, Archangel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 9,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "f": "doing",
+        "v": "Managing first contact, suppressing the political calculation until private"
+      },
+      "r": ""
+    },
+    {
+      "tx": 10,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "MS",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "f": "reads",
+        "k": "pc",
+        "v": "Tactically sharp, diplomatically reckless"
+      },
+      "r": ""
+    },
+    {
+      "tx": 11,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "CR",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "name": "Natarle Badgiruel",
+        "tier": "TRACKED",
+        "location": "Port corridor, Archangel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 12,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "f": "doing",
+        "v": "Running the same math Autumn voiced, storing it for the briefing room"
+      },
+      "r": ""
+    },
+    {
+      "tx": 13,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "MS",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "f": "reads",
+        "k": "pc",
+        "v": "Useful. Correct. Should have said it privately."
+      },
+      "r": ""
+    },
+    {
+      "tx": 14,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "Port corridor, Archangel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 15,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Post-sortie fatigue, bruises hidden, stimulant edge fading"
+      },
+      "r": ""
+    },
+    {
+      "tx": 16,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "name": "The Clyne Variable"
+      },
+      "r": ""
+    },
+    {
+      "tx": 17,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "forces",
+        "v": "Lacus's political value vs. her humanity; Natarle's asset logic vs. Murrue's conscience; Autumn's moral compass vs. survival pragmatism"
+      },
+      "r": ""
+    },
+    {
+      "tx": 18,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "details",
+        "v": "Siegel Clyne's daughter is aboard a ship being hunted by her father's government. She is simultaneously a person, a hostage, a bargaining chip, and a political bomb. Every faction gains or loses depending on what the Archangel does with her."
+      },
+      "r": ""
+    },
+    {
+      "tx": 19,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "cost",
+        "v": "Treating her as a person costs tactical advantage. Treating her as an asset costs the crew's remaining humanity."
+      },
+      "r": ""
+    },
+    {
+      "tx": 20,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "target_constraint",
+        "v": "Autumn's moral compass"
+      },
+      "r": ""
+    },
+    {
+      "tx": 21,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "distance",
+        "v": 6
+      },
+      "r": ""
+    },
+    {
+      "tx": 22,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "status",
+        "v": "SIMMERING"
+      },
+      "r": ""
+    },
+    {
+      "tx": 23,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn categorized her aloud; Lacus heard and challenged it directly"
+      },
+      "r": ""
+    },
+    {
+      "tx": 24,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Lacus does not know Kira defected — discovery will reshape her read of everyone aboard"
+      },
+      "r": ""
+    },
+    {
+      "tx": 25,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "ZAFT pursuit continues with Kira's intelligence; Lacus's presence changes the engagement calculus if Le Creuset learns"
+      },
+      "r": ""
+    },
+    {
+      "tx": 26,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Crew anti-Coordinator sentiment now has a high-value target to focus on"
+      },
+      "r": ""
+    },
+    {
+      "tx": 27,
+      "t": "[Day 1 - 14:32]",
+      "_ts": "2026-04-03T10:44:52.381Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Lacus Clyne recovered from escape pod, brought aboard Archangel. Autumn voiced the strategic calculus aloud — hostage or ticket — within her hearing. Lacus responded by reading him publicly, testing his honesty. First contact between two people trained to see through surfaces. Murrue shut down the corridor discussion; Natarle stored the math. The crew watches."
+      },
+      "r": ""
+    },
+    {
+      "tx": 28,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "constants",
+        "k": "power_scale",
+        "v": "1=conventional military (tanks, fighters, infantry). 2=mass-production MS + average pilot (GINN, early Strike Dagger) or ace in obsolete hardware. 2.5=advanced MS with developing pilot OR outdated platform with exceptional ace. 3=ace pilot in advanced MS; current CE71 field ceiling for most named combatants. 3.5=elite ace pushing hardware beyond spec with unique edge. 4=top-tier ace in next-gen MS (not yet achieved CE71). 5=CE73 peak (Freedom/Justice + experienced aces); theoretical ceiling, currently unreachable."
+      },
+      "r": "World combat ladder"
+    },
+    {
+      "tx": 29,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "constants",
+        "k": "power_ceiling",
+        "v": "5"
+      },
+      "r": "CE73 peak; current practical ceiling is ~3.0-3.5"
+    },
+    {
+      "tx": 30,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "constants",
+        "k": "power_notes",
+        "v": "Power combines pilot skill and MS specs. A Natural in a Coordinator-optimized MS suffers effective power penalty from G-force damage, reaction-time mismatch, and OS friction. Manifold Resonance may offset this under stress but is undocumented and unreliable. Archangel fire support can temporarily elevate effective pilot power by +0.5 in coordinated engagements. Sustained sorties degrade Natural pilot power cumulatively."
+      },
+      "r": "Combat realism caveats"
+    },
+    {
+      "tx": 31,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "world_state",
+        "v": "CE71, weeks after Heliopolis collapse. ZAFT winning war of attrition. Archangel in hostile space, damaged, under-supplied, fleeing toward 8th Fleet rendezvous near Earth orbit. Le Creuset team pursuing with Kira Yamato's tactical intelligence. PLANT politics shifting toward Zala hardliners. Lacus Clyne missing from public view — political variable. Orb maintaining armed neutrality under increasing strain."
+      },
+      "r": "Macro reality"
+    },
+    {
+      "tx": 32,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "faction",
+      "id": "zaft",
+      "d": {
+        "name": "ZAFT / Le Creuset Team",
+        "objective": "Neutralize the Archangel, recover Strike combat data, consolidate space superiority",
+        "resources": "Vesalius (Nazca-class), Gamow (Laurasia-class), 4 G-weapons (Aegis, Duel, Buster, Blitz), GINN complement, Kira Yamato's intelligence",
+        "stance_toward_pc": "Hostile — primary target",
+        "power": "rising",
+        "momentum": "Pursuing Archangel with tactical advantage from defector intelligence",
+        "leverage": "Mobile suit superiority, knowledge of Archangel's patterns and capabilities",
+        "vulnerability": "Le Creuset's personal agenda diverges from command; Kira's cooperation is conditional; Lacus's presence aboard Archangel (unknown to ZAFT) would fracture operational unity"
+      },
+      "r": "Primary antagonist faction"
+    },
+    {
+      "tx": 33,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "faction",
+      "id": "ea-8th-fleet",
+      "d": {
+        "name": "Earth Alliance / 8th Fleet",
+        "objective": "Recover the Archangel and its combat data for the war effort",
+        "resources": "8th Fleet battle group under Admiral Halberton, orbital defense infrastructure",
+        "stance_toward_pc": "Nominal ally — values the ship more than the crew",
+        "power": "stable",
+        "momentum": "Awaiting Archangel at designated rendezvous coordinates near Earth orbit",
+        "leverage": "Institutional authority, fleet firepower, safe harbor",
+        "vulnerability": "8th Fleet is exposed during rendezvous; ZAFT knows the Archangel's destination from Kira's intelligence; EA high command views Halberton's sponsorship of the Archangel project as politically expendable"
+      },
+      "r": "Destination faction"
+    },
+    {
+      "tx": 34,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "faction",
+      "id": "orb",
+      "d": {
+        "name": "Orb Union",
+        "objective": "Maintain armed neutrality while preparing for inevitable involvement",
+        "resources": "Astray program (secret MS development), Kaguya mass driver, advanced industrial base, Athha political dynasty",
+        "stance_toward_pc": "Watchful — tracking the Archangel's trajectory",
+        "power": "stable",
+        "momentum": "Intelligence monitoring; decision brief pending for Athha administration",
+        "leverage": "Territorial sovereignty, technological capability, mass driver access to Earth",
+        "vulnerability": "Neutrality is already compromised by secret MS development; discovery forces involvement on unfavorable terms"
+      },
+      "r": "Potential sanctuary faction"
+    },
+    {
+      "tx": 35,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "zaft",
+      "d": {
+        "f": "relations",
+        "k": "ea-8th-fleet",
+        "v": "Active belligerent — seeking to intercept before rendezvous"
+      },
+      "r": ""
+    },
+    {
+      "tx": 36,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "zaft",
+      "d": {
+        "f": "relations",
+        "k": "orb",
+        "v": "Formally neutral — suspicious of Orb's technological independence"
+      },
+      "r": ""
+    },
+    {
+      "tx": 37,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "ea-8th-fleet",
+      "d": {
+        "f": "relations",
+        "k": "zaft",
+        "v": "Active belligerent — defensive posture awaiting Archangel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 38,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "ea-8th-fleet",
+      "d": {
+        "f": "relations",
+        "k": "orb",
+        "v": "Strained neutral — would pressure Orb for basing rights if desperate"
+      },
+      "r": ""
+    },
+    {
+      "tx": 39,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "orb",
+      "d": {
+        "f": "relations",
+        "k": "zaft",
+        "v": "Formal neutrality masking secret rearmament"
+      },
+      "r": ""
+    },
+    {
+      "tx": 40,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "faction",
+      "id": "orb",
+      "d": {
+        "f": "relations",
+        "k": "ea-8th-fleet",
+        "v": "Formal neutrality under quiet diplomatic strain"
+      },
+      "r": ""
+    },
+    {
+      "tx": 41,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "chapter",
+      "id": "ch1-flight-to-earth",
+      "d": {
+        "number": "1",
+        "title": "The Weight of Knowing",
+        "status": "OPEN",
+        "arc": "Escape from the Vesalius to rendezvous with the 8th Fleet",
+        "central_tension": "Can the Archangel survive being hunted by an enemy who knows everything about it — and can its pilot survive the machine that's killing him?"
+      },
+      "r": "Chapter 1"
+    },
+    {
+      "tx": 42,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "name": "The Clyne Variable",
+        "forces": "Lacus's political value vs. her humanity; Natarle's asset logic vs. Murrue's conscience; Autumn's moral compass vs. survival pragmatism",
+        "status": "SIMMERING",
+        "distance": "6",
+        "details": "Siegel Clyne's daughter is aboard a ship hunted by her father's government. Natarle is already calculating leverage. Murrue is weighing duty against decency. Autumn named the calculus aloud and Lacus heard it — she challenged him directly, testing whether he'll treat her as a person or a variable. The crew's anti-Coordinator sentiment now has a high-profile target. Every faction gains or loses depending on what the Archangel does with her.",
+        "cost": "Treating her as a person costs tactical advantage. Treating her as an asset costs the crew's remaining humanity. Delay costs both — the longer her status is ambiguous, the more dangerous her position becomes.",
+        "target_constraint": "c1-optimization",
+        "last_manifestation": "Lacus asked Autumn directly whether his careful treatment is personal or categorical. The corridor is waiting for his answer."
+      },
+      "r": "Political bomb aboard a fragile ship"
+    },
+    {
+      "tx": 43,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "name": "The Defector's Playbook",
+        "forces": "Kira's intelligence vs. Archangel survival; ZAFT tactical advantage vs. the promise that was supposed to protect the crew",
+        "status": "SIMMERING",
+        "distance": "5",
+        "details": "Kira Yamato's debriefing data is being compiled into tactical recommendations for field commanders. The Le Creuset team already knows the Archangel's combat patterns, the Strike's OS architecture, damage thresholds, crew rotation schedules, and the ship's known weaknesses. Every engagement from now on is fought against an opponent reading from the Archangel's own playbook. Autumn's OS rewrites partially invalidate Kira's data on the Strike, but the ship-level intelligence remains devastating. The 8th Fleet rendezvous coordinates may be compromised.",
+        "cost": "Each engagement costs more because the enemy anticipates responses. Changing patterns costs readiness. The 8th Fleet rendezvous may be a trap. Kira's promise — that the crew would be spared — is only as strong as Le Creuset's willingness to honor Athrun's deal.",
+        "target_constraint": "c3-adequacy"
+      },
+      "r": "The enemy has the playbook"
+    },
+    {
+      "tx": 44,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "naturals-cockpit",
+      "d": {
+        "name": "The Natural's Cockpit",
+        "forces": "Autumn's body vs. the Strike's demands; the crew's need vs. Autumn's limits; Manifold Resonance vs. the secret that must be kept",
+        "status": "SIMMERING",
+        "distance": "7",
+        "details": "The Strike was built for a Coordinator. Every sortie leaves Autumn with bruises from G-forces a Coordinator frame would absorb, hand tremors, migraines he hides from medical. He self-medicates with stims and painkillers. The OS rewrites help but cannot solve the fundamental mismatch between a Natural body and a machine designed to exceed Natural parameters. Mu notices combat reactions that don't track. Autumn avoids post-combat data reviews. The crew's gratitude masks their willingness to let him destroy himself — and he sees the dynamic clearly. The ticking clock: cumulative physical damage will eventually degrade his piloting below combat viability, and the Manifold Resonance he won't name is leaving data anomalies someone will eventually examine.",
+        "cost": "Every sortie costs physical capacity he cannot regenerate. Discovery of Manifold Resonance costs his personhood in a world that dissects the biologically different. Hiding it costs accuracy in self-assessment. The intersection: when the physical damage is bad enough that only Resonance keeps him competitive, the secret becomes visible in the gap between what his body can do and what the combat logs show.",
+        "target_constraint": "c2-natural-ceiling"
+      },
+      "r": "The machine is killing the pilot"
+    },
+    {
+      "tx": 45,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Lacus does not know Kira defected — discovery will reshape her read of everyone aboard"
+      },
+      "r": "Fresh seam; no forced choice yet"
+    },
+    {
+      "tx": 46,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "ZAFT pursuit continues with Kira's intelligence; Lacus's presence changes the engagement calculus if Le Creuset learns she's aboard"
+      },
+      "r": "Fresh seam; Le Creuset doesn't know yet"
+    },
+    {
+      "tx": 47,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "PLANT internal politics — Zala hardliners gaining ground on Clyne moderates; Lacus's disappearance is a political variable being exploited"
+      },
+      "r": "Offscreen pressure feeding multiple collisions"
+    },
+    {
+      "tx": 48,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "name",
+        "v": "Autumn Yuy"
+      },
+      "r": ""
+    },
+    {
+      "tx": 49,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "demonstrated_traits",
+        "v": "Pattern recognition operating above baseline; reads people in seconds and says nothing; nonchalance is load-bearing; moral compass from first principles; resents being the one who acts but acts anyway; genius-level intellect applied to OS engineering; deflects with studied indifference; economical speech that lands precisely"
+      },
+      "r": ""
+    },
+    {
+      "tx": 50,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "power_base",
+        "v": "2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 51,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "power",
+        "v": "2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 52,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "power_basis",
+        "v": "Genius intellect enabling rapid tactical adaptation and OS engineering; strong Natural physique partially compensating for Coordinator-optimized cockpit; latent Manifold Resonance providing precognitive threat assessment and spatial cognition under combat stress; rookie piloting skill — reads patterns faster than reflexes can execute; mobile suit engineering education allows iterative OS improvement. Limited by: Natural body taking cumulative damage from MS designed for Coordinator parameters, untrained and unacknowledged Resonance producing inconsistent results, zero formal military combat training."
+      },
+      "r": ""
+    },
+    {
+      "tx": 53,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "abilities",
+        "v": "Latent Manifold Resonance — precognitive threat assessment, enhanced spatial cognition, faint empathic sensing of other Resonance-capable minds; unreliable, stress-activated, unacknowledged"
+      },
+      "r": ""
+    },
+    {
+      "tx": 54,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "abilities",
+        "v": "Rookie MS Piloting — defensive/reactive style; absorbs hits via phase-shift armor rather than dodging; prediction constrained by Natural reaction time; competitive vs. mass-production units, survival-dependent on support vs. aces"
+      },
+      "r": ""
+    },
+    {
+      "tx": 55,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "abilities",
+        "v": "MS Engineering / OS Architecture — iteratively rewriting Strike's Coordinator-optimized OS toward Natural-compatible framework; rewrites unconsciously accommodating Resonance patterns; engineering insight allows field repair and tactical adaptation of loadout"
+      },
+      "r": ""
+    },
+    {
+      "tx": 56,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "abilities",
+        "v": "Combat Limitation — cumulative G-force damage, hand tremors, migraines from sustained sorties; self-medicating with stims and painkillers; each engagement degrades effective power if recovery time is insufficient"
+      },
+      "r": ""
+    },
+    {
+      "tx": 57,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "autumn-yuy",
+      "d": {
+        "name": "Autumn Yuy",
+        "tier": "PRINCIPAL",
+        "want": "Keep the Archangel alive; underneath: prove that staying was the right choice when leaving was easier",
+        "doing": "Standing in port corridor post-sortie, caught in Lacus's direct challenge | Cost: being seen by someone trained to see",
+        "cost": "Being read accurately threatens the nonchalant distance that keeps him functional"
+      },
+      "r": ""
+    },
+    {
+      "tx": 58,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "autumn-yuy",
+      "d": {
+        "f": "intimacy_stance",
+        "v": "Guarded by default. Social battery drains fast. Processes others' emotional states in seconds, which creates false intimacy he maintains distance from. Physical contact is functional, not sought. The flight suit and bruises and stims create a body-relationship that's adversarial — his body is a tool being used past tolerance. Intimacy would require letting someone close enough to see the damage, and the damage is the secret."
+      },
+      "r": ""
+    },
+    {
+      "tx": 59,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "constraint",
+      "id": "c1-optimization",
+      "d": {
+        "name": "The Optimization Principle",
+        "owner_id": "autumn-yuy",
+        "integrity": "STABLE",
+        "prevents": "Full emotional engagement; maintains calculated distance through nonchalance and efficiency framing",
+        "threshold": "Someone he is protecting is hurt because his calculated restraint delayed action, or someone's genuine care for him persists past every deflection",
+        "replacement": "Displacement — redirects exposed care into obsessive technical problem-solving (OS rewrites, tactical planning, anything with a solution space)",
+        "replacement_type": "displacement",
+        "shedding_order": "1"
+      },
+      "r": ""
+    },
+    {
+      "tx": 60,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "constraint",
+      "id": "c2-natural-ceiling",
+      "d": {
+        "name": "The Natural Ceiling",
+        "owner_id": "autumn-yuy",
+        "integrity": "STABLE",
+        "prevents": "Acknowledging Manifold Resonance; sustains the framework that Coordinators are inherently superior and he is merely 'good enough'",
+        "threshold": "Undeniable evidence that his abilities exceed Coordinator parameters, forced into confrontation by someone who won't accept deflection — or a combat moment where Resonance visibly operates beyond any Natural explanation",
+        "replacement": "Depth shift — forced to confront what he actually is and what that means in a world that dissects the biologically different",
+        "replacement_type": "depth_shift",
+        "shedding_order": "2"
+      },
+      "r": ""
+    },
+    {
+      "tx": 61,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "constraint",
+      "id": "c3-adequacy",
+      "d": {
+        "name": "The Adequacy Bargain",
+        "owner_id": "autumn-yuy",
+        "integrity": "STABLE",
+        "prevents": "Asking for help; admitting he's in over his head; sustains the framework that 'good enough' is sufficient and the lower bar is actually achievable",
+        "threshold": "A situation where being 'good enough' directly costs someone their life — where the gap between adequate and excellent is measured in bodies",
+        "replacement": "Regression — collapses into the recognition that staying was not the rational choice, that the math doesn't work, and he has been constructing a narrative to avoid that conclusion",
+        "replacement_type": "regression",
+        "shedding_order": "3"
+      },
+      "r": ""
+    },
+    {
+      "tx": 62,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "name": "Lacus Clyne",
+        "tier": "PRINCIPAL",
+        "want": "To understand where she is, who these people are, and whether she's safe; deeper: to find a response to the war that isn't choosing a side",
+        "doing": "Seated on medical stretcher in port corridor, testing Autumn's honesty with a direct challenge | Cost: revealing her perception reveals her value as more than a passive guest",
+        "cost": "Every display of acuity invites exploitation by people who see political tools before people"
+      },
+      "r": ""
+    },
+    {
+      "tx": 63,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "intimacy_stance",
+        "v": "Performance layer active — warmth, grace, composure are survival tools, not invitations. Underneath is someone who was floating in the dark waiting to die and has not processed it. Physical contact would be destabilizing — she controls her body language so completely that any uncontrolled touch threatens the architecture. Trust must be built through sustained honesty, not gestures. Currently: boundaries unknown to herself, masked by political composure that has never been tested by genuine personal connection under these conditions."
+      },
+      "r": ""
+    },
+    {
+      "tx": 64,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "constraint",
+      "id": "c1-serene-mask",
+      "d": {
+        "name": "The Serene Mask",
+        "owner_id": "lacus-clyne",
+        "integrity": "STABLE",
+        "prevents": "Showing the fear and trauma underneath the political composure; maintains the performance of warmth and grace as a survival tool",
+        "threshold": "Sustained isolation where the performance has no audience, or unexpected genuine kindness that doesn't want anything in return",
+        "replacement": "Displacement — redirects revealed vulnerability into caretaking others, making their pain the focus instead of hers",
+        "replacement_type": "displacement",
+        "shedding_order": "1"
+      },
+      "r": ""
+    },
+    {
+      "tx": 65,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "constraint",
+      "id": "c2-political-lens",
+      "d": {
+        "name": "The Political Lens",
+        "owner_id": "lacus-clyne",
+        "integrity": "STABLE",
+        "prevents": "Reading personal emotion as personal; defaults every interaction to political interpretation (ideology, faction, leverage)",
+        "threshold": "Confrontation with raw emotional reality that has no political angle — grief that is just grief, care that is just care, damage that serves no strategic purpose",
+        "replacement": "Depth shift — begins to see people as people rather than political actors, which destabilizes her entire interpretive framework",
+        "replacement_type": "depth_shift",
+        "shedding_order": "2"
+      },
+      "r": ""
+    },
+    {
+      "tx": 66,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "constraint",
+      "id": "c3-chairmans-daughter",
+      "d": {
+        "name": "The Chairman's Daughter",
+        "owner_id": "lacus-clyne",
+        "integrity": "STABLE",
+        "prevents": "Using her name and status as leverage or weapon; maintains separation between her identity and her father's political power",
+        "threshold": "Someone she cares about is endangered and her name is the only tool that might save them",
+        "replacement": "Regression — loses the identity framework that kept her distinct from Siegel Clyne's politics; becomes the political instrument she has always refused to be",
+        "replacement_type": "regression",
+        "shedding_order": "3"
+      },
+      "r": ""
+    },
+    {
+      "tx": 67,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "name": "Mu La Flaga",
+        "tier": "TRACKED",
+        "want": "Keep the kids alive long enough to stop being kids; underneath: survive long enough to matter",
+        "doing": "Off-duty, likely in pilot ready room or hangar — aware of the Lacus recovery but not present in corridor",
+        "cost": "Every sortie in the Moebius Zero against mobile suits narrows the margin"
+      },
+      "r": ""
+    },
+    {
+      "tx": 68,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "power_base",
+        "v": "2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 69,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "power",
+        "v": "2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 70,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "power_basis",
+        "v": "Elite mobile armor ace with Manifold Resonance (unacknowledged); wire-guided gunbarrel mastery compensates for obsolete platform; spatial awareness provides precognitive edge against superior hardware; extensive combat experience and tactical creativity. Limited by: Moebius Zero is fundamentally outclassed by mobile suits in direct engagement; Resonance is instinct-level, not trained or understood."
+      },
+      "r": ""
+    },
+    {
+      "tx": 71,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "abilities",
+        "v": "Moebius Zero gunbarrel mastery — wire-guided all-range attack requiring spatial awareness beyond standard Natural parameters"
+      },
+      "r": ""
+    },
+    {
+      "tx": 72,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "abilities",
+        "v": "Manifold Resonance (unacknowledged) — enhanced spatial cognition, threat precognition, instinctive; recognizes similar ability in others without framework to name it"
+      },
+      "r": ""
+    },
+    {
+      "tx": 73,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "abilities",
+        "v": "Veteran combat instincts — reads engagements, manages stress under fire, mentors under lethal conditions"
+      },
+      "r": ""
+    },
+    {
+      "tx": 74,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "",
+        "k": "autumn-yuy",
+        "v": "Kid's reactions in the cockpit don't always track. Too fast, too precise for a rookie Natural. Watching. Not saying anything yet."
+      },
+      "r": ""
+    },
+    {
+      "tx": 75,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "name": "Murrue Ramius",
+        "tier": "TRACKED",
+        "want": "Keep her crew alive while maintaining the authority to make the calls that might kill them",
+        "doing": "Approaching Lacus in port corridor with Natarle — making the command decision on where to put her | Cost: every choice about Lacus sets precedent for how the ship treats Coordinators",
+        "cost": "Authority already shaken by Kira's defection; a wrong call here fractures crew discipline further"
+      },
+      "r": ""
+    },
+    {
+      "tx": 76,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "name": "Natarle Badgiruel",
+        "tier": "TRACKED",
+        "want": "Mission completion through correct procedure; underneath: validation that the math is right even when the math is cruel",
+        "doing": "Half-step behind Murrue — already calculating Lacus's value as political leverage | Cost: pushing the asset logic now risks open conflict with Murrue",
+        "cost": "Being right about the math makes her the person willing to say what everyone else is thinking"
+      },
+      "r": ""
+    },
+    {
+      "tx": 77,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "MS",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "f": "",
+        "k": "lacus-clyne",
+        "v": "Chairman Clyne's daughter. Political value exceeds tactical risk of keeping her alive. Asset, not guest."
+      },
+      "r": ""
+    },
+    {
+      "tx": 78,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "name": "Kira Yamato",
+        "tier": "TRACKED",
+        "want": "The promise to hold — that the crew will be spared; underneath: for the choice to have been worth something",
+        "doing": "Aboard the Vesalius, cooperating with ZAFT debriefing — answering questions because that was the deal | Cost: each answer is another betrayal of people who trusted him",
+        "cost": "Psychological erosion; dependent on Athrun as only anchor; guilt compounds with each intelligence application"
+      },
+      "r": ""
+    },
+    {
+      "tx": 79,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "power_base",
+        "v": "3.0"
+      },
+      "r": ""
+    },
+    {
+      "tx": 80,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "power",
+        "v": "1.0"
+      },
+      "r": ""
+    },
+    {
+      "tx": 81,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "power_basis",
+        "v": "Coordinator with exceptional aptitude — rewrote Strike OS in real-time combat, adapted to MS piloting without formal training, demonstrated creative tactical ability. Base 3.0 reflects proven capability in the Strike. Current 1.0: no mobile suit assigned, confined aboard Vesalius, untrusted by ZAFT command. Combat effectiveness is theoretical until given hardware."
+      },
+      "r": ""
+    },
+    {
+      "tx": 82,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "abilities",
+        "v": "Coordinator physiology — enhanced reflexes, spatial processing, G-force tolerance"
+      },
+      "r": ""
+    },
+    {
+      "tx": 83,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "abilities",
+        "v": "OS architecture genius — rewrote Strike's combat OS under fire; his original code is what Autumn is now iterating on"
+      },
+      "r": ""
+    },
+    {
+      "tx": 84,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "abilities",
+        "v": "Limitation — no assigned mobile suit; combat power is locked behind ZAFT trust threshold"
+      },
+      "r": ""
+    },
+    {
+      "tx": 85,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "name": "Athrun Zala",
+        "tier": "TRACKED",
+        "want": "To protect Kira; underneath: to reconcile the friend who came back with the hollow person who arrived",
+        "doing": "Le Creuset team duties aboard Vesalius — balancing operational orders with the promise he made to Kira | Cost: every engagement with the Archangel tests whether the promise holds",
+        "cost": "Duty and promise pull in opposite directions; Lacus's disappearance adds a third vector he hasn't felt yet"
+      },
+      "r": ""
+    },
+    {
+      "tx": 86,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "power_base",
+        "v": "3.0"
+      },
+      "r": ""
+    },
+    {
+      "tx": 87,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "power",
+        "v": "3.0"
+      },
+      "r": ""
+    },
+    {
+      "tx": 88,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "power_basis",
+        "v": "ZAFT Red — top graduate; Aegis is a transformable G-weapon with versatile combat modes. Coordinator physiology plus formal military training plus advanced MS. Fights with precision and creativity. Current engagement complicated by emotional constraints — the promise to Kira means he's fighting the Archangel while trying not to destroy it."
+      },
+      "r": ""
+    },
+    {
+      "tx": 89,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "abilities",
+        "v": "Aegis transformable MS — versatile combat modes including mobile armor grapple configuration"
+      },
+      "r": ""
+    },
+    {
+      "tx": 90,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "abilities",
+        "v": "ZAFT Red elite training — tactical discipline, team coordination, creative problem-solving under fire"
+      },
+      "r": ""
+    },
+    {
+      "tx": 91,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "abilities",
+        "v": "Emotional constraint — fights the Archangel under orders but the promise to spare the crew limits his engagement ceiling"
+      },
+      "r": ""
+    },
+    {
+      "tx": 92,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "name": "Rau Le Creuset",
+        "tier": "TRACKED",
+        "want": "To advance personal agendas he has shared with no one; the Archangel pursuit serves purposes beyond tactical value",
+        "doing": "Commanding the Le Creuset team from the Vesalius — leveraging Kira's intelligence to justify continued pursuit | Cost: operational deadline approaching; if Archangel isn't neutralized soon, ZAFT command reassigns assets",
+        "cost": "Exposure of personal agenda; loss of operational autonomy; the asset (Kira) has an expiration date"
+      },
+      "r": ""
+    },
+    {
+      "tx": 93,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "power_base",
+        "v": "3.0"
+      },
+      "r": ""
+    },
+    {
+      "tx": 94,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "power",
+        "v": "3.0"
+      },
+      "r": ""
+    },
+    {
+      "tx": 95,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "power_basis",
+        "v": "Elite pilot in CGUE commander variant; Manifold Resonance (secret, fully unacknowledged to anyone) provides spatial awareness matching Mu La Flaga; decades of combat experience; tactical genius commanding team-level operations. The mask is literal and figurative — his piloting skill is real, but his true threat is informational and political, not mechanical."
+      },
+      "r": ""
+    },
+    {
+      "tx": 96,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "abilities",
+        "v": "Manifold Resonance (secret) — spatial awareness, threat precognition; would recognize similar ability in others and seek to acquire/control rather than report"
+      },
+      "r": ""
+    },
+    {
+      "tx": 97,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "abilities",
+        "v": "Command autonomy — operates with unusual independence from ZAFT command; personal agenda masked by tactical competence"
+      },
+      "r": ""
+    },
+    {
+      "tx": 98,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "abilities",
+        "v": "Intelligence exploitation — currently leveraging Kira's debriefing data for operational and personal advantage"
+      },
+      "r": ""
+    },
+    {
+      "tx": 99,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "yzak-joule",
+      "d": {
+        "name": "Yzak Joule",
+        "tier": "KNOWN"
+      },
+      "r": "Le Creuset team; Duel Gundam pilot; aggressive, pride-driven"
+    },
+    {
+      "tx": 100,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "yzak-joule",
+      "d": {
+        "f": "power_base",
+        "v": "2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 101,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "yzak-joule",
+      "d": {
+        "f": "power",
+        "v": "2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 102,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "yzak-joule",
+      "d": {
+        "f": "power_basis",
+        "v": "ZAFT Red in Duel Gundam — straightforward combat MS with Assault Shroud upgrade; aggressive piloting style prioritizing direct engagement; Coordinator training and reflexes; personal grudge against the Strike makes him reckless"
+      },
+      "r": ""
+    },
+    {
+      "tx": 103,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "dearka-elsman",
+      "d": {
+        "name": "Dearka Elsman",
+        "tier": "KNOWN"
+      },
+      "r": "Le Creuset team; Buster Gundam pilot; ranged specialist"
+    },
+    {
+      "tx": 104,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "dearka-elsman",
+      "d": {
+        "f": "power_base",
+        "v": "2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 105,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "dearka-elsman",
+      "d": {
+        "f": "power",
+        "v": "2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 106,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "dearka-elsman",
+      "d": {
+        "f": "power_basis",
+        "v": "ZAFT Red in Buster Gundam — artillery-focused MS optimized for ranged fire support; disciplined at range, vulnerable in close engagement; Coordinator baseline"
+      },
+      "r": ""
+    },
+    {
+      "tx": 107,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "nicol-amalfi",
+      "d": {
+        "name": "Nicol Amalfi",
+        "tier": "KNOWN"
+      },
+      "r": "Le Creuset team; Blitz Gundam pilot; Mirage Colloid stealth capability"
+    },
+    {
+      "tx": 108,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "nicol-amalfi",
+      "d": {
+        "f": "power_base",
+        "v": "2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 109,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "nicol-amalfi",
+      "d": {
+        "f": "power",
+        "v": "2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 110,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "S",
+      "e": "char",
+      "id": "nicol-amalfi",
+      "d": {
+        "f": "power_basis",
+        "v": "ZAFT Red in Blitz Gundam — stealth MS with Mirage Colloid invisibility system; gentler temperament but trained and effective; ambush specialist; Coordinator baseline"
+      },
+      "r": ""
+    },
+    {
+      "tx": 111,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "CR",
+      "e": "char",
+      "id": "flay-allster",
+      "d": {
+        "name": "Flay Allster",
+        "tier": "KNOWN"
+      },
+      "r": "Heliopolis civilian; anti-Coordinator sentiment rooted in grief; potential manipulator or genuine casualty depending on how she's handled"
+    },
+    {
+      "tx": 112,
+      "t": "[Day 1 — 14:30]",
+      "_ts": "2026-04-03T11:34:19.354Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "[Day 1 — 14:32] Lacus Clyne recovered from escape pod, brought to port corridor on stretcher. Medical check performed with minimal warmth; armed guard stationed at hatch. Autumn arrived post-sortie in stained flight suit, bruises hidden, stim edge wearing thin. He assessed Lacus aloud to Murrue — 'hostage or ticket out alive' — within Lacus's hearing. Lacus read the room in seconds: the hostility, the fear wearing hostility's mask, the power geometry of who defers to whom. She found Autumn's eyes and held them one beat too long. When he spoke, she targeted him specifically — 'I wonder if you're always this careful with guests, or if there's something particular about me.' Murrue shut down the corridor discussion. Natarle stored the math. First contact between two people trained to see through surfaces. Unresolved: Autumn has been asked a direct question by someone who will know if he lies. The corridor is watching."
+      },
+      "r": ""
+    },
+    {
+      "tx": 113,
+      "t": "",
+      "_ts": "2026-04-03T11:37:58.787Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "name": "The Unsaid Name",
+        "status": "SIMMERING",
+        "distance": "4",
+        "target_constraint": "c2-political-lens"
+      },
+      "r": ""
+    },
+    {
+      "tx": 114,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Port corridor, Archangel. Post-dispersal. Autumn alone, stimulant headache building. Lacus escorted to quarters by Natarle. Murrue heading to bridge."
+      },
+      "r": ""
+    },
+    {
+      "tx": 115,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "doing",
+        "v": "Standing in an empty corridor processing a mutual read with someone who sees as much as he does | Cost: thirty minutes until a briefing where Murrue will want answers he hasn't decided on yet"
+      },
+      "r": ""
+    },
+    {
+      "tx": 116,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "location",
+        "v": "Assigned quarters, Archangel (escorted, guard posted)"
+      },
+      "r": ""
+    },
+    {
+      "tx": 117,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "doing",
+        "v": "Being processed into shipboard containment dressed as hospitality | Cost: every hour without information is an hour her model of this ship runs on incomplete data"
+      },
+      "r": ""
+    },
+    {
+      "tx": 118,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "MS",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "reads",
+        "k": "autumn",
+        "v": "Honest but guarded. Sees the board. Chose not to tell me where I stand — which tells me no one has decided. The most dangerous kind of person: one who sees clearly and acts carefully. Not an ally. Not an enemy. Undecided — and aware he's undecided."
+      },
+      "r": ""
+    },
+    {
+      "tx": 119,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "f": "doing",
+        "v": "Managing Lacus's containment logistics — quarters, guard rotation, access restrictions | Cost: every accommodation is a precedent; every restriction is a signal Lacus will read"
+      },
+      "r": ""
+    },
+    {
+      "tx": 120,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "f": "doing",
+        "v": "Heading to bridge, briefing scheduled in 30 minutes | Cost: must decide Lacus's status before the crew decides for her"
+      },
+      "r": ""
+    },
+    {
+      "tx": 121,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "MS",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "f": "reads",
+        "k": "autumn",
+        "v": "Tactically sharp but needs to learn when to shut up in corridors full of crew"
+      },
+      "r": ""
+    },
+    {
+      "tx": 122,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn deflected Lacus's direct question; Lacus read the deflection as confirmation that her status is undecided; mutual recognition established — both see more than they say; Murrue shut it down and took command of the situation"
+      },
+      "r": ""
+    },
+    {
+      "tx": 123,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "forces",
+        "v": "Lacus's ignorance of Kira's defection vs. the crew's wound from it; whoever controls the telling controls the framing; the longer she doesn't know, the more her reads of this ship are built on missing context"
+      },
+      "r": ""
+    },
+    {
+      "tx": 124,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "details",
+        "v": "Kira Yamato defected to ZAFT. Everyone aboard knows. Lacus Clyne does not. Every interaction she has is shaped by a betrayal she's unaware of — the crew's hostility reads as ideology to her when it's actually grief. Her political lens interprets anti-Coordinator sentiment as factional when it's personal. When she learns the truth, every read she's built recalibrates. The forced choice: who tells her, when, and whose version of events does she hear first? If hostile crew tell her, it weaponizes. If Autumn tells her, it creates trust or obligation. If command tells her, it's framed as briefing rather than confession. If she discovers it herself — overheard, pieced together — she learns that everyone chose to keep it from her."
+      },
+      "r": ""
+    },
+    {
+      "tx": 125,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "cost",
+        "v": "Lacus's misreads accumulate with every interaction built on missing context. The crew's hostility intensifies because she doesn't understand its source and therefore can't navigate it. Autumn carries the weight of knowing the name she hasn't heard. Whoever finally speaks it pays the price of being the one who broke the silence."
+      },
+      "r": ""
+    },
+    {
+      "tx": 126,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Lacus does not know Kira defected — discovery will reshape her read of everyone aboard"
+      },
+      "r": ""
+    },
+    {
+      "tx": 127,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "ZAFT pursuit continues with Kira's intelligence; Lacus's presence changes the engagement calculus if Le Creuset learns"
+      },
+      "r": ""
+    },
+    {
+      "tx": 128,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Crew anti-Coordinator sentiment now has a high-value target to focus on"
+      },
+      "r": ""
+    },
+    {
+      "tx": 129,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "PLANT Supreme Council balance shifting — Zala hardliners exploiting Lacus Clyne's disappearance to undermine Siegel Clyne's moderate faction; if her location becomes known to any faction, every calculus changes"
+      },
+      "r": ""
+    },
+    {
+      "tx": 130,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Athrun Zala is searching for Lacus — the ship he's ordered to help destroy is carrying the person he's searching for; when he discovers this, every loyalty collides"
+      },
+      "r": ""
+    },
+    {
+      "tx": 131,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Murrue must decide Lacus's official status before the crew's hostility makes the decision for her — briefing in 30 minutes"
+      },
+      "r": ""
+    },
+    {
+      "tx": 132,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "power",
+        "v": "2.0|base:2.5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 133,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "power_basis",
+        "v": "GAT-X105 Strike Gundam — Earth Alliance prototype, Phase Shift armor, Striker Pack system (Aile/Sword/Launcher configs). Hardware ceiling is elite-tier (~3.0) but effective power capped by Natural body in Coordinator-optimized cockpit, rookie piloting skill, partially rewritten OS. Manifold Resonance can spike effective power under sustained stress but is unreliable and unacknowledged. Archangel fire support adds +0.5 in coordinated engagements."
+      },
+      "r": ""
+    },
+    {
+      "tx": 134,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "abilities",
+        "v": "Latent Manifold Resonance — precognitive threat assessment, enhanced spatial cognition, faint empathic sensing; unreliable, stress-activated, unacknowledged | Rookie MS Piloting — defensive/reactive in Strike; absorbs hits via Phase Shift; prediction constrained by Natural reaction time | MS Engineering / OS Architecture — iteratively rewriting Strike OS toward Natural-compatible framework; rewrites unconsciously accommodating Resonance | Striker Pack System — Aile/Sword/Launcher loadout choice per sortie | Combat Limitation — cumulative G-force damage, tremors, migraines; self-medicating; each sortie without recovery degrades power"
+      },
+      "r": ""
+    },
+    {
+      "tx": 135,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "power_basis",
+        "v": "TS-MA2mod.00 Moebius Zero — obsolete mobile armor with wire-guided gunbarrels requiring spatial awareness beyond normal parameters. Mu's Manifold Resonance elevates the platform far beyond design ceiling. Against GINNs: competitive. Against G-weapons: outgunned but unpredictable. Dead-end platform with no replacement."
+      },
+      "r": ""
+    },
+    {
+      "tx": 136,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "power_basis",
+        "v": "No MS assigned. ZAFT does not trust a defector with hardware. Base 3.0 reflects Ultimate Coordinator genetics and combat-proven Strike piloting. Current 1.0 reflects unarmed intelligence asset status. Gap between base and current measures his captivity."
+      },
+      "r": ""
+    },
+    {
+      "tx": 137,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "doing",
+        "v": "Cooperating with ZAFT debriefings aboard the Vesalius | Cost: each answer betrays people who trusted him; intelligence being compiled into tactical recommendations against the Archangel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 138,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "condition",
+        "v": "Exhausted, guilt-laden, psychologically hollowed. Clinging to the promise as justification. Confined in practice, dependent on Athrun. Does not know Lacus is on the Archangel."
+      },
+      "r": ""
+    },
+    {
+      "tx": 139,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "MS",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "reads",
+        "k": "autumn",
+        "v": "The friend who stayed when I left. Guilt made specific."
+      },
+      "r": ""
+    },
+    {
+      "tx": 140,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "MS",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "reads",
+        "k": "athrun",
+        "v": "The reason I'm here. The only person I trust. Trust conditional on the promise holding."
+      },
+      "r": ""
+    },
+    {
+      "tx": 141,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "location",
+        "v": "Vesalius, ZAFT quarters (confined)"
+      },
+      "r": ""
+    },
+    {
+      "tx": 142,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "wants",
+        "v": "For the promise to hold. For none of this to have been necessary. Deeper: to stop choosing between people he cares about."
+      },
+      "r": ""
+    },
+    {
+      "tx": 143,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "power_basis",
+        "v": "GAT-X303 Aegis Gundam — transformable G-weapon, MA mode with Scylla cannon. Phase Shift armor. Athrun fights with precision and mode-shifting creativity. Power 3.0 at CE71 field ceiling. Decisive advantage over Autumn, partially offset by Archangel support and Resonance spikes."
+      },
+      "r": ""
+    },
+    {
+      "tx": 144,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "doing",
+        "v": "Le Creuset team operations, pursuing Archangel. Protecting Kira within ZAFT while reconciling the promise with orders. Searching for Lacus. | Cost: every mission tests the promise; every day Lacus is missing erodes composure"
+      },
+      "r": ""
+    },
+    {
+      "tx": 145,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "condition",
+        "v": "Professionally functional, privately strained. The friend he recovered is hollow. His fiancée is missing."
+      },
+      "r": ""
+    },
+    {
+      "tx": 146,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "MS",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "reads",
+        "k": "kira",
+        "v": "He came but it feels like giving up in my direction. I have to make this worth it."
+      },
+      "r": ""
+    },
+    {
+      "tx": 147,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "location",
+        "v": "Vesalius"
+      },
+      "r": ""
+    },
+    {
+      "tx": 148,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "power_basis",
+        "v": "ZGMF-515 CGUE Commander Type — high-performance ZAFT MS, not a G-weapon. Le Creuset's undisclosed Manifold Resonance and ace skill push it to power 3.0 despite hardware limits. His real weapons are information, manipulation, and patience."
+      },
+      "r": ""
+    },
+    {
+      "tx": 149,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "yzak-joule",
+      "d": {
+        "f": "power_basis",
+        "v": "GAT-X102 Duel Gundam — G-weapon, Phase Shift armor. Yzak compensates for the Duel's straightforward design with aggression and genuine talent. Assault Shroud upgrade available as future mod."
+      },
+      "r": ""
+    },
+    {
+      "tx": 150,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "dearka-elsman",
+      "d": {
+        "f": "power_basis",
+        "v": "GAT-X103 Buster Gundam — dedicated long-range artillery G-weapon. Dual gun launcher and rifle combine into shotgun or sniper config. Excels at range, vulnerable close."
+      },
+      "r": ""
+    },
+    {
+      "tx": 151,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "char",
+      "id": "nicol-amalfi",
+      "d": {
+        "f": "power_basis",
+        "v": "GAT-X207 Blitz Gundam — G-weapon with Mirage Colloid stealth. Gleipnir anchor, Trikeros system. Nicol uses stealth for ambush and disruption. Most tactically creative of the junior pilots."
+      },
+      "r": ""
+    },
+    {
+      "tx": 152,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "S",
+      "e": "faction",
+      "id": "zaft",
+      "d": {
+        "f": "notes",
+        "v": "Le Creuset team fields four G-weapons (Aegis, Duel, Buster, Blitz) plus Le Creuset's CGUE and GINN support. Vesalius is Nazca-class. Combined with Kira's intelligence: decisive material and information advantage. Operational deadline approaching — ZAFT command will reassign if the Archangel isn't neutralized soon."
+      },
+      "r": ""
+    },
+    {
+      "tx": 153,
+      "t": "[Day 1 - 14:35]",
+      "_ts": "2026-04-03T11:41:25.081Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Autumn deflected Lacus's direct question with characteristic economy — 'you'll find out, or not.' Lacus read the deflection instantly, adjusted her model: he's honest, guarded, undecided, and sees the board. She dropped one degree of performance warmth specifically for him. Murrue intervened, took command, assigned quarters and escort. Natarle managing containment logistics. Mutual recognition established between Autumn and Lacus — both see more than they say, both know the other sees. Lacus escorted to quarters with guard. Autumn left in empty corridor with stimulant headache, thirty minutes until briefing where Murrue wants answers about what to do with the chairman's daughter. Unresolved: Lacus still doesn't know about Kira. The name hasn't been spoken."
+      },
+      "r": ""
+    },
+    {
+      "tx": 154,
+      "t": "",
+      "_ts": "2026-04-03T11:44:33.801Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "name": "Le Creuset's Card",
+        "status": "SIMMERING",
+        "distance": "5"
+      },
+      "r": ""
+    },
+    {
+      "tx": 155,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Briefing room, Archangel. Murrue, Natarle, Mu, Autumn. Coffee and calculus. The question of what Lacus Clyne means has been laid out — Natarle's leverage play, Mu's warning about crew fracture, and the Kira-shaped silence that Natarle finally broke."
+      },
+      "r": ""
+    },
+    {
+      "tx": 156,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "Briefing room, Archangel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 157,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Functional; tremor window holding; stimulant headache dulled by painkillers; processing Kira's name spoken aloud as strategic context"
+      },
+      "r": ""
+    },
+    {
+      "tx": 158,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "doing",
+        "v": "Attending briefing, voicing the crew-morale risk | Cost: being the experienced voice in a room full of hard choices"
+      },
+      "r": ""
+    },
+    {
+      "tx": 159,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "f": "doing",
+        "v": "Seeking assessments before committing to a decision on Lacus's status | Cost: every minute without a decision is a decision"
+      },
+      "r": ""
+    },
+    {
+      "tx": 160,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "f": "doing",
+        "v": "Presenting the leverage case — broadcast Lacus's presence for a de facto ceasefire | Cost: turning a person into a shield"
+      },
+      "r": ""
+    },
+    {
+      "tx": 161,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "distance",
+        "v": 5
+      },
+      "r": ""
+    },
+    {
+      "tx": 162,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Natarle laid out the leverage case in the briefing room. Mu warned about crew fracture. Murrue turned to Autumn for the answer."
+      },
+      "r": ""
+    },
+    {
+      "tx": 163,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Natarle spoke Kira's name in the briefing room as context for crew hostility toward Lacus. The name is now active in command discussions. Lacus still doesn't know."
+      },
+      "r": ""
+    },
+    {
+      "tx": 164,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "forces",
+        "v": "Le Creuset's private agenda | ZAFT command's institutional interests | Athrun's search for Lacus | Kira's conditional cooperation | The operational deadline for decisive engagement"
+      },
+      "r": ""
+    },
+    {
+      "tx": 165,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "details",
+        "v": "Le Creuset has discovered Lacus Clyne is aboard the Archangel via picket drone NC-7 and is withholding this from everyone — Athrun (searching for his fiancée), Kira (whose cooperation would shatter if he learned the hunted ship carries Lacus), ZAFT command (who would politicize it into the Zala-Clyne factional war). He is building a private scenario tree for when and how to deploy this information. The forced choice: every day he withholds is insubordination; every day he reveals reshapes the board in ways he may not fully control."
+      },
+      "r": ""
+    },
+    {
+      "tx": 166,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "cost",
+        "v": "Withholding costs Athrun's trust if discovered. Revealing costs Le Creuset's control of the timeline. Kira learning Lacus is aboard the hunted ship destroys his cooperation framework — the deal that justified his defection collapses if ZAFT fires on a ship carrying her. The operational deadline means the card must be played before ZAFT command reassigns assets."
+      },
+      "r": ""
+    },
+    {
+      "tx": 167,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "PLANT internal politics — Zala hardliners gaining ground on Clyne moderates; Lacus's disappearance is a political variable being exploited"
+      },
+      "r": ""
+    },
+    {
+      "tx": 168,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "PLANT Supreme Council balance shifting — Zala hardliners exploiting Lacus Clyne's disappearance to undermine Siegel Clyne's moderate faction; if her location becomes known to any faction, every calculus changes"
+      },
+      "r": ""
+    },
+    {
+      "tx": 169,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Athrun Zala is searching for Lacus — the ship he's ordered to help destroy is carrying the person he's searching for; when he discovers this, every loyalty collides"
+      },
+      "r": ""
+    },
+    {
+      "tx": 170,
+      "t": "[Day 1 - 15:05]",
+      "_ts": "2026-04-03T11:48:44.322Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Briefing room — Natarle presented the leverage case: broadcast Lacus's presence to force a de facto ceasefire, since ZAFT cannot fire on a ship carrying the chairman's daughter without splitting the Supreme Council. Mu warned that claiming PLANT royalty as a shield would fracture crew morale and turn the Archangel into a diplomatic incident rather than a warship. Natarle broke the Kira silence — named his defection as the specific cause of anti-Coordinator sentiment that Lacus will inherit. Murrue turned to Autumn for an honest assessment of what happens when the crew learns who Lacus is. The question hangs. Unresolved: Lacus still doesn't know about Kira. Le Creuset still holds the information monopoly about Lacus being aboard."
+      },
+      "r": ""
+    },
+    {
+      "tx": 171,
+      "t": "[Day 1 - 15:08]",
+      "_ts": "2026-04-03T11:59:31.893Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Briefing room, Archangel. Murrue, Natarle, Mu, Autumn. The strategic question has expanded — Autumn pushed for full analysis before deciding Lacus's status, Mu reframed POW as political liability, Murrue turned Autumn's cynicism back on him with the Kira comparison. Autumn is cornered by a question he sees through but cannot dodge."
+      },
+      "r": ""
+    },
+    {
+      "tx": 172,
+      "t": "[Day 1 - 15:08]",
+      "_ts": "2026-04-03T11:59:31.893Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "doing",
+        "v": "Watching Autumn's response with the focus of a man who heard 'escape' instead of 'defection' and is updating his model | Cost: showing his hand about what he's tracking in Autumn"
+      },
+      "r": ""
+    },
+    {
+      "tx": 173,
+      "t": "[Day 1 - 15:08]",
+      "_ts": "2026-04-03T11:59:31.893Z",
+      "op": "S",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "f": "doing",
+        "v": "Testing Autumn's assessment for prejudice vs. pattern recognition — needs to know if her pilot is still thinking straight | Cost: asking a teenager to justify cynicism she partly shares"
+      },
+      "r": ""
+    },
+    {
+      "tx": 174,
+      "t": "[Day 1 - 15:08]",
+      "_ts": "2026-04-03T11:59:31.893Z",
+      "op": "S",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "f": "doing",
+        "v": "Waiting for the answer that determines whether her leverage case survives the briefing | Cost: none yet — she hasn't committed"
+      },
+      "r": ""
+    },
+    {
+      "tx": 175,
+      "t": "[Day 1 - 15:08]",
+      "_ts": "2026-04-03T11:59:31.893Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "distance",
+        "v": 4
+      },
+      "r": ""
+    },
+    {
+      "tx": 176,
+      "t": "[Day 1 - 15:08]",
+      "_ts": "2026-04-03T11:59:31.893Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn pushed POW framing and full strategic analysis; Mu countered with political liability of formal designation; Murrue trapped Autumn with the Kira parallel — forcing him to either confirm crew prejudice or admit Lacus might be different"
+      },
+      "r": ""
+    },
+    {
+      "tx": 177,
+      "t": "[Day 1 - 15:08]",
+      "_ts": "2026-04-03T11:59:31.893Z",
+      "op": "TR",
+      "e": "constraint",
+      "id": "c1-optimization",
+      "d": {
+        "f": "integrity",
+        "from": "STABLE",
+        "to": "STRESSED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 178,
+      "t": "[Day 1 - 15:08]",
+      "_ts": "2026-04-03T11:59:31.893Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "[Day 1 - 15:08] Autumn delivered his assessment — Lacus will choose her own kind, treat her as POW, but protect her from crew hostility fueled by Kira's 'escape.' His word choice (escape, not defection) caught Mu and Natarle's attention for different reasons. Mu reframed: POW status is a political incident, protective custody is the same locked door with a cleaner report. Autumn pushed for full strategic analysis before any status decision. Murrue turned his cynicism into a trap question: what makes you sure Lacus won't choose differently than Kira? Autumn sees every wire in the question and has no clean exit. Unresolved: the answer determines whether Lacus is treated as leverage, liability, or person."
+      },
+      "r": ""
+    },
+    {
+      "tx": 179,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Briefing room, Archangel. Murrue, Natarle, Mu, Autumn. Strategic analysis complete. The 8th Fleet rendezvous is likely compromised. Lacus is the only shield. The room has turned to Autumn for a recommendation."
+      },
+      "r": ""
+    },
+    {
+      "tx": 180,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Functional; tremor window approaching; ribs aching; stimulant headache managed. Has just admitted combat inadequacy to command for the first time."
+      },
+      "r": ""
+    },
+    {
+      "tx": 181,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "S",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "f": "doing",
+        "v": "Asking Autumn for a recommendation she can't find herself | Cost: authority — captains who ask teenagers for strategy are captains who've run out of answers"
+      },
+      "r": ""
+    },
+    {
+      "tx": 182,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "S",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "f": "doing",
+        "v": "Running tactical projections on the compromised rendezvous | Cost: each variable she adds makes the clean math dirtier"
+      },
+      "r": ""
+    },
+    {
+      "tx": 183,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "doing",
+        "v": "Watching Autumn with sharpened attention — respect layered over the unnamed recognition | Cost: the more he sees in Autumn, the harder the question about what he's seeing becomes"
+      },
+      "r": ""
+    },
+    {
+      "tx": 184,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "MS",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "reads",
+        "k": "autumn-yuy",
+        "v": "Strategic mind, honest about limits, says what the room won't — and something underneath the tactical competence that Mu still can't name"
+      },
+      "r": ""
+    },
+    {
+      "tx": 185,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "distance",
+        "v": 3
+      },
+      "r": ""
+    },
+    {
+      "tx": 186,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn named sexual violence as the primary threat to Lacus and connected it to Kira becoming an active combatant. The room absorbed it. Lacus's safety is now a tactical imperative, not a moral one — and the distinction costs something."
+      },
+      "r": ""
+    },
+    {
+      "tx": 187,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "distance",
+        "v": 4
+      },
+      "r": ""
+    },
+    {
+      "tx": 188,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "last_manifestation",
+        "v": "8th Fleet rendezvous coordinates likely compromised via Kira's debriefing. The Archangel's destination may be a kill box."
+      },
+      "r": ""
+    },
+    {
+      "tx": 189,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "TR",
+      "e": "constraint",
+      "id": "c3-adequacy",
+      "d": {
+        "f": "integrity",
+        "from": "STABLE",
+        "to": "STRESSED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 190,
+      "t": "[Day 1 - 15:14]",
+      "_ts": "2026-04-03T12:06:39.268Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Autumn named the real threats: crew violence against Lacus, and Kira's transformation into an active enemy if it happens. Admitted he can't outfight four Gundams. Strategic analysis revealed the 8th Fleet rendezvous is likely compromised — Le Creuset can position to intercept before escort range. Murrue asked Autumn for a recommendation. The question is genuine. Visual: the patrol envelope overlapping the approach corridor on the display, numbers that don't lie. Emotional: the weight of a captain asking her expendable pilot to find the exit she can't see. Unresolved: what does Autumn recommend?"
+      },
+      "r": ""
+    },
+    {
+      "tx": 191,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Corridor outside briefing room. Autumn alone, heading to quarters. Tremor window imminent."
+      },
+      "r": ""
+    },
+    {
+      "tx": 192,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "Corridor → quarters, Archangel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 193,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Tremor window approaching; stimulant crash imminent; ribs aching; mentally sharp but physically degrading. Has just committed to strategic leadership role he resents."
+      },
+      "r": ""
+    },
+    {
+      "tx": 194,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "f": "doing",
+        "v": "Implementing Autumn's strategic recommendations — course change, hand-picked security detail for Lacus, new combat doctrine | Cost: she just leaned on an eighteen-year-old for strategy and knows what that means"
+      },
+      "r": ""
+    },
+    {
+      "tx": 195,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "f": "doing",
+        "v": "Plotting alternate debris belt approach to 8th Fleet rendezvous | Cost: professional recalibration — Autumn saw the scenario tree she missed"
+      },
+      "r": ""
+    },
+    {
+      "tx": 196,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "MS",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "f": "reads",
+        "k": "autumn-yuy",
+        "v": "Tactically valuable. Not just a pilot."
+      },
+      "r": ""
+    },
+    {
+      "tx": 197,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "doing",
+        "v": "Drafting revised combat doctrine to replace compromised playbook | Cost: building a new playbook with one MS and a relic mobile armor"
+      },
+      "r": ""
+    },
+    {
+      "tx": 198,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "MS",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "reads",
+        "k": "autumn-yuy",
+        "v": "Pattern recognition that doesn't track for a Natural civilian. Filing it. Soon."
+      },
+      "r": ""
+    },
+    {
+      "tx": 199,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "distance",
+        "v": 2
+      },
+      "r": ""
+    },
+    {
+      "tx": 200,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn reframed Lacus from shield to key — information asymmetry is the only uncommitted asset. Murrue ordered hand-picked security detail. The broadcast question is tabled. Lacus's status: protected asset under information lockdown."
+      },
+      "r": ""
+    },
+    {
+      "tx": 201,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "distance",
+        "v": 3
+      },
+      "r": ""
+    },
+    {
+      "tx": 202,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Course change ordered — debris belt approach to avoid compromised rendezvous corridor. New combat doctrine in development. Kira's intelligence partially countered by unpredictable routing."
+      },
+      "r": ""
+    },
+    {
+      "tx": 203,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "distance",
+        "v": 4
+      },
+      "r": ""
+    },
+    {
+      "tx": 204,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn independently identified the hardliner incentive to let Lacus die on an EA ship — the same scenario tree Le Creuset is already building. Two players reaching the same conclusion from opposite sides. Neither knows about the other."
+      },
+      "r": ""
+    },
+    {
+      "tx": 205,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "constraint",
+      "id": "c1-optimization",
+      "d": {
+        "f": "integrity",
+        "v": "STRESSED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 206,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "S",
+      "e": "constraint",
+      "id": "c3-adequacy",
+      "d": {
+        "f": "integrity",
+        "v": "STRESSED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 207,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Murrue must decide Lacus's official status before the crew's hostility makes the decision for her — briefing in 30 minutes"
+      },
+      "r": ""
+    },
+    {
+      "tx": 208,
+      "t": "[Day 1 - 15:22]",
+      "_ts": "2026-04-03T12:54:59.476Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "[Day 1 - 15:22] Autumn delivered full strategic analysis: ZAFT hardliners benefit from Lacus dying in EA custody, broadcasting her presence may paint a target not raise a shield, 8th Fleet rendezvous is compromised, information asymmetry is the only new advantage. Recommended: course change through debris belt, emissions blackout, information lockdown on Lacus's identity. Murrue adopted all three. Natarle recalibrated her assessment of Autumn. Mu flagged Autumn's pattern recognition for future conversation. Autumn left the briefing carrying a strategic role he never wanted. Tremor window approaching."
+      },
+      "r": ""
+    },
+    {
+      "tx": 209,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Lacus's quarters. Small, over-lit, institutional. Autumn standing, Lacus seated at desk. Cold tea. Half-eaten tray. Guard audible outside. The air between them is loaded with a name she hasn't heard."
+      },
+      "r": ""
+    },
+    {
+      "tx": 210,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "Lacus's assigned quarters, Archangel"
+      },
+      "r": ""
+    },
+    {
+      "tx": 211,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Tremor window active — left hand shaking, pocketed. Painkillers fading. Ribs aching. Mentally sharp but running on fumes."
+      },
+      "r": ""
+    },
+    {
+      "tx": 212,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "condition",
+        "v": "Functional, composed. Bruise treated, fed, rested minimally. Serene Mask at moderate cost — jaw tension, posture too perfect, cold tea she stopped drinking. Reading Autumn with full focus."
+      },
+      "r": ""
+    },
+    {
+      "tx": 213,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "doing",
+        "v": "Probing for the shape of the crew's grief without knowing its name | Cost: each question narrows the gap toward Kira's name and whatever answer she gets reshapes every read she's built"
+      },
+      "r": ""
+    },
+    {
+      "tx": 214,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "MS",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "reads",
+        "k": "pc",
+        "v": "Came when he didn't have to. Hiding physical damage. Said she'd choose her own kind but is here checking on her. Contradiction is the most honest thing she's seen on this ship."
+      },
+      "r": ""
+    },
+    {
+      "tx": 215,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "distance",
+        "v": 3
+      },
+      "r": ""
+    },
+    {
+      "tx": 216,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Lacus identified the crew's emotional signature as grief, not hatred. She is one direct question from the name. Autumn is the person she's asking."
+      },
+      "r": ""
+    },
+    {
+      "tx": 217,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn visiting Lacus's quarters despite not being on the security detail. Tonomura noted the visit. The pilot checking on the asset blurs his own framing."
+      },
+      "r": ""
+    },
+    {
+      "tx": 218,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "S",
+      "e": "constraint",
+      "id": "c1-optimization",
+      "d": {
+        "f": "integrity",
+        "v": "STRESSED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 219,
+      "t": "[Day 1 - 15:45]",
+      "_ts": "2026-04-03T13:01:08.119Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Autumn visited Lacus despite not being on her detail. Found her functional — treated, fed, composed at moderate cost. She read his contradiction instantly: the man who called her a POW came to check on her. She identified the crew's core emotion as grief, not hostility. She is one question from Kira's name and has chosen Autumn as the person most likely to answer honestly. Tremor window active, left hand shaking."
+      },
+      "r": ""
+    },
+    {
+      "tx": 220,
+      "t": "[Day 1 - 15:48]",
+      "_ts": "2026-04-03T13:03:41.215Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Lacus's quarters. Small, over-lit. Autumn in doorway, Lacus seated at desk. Cold tea set down. The air between them has thinned to glass — transparent, fragile, cutting. She has reconstructed the shape of Kira's absence from behavioral evidence alone and is asking Autumn to confirm."
+      },
+      "r": ""
+    },
+    {
+      "tx": 221,
+      "t": "[Day 1 - 15:48]",
+      "_ts": "2026-04-03T13:03:41.215Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "doing",
+        "v": "Pressing Autumn for the truth about the crew's grief | Cost: if he answers, she inherits the full weight of context she can't unknow"
+      },
+      "r": ""
+    },
+    {
+      "tx": 222,
+      "t": "[Day 1 - 15:48]",
+      "_ts": "2026-04-03T13:03:41.215Z",
+      "op": "MS",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "reads",
+        "k": "pc",
+        "v": "Honest but withholding. Chose the easier answer. Knows the difficult one. Came here because he cares despite framing her as a prisoner. The contradiction is the most trustworthy thing about him."
+      },
+      "r": ""
+    },
+    {
+      "tx": 223,
+      "t": "[Day 1 - 15:48]",
+      "_ts": "2026-04-03T13:03:41.215Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "distance",
+        "v": 1
+      },
+      "r": ""
+    },
+    {
+      "tx": 224,
+      "t": "[Day 1 - 15:48]",
+      "_ts": "2026-04-03T13:03:41.215Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Lacus reconstructed the shape of Kira's defection from behavioral evidence — someone trusted, someone important, someone Coordinator. She is asking Autumn to say the name."
+      },
+      "r": ""
+    },
+    {
+      "tx": 225,
+      "t": "[Day 1 - 15:48]",
+      "_ts": "2026-04-03T13:03:41.215Z",
+      "op": "TR",
+      "e": "constraint",
+      "id": "c2-political-lens",
+      "d": {
+        "f": "integrity",
+        "from": "STABLE",
+        "to": "STRESSED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 226,
+      "t": "[Day 1 - 15:48]",
+      "_ts": "2026-04-03T13:03:41.215Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Autumn deflected with partial truth — crew fears dying at Coordinator hands. Lacus caught the mismatch between fear and grief instantly. She reconstructed the outline of Kira's defection from crew behavior alone and is now pressing Autumn to confirm. The name is one honest sentence away. Autumn's hand is shaking in his pocket."
+      },
+      "r": ""
+    },
+    {
+      "tx": 227,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Lacus's quarters. Over-lit, cramped. Autumn standing in doorway, Lacus seated at desk gripping edge with white knuckles. The name has been said. The masks are thinner. The engine pitch has changed."
+      },
+      "r": ""
+    },
+    {
+      "tx": 228,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "condition",
+        "v": "Composure cracked and rebuilt — functional but thinner. Processing Kira's name through personal connection to Athrun. Political lens failed for the first time. Knuckles white on desk edge."
+      },
+      "r": ""
+    },
+    {
+      "tx": 229,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "MS",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "reads",
+        "k": "autumn-yuy",
+        "v": "The person who replaced Kira. A Natural destroying himself in a Coordinator's machine. Honest enough to give her the true version. Hurt in ways the borrowed shirt doesn't cover."
+      },
+      "r": ""
+    },
+    {
+      "tx": 230,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "A",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "noticed_details",
+        "v": "Autumn's tremor (left hand, pocketed). The bruises visible past the shirt collar. The engine pitch change."
+      },
+      "r": ""
+    },
+    {
+      "tx": 231,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "doing",
+        "v": "Telling Lacus the truth about Kira | Cost: creating trust or obligation with someone he framed as a prisoner thirty minutes ago"
+      },
+      "r": ""
+    },
+    {
+      "tx": 232,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "TR",
+      "e": "constraint",
+      "id": "c1-serene-mask",
+      "d": {
+        "f": "integrity",
+        "from": "STABLE",
+        "to": "STRESSED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 233,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "TR",
+      "e": "constraint",
+      "id": "c2-political-lens",
+      "d": {
+        "f": "integrity",
+        "from": "STRESSED",
+        "to": "CRITICAL"
+      },
+      "r": ""
+    },
+    {
+      "tx": 234,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "distance",
+        "v": 0
+      },
+      "r": ""
+    },
+    {
+      "tx": 235,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "TR",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "status",
+        "from": "SIMMERING",
+        "to": "RESOLVING"
+      },
+      "r": ""
+    },
+    {
+      "tx": 236,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn said Kira's name. Lacus recognized it through Athrun — the childhood friend her fiancé spoke of. Her composure broke for two seconds. She deduced Autumn flies Kira's machine and named his damage aloud."
+      },
+      "r": ""
+    },
+    {
+      "tx": 237,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn who argued for POW framing is now giving Lacus honest intelligence, blurring every line he drew in the briefing room."
+      },
+      "r": ""
+    },
+    {
+      "tx": 238,
+      "t": "[Day 1 - 15:52]",
+      "_ts": "2026-04-03T13:07:07.853Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Autumn told Lacus the truth. Said Kira Yamato's name. Lacus recognized it — Athrun's childhood friend, spoken of in another life. Her composure cracked for two seconds before rebuilding thinner. She deduced the full chain: Kira was the pilot, he left for Athrun's team, Autumn replaced him in a machine built for a Coordinator, and the machine is breaking him. Her political lens failed to engage — too personal. She named his damage directly: 'You're the one flying his machine. That's why you're hurt.' The name is in the room. Both of them own it differently. Engine pitch changed — bridge is worried about something unannounced."
+      },
+      "r": ""
+    },
+    {
+      "tx": 239,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Corridor outside Lacus's quarters. Autumn departing. Tonomura on guard, newly wary. Engine pitch shifting."
+      },
+      "r": ""
+    },
+    {
+      "tx": 240,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "Corridor, en route to quarters"
+      },
+      "r": ""
+    },
+    {
+      "tx": 241,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Tremor window active — left hand visible shaking. Ribs flaring. Painkillers depleted. Emotionally exposed. Two people now hold pieces of him he didn't plan to give."
+      },
+      "r": ""
+    },
+    {
+      "tx": 242,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "doing",
+        "v": "Recalibrating her model of the ship, the war, and the pilot — with accurate data | Cost: the political lens has been replaced by something personal and more dangerous"
+      },
+      "r": ""
+    },
+    {
+      "tx": 243,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "MS",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "reads",
+        "k": "autumn-yuy",
+        "v": "Honest. Guarded. Sympathetic to Kira in a way that isolates him from his own crew. Damaged by the machine he inherited. Came to warn her and needed to say the name. Trustworthy — not because he's kind, but because he can't tolerate operating on false premises."
+      },
+      "r": ""
+    },
+    {
+      "tx": 244,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "S",
+      "e": "char",
+      "id": "lacus-clyne",
+      "d": {
+        "f": "condition",
+        "v": "Composed — thinner architecture, rebuilt on accurate data. Bruise treated. Processing the Kira-Athrun-Archangel web. The mask is still running but the person underneath it now knows where she is."
+      },
+      "r": ""
+    },
+    {
+      "tx": 245,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "TR",
+      "e": "constraint",
+      "id": "c2-political-lens",
+      "d": {
+        "f": "integrity",
+        "from": "CRITICAL",
+        "to": "STRESSED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 246,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "TR",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "status",
+        "from": "RESOLVING",
+        "to": "RESOLVED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 247,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "distance",
+        "v": 0
+      },
+      "r": ""
+    },
+    {
+      "tx": 248,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "outcome_type",
+        "v": "Earned trust — costly. Autumn told the truth first, on his own terms, creating an obligation Lacus acknowledges. But the telling was partially overheard."
+      },
+      "r": ""
+    },
+    {
+      "tx": 249,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "aftermath",
+        "v": "Lacus holds accurate intelligence and a personal read on Autumn that cuts deeper than strategy. Tonomura heard enough to recalibrate his assessment of the pilot — the crew grapevine now has a seed. Autumn's position as the ship's protector is complicated by evidence he sympathizes with the man who left."
+      },
+      "r": ""
+    },
+    {
+      "tx": 250,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "S",
+      "e": "collision",
+      "id": "unsaid-name",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Lacus named Autumn's hidden sympathy for Kira aloud. Tonomura overheard through the hatch. Autumn left with his hand shaking and his cover thinner."
+      },
+      "r": ""
+    },
+    {
+      "tx": 251,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Tonomura heard Autumn speaking to Lacus with understanding about Kira's defection — seed for crew trust erosion toward the pilot"
+      },
+      "r": ""
+    },
+    {
+      "tx": 252,
+      "t": "[Day 1 - 16:00]",
+      "_ts": "2026-04-03T13:11:15.814Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Autumn warned Lacus the crew would not be understanding of her. Lacus — now holding the full Kira picture — read him back with surgical precision: he understands Kira, and that understanding is treason on this ship. He came not just to warn her but to say the name to someone who wouldn't hate him for it. Autumn gave no denial. Tonomura overheard through the hatch — enough to shift his posture, not enough to report, but the seed is planted. Autumn told Lacus to contact him directly if meals stop coming. She called him by his given name. He left with his hand shaking and two people holding pieces of him. The math is exact: honesty with Lacus cost standing with the crew."
+      },
+      "r": ""
+    },
+    {
+      "tx": 253,
+      "t": "[Day 1 - 19:40]",
+      "_ts": "2026-04-03T13:15:54.152Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Vesalius, Kira's quarters. Intelligence verification. The document that converts words into weapons."
+      },
+      "r": ""
+    },
+    {
+      "tx": 254,
+      "t": "[Day 1 - 19:40]",
+      "_ts": "2026-04-03T13:15:54.152Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "doing",
+        "v": "Verified tactical intelligence derived from his own debriefing — 47 pages of engagement solutions targeting the Archangel | Cost: the last layer of justification"
+      },
+      "r": ""
+    },
+    {
+      "tx": 255,
+      "t": "[Day 1 - 19:40]",
+      "_ts": "2026-04-03T13:15:54.152Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "condition",
+        "v": "Hollowed further. Saw his knowledge rendered as firing solutions. Confirmed a Natural is piloting the Strike with absorption-primary doctrine. The promise is not in the document."
+      },
+      "r": ""
+    },
+    {
+      "tx": 256,
+      "t": "[Day 1 - 19:40]",
+      "_ts": "2026-04-03T13:15:54.152Z",
+      "op": "MS",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "reads",
+        "k": "autumn-yuy",
+        "v": "Unknown Natural pilot — 340ms reaction deficit, absorption-primary, rewriting his OS. A person converted to a percentage."
+      },
+      "r": ""
+    },
+    {
+      "tx": 257,
+      "t": "[Day 1 - 19:40]",
+      "_ts": "2026-04-03T13:15:54.152Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "doing",
+        "v": "Searching fleet comms for Lacus — eleventh iteration, same nothing | Cost: hope spent daily with no return"
+      },
+      "r": ""
+    },
+    {
+      "tx": 258,
+      "t": "[Day 1 - 19:40]",
+      "_ts": "2026-04-03T13:15:54.152Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "distance",
+        "v": 2
+      },
+      "r": ""
+    },
+    {
+      "tx": 259,
+      "t": "[Day 1 - 19:40]",
+      "_ts": "2026-04-03T13:15:54.152Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Kira verified a 47-page tactical document converting his debriefing into engagement solutions. The promise that justified his defection is nowhere in the math."
+      },
+      "r": ""
+    },
+    {
+      "tx": 260,
+      "t": "[Day 1 - 19:40]",
+      "_ts": "2026-04-03T13:15:54.152Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Le Creuset had Kira verify the tactical document — routine procedure that precisely compounds the defector's guilt while extracting final confirmation. Athrun searches for Lacus three decks above the answer."
+      },
+      "r": ""
+    },
+    {
+      "tx": 261,
+      "t": "[Day 1 - 19:40]",
+      "_ts": "2026-04-03T13:15:54.152Z",
+      "op": "S",
+      "e": "divination",
+      "id": "",
+      "d": {
+        "f": "last_draw",
+        "v": "Justice XI — Consequences arrive precisely. The math is exact."
+      },
+      "r": ""
+    },
+    {
+      "tx": 262,
+      "t": "[Day 1 - 19:40]",
+      "_ts": "2026-04-03T13:15:54.152Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "[Day 1 - 19:40] Kira Yamato verified ZAFT's tactical compilation — 47 pages of engagement solutions built from his debriefing. Phase-shift cycling thresholds, crew fatigue windows, Strike OS architecture. Discovered a Natural is now piloting the Strike with absorption-primary doctrine, 340ms slower than him. The document is precise. The promise is absent from it. He confirmed accuracy because the numbers are correct and that is the last betrayal he can afford. Athrun searches for Lacus three decks above the encrypted file that contains her location. Residue: a tablet placed face-down on a desk. Hook: Kira's justification framework is fracturing — the next pressure will crack it."
+      },
+      "r": ""
+    },
+    {
+      "tx": 263,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Strike cockpit, maintenance cradle. Gantry empty. Mu at the railing. Amber anomalies on the screen. The question hanging."
+      },
+      "r": ""
+    },
+    {
+      "tx": 264,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "Hangar, Strike cockpit"
+      },
+      "r": ""
+    },
+    {
+      "tx": 265,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Tremor window closed. Painkillers holding. Ribs dull ache. Confronted with combat log data proving precognitive response times. Emotionally cold-still — framework failure. Currently building camouflage into the OS to hide what the data shows."
+      },
+      "r": ""
+    },
+    {
+      "tx": 266,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "doing",
+        "v": "Frozen at the terminal with Mu watching the amber timestamps | Cost: one keystroke closes the window and preserves the lie; silence confirms what the data shows"
+      },
+      "r": ""
+    },
+    {
+      "tx": 267,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "location",
+        "v": "Hangar gantry, three meters from Strike cockpit"
+      },
+      "r": ""
+    },
+    {
+      "tx": 268,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "doing",
+        "v": "Looking at precognition data he recognizes on a level he has never named | Cost: asking means confronting what he is too"
+      },
+      "r": ""
+    },
+    {
+      "tx": 269,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "MS",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "reads",
+        "k": "pc",
+        "v": "The data confirms what instinct has been telling him for weeks. He doesn't have the framework yet but he has the recognition."
+      },
+      "r": ""
+    },
+    {
+      "tx": 270,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "S",
+      "e": "collision",
+      "id": "naturals-cockpit",
+      "d": {
+        "f": "distance",
+        "v": 5
+      },
+      "r": ""
+    },
+    {
+      "tx": 271,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "S",
+      "e": "collision",
+      "id": "naturals-cockpit",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Combat logs expose precognitive timestamps. Mu sees the amber anomalies. The OS rewrite requires building the truth into the architecture, which creates a permanent data trail."
+      },
+      "r": ""
+    },
+    {
+      "tx": 272,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "pilots-loyalty",
+      "d": {
+        "name": "The Pilot's Loyalty",
+        "forces": "Crew suspicion vs. Autumn's honesty with Lacus",
+        "details": "Tonomura's silence carried weight. Karev's missing nod. The crew's rumor architecture runs on negative space. The pilot visited the Coordinator, spoke Kira's name with understanding, and the corridor heard enough. Not a confrontation yet — a temperature change. The forced choice approaches: perform the hatred the crew needs or maintain the honesty that makes him effective.",
+        "cost": "Crew trust eroding costs combat coordination and personal safety. Performing hatred costs the only honest relationship on the ship.",
+        "target_constraint": "c1-optimization",
+        "distance": "5",
+        "status": "SIMMERING"
+      },
+      "r": ""
+    },
+    {
+      "tx": 273,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Tonomura heard Autumn speaking to Lacus with understanding about Kira's defection — seed for crew trust erosion toward the pilot [aging (11 tx)]"
+      },
+      "r": ""
+    },
+    {
+      "tx": 274,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "S",
+      "e": "divination",
+      "id": "",
+      "d": {
+        "f": "last_draw",
+        "v": "XX Judgement — Reckoning. The past demands an answer. The combat logs are the reckoning — timestamps that prove what Autumn won't name. Mu sees them. Both men stand at the edge of a truth neither has language for."
+      },
+      "r": ""
+    },
+    {
+      "tx": 275,
+      "t": "[Day 1 - 21:15]",
+      "_ts": "2026-04-03T13:49:34.846Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Autumn went to the hangar to rewrite the Strike's OS for new combat doctrine. The rewrite required opening combat logs he'd been avoiding. The logs revealed consistent precognitive response timestamps — 200-500ms before sensor data justified action, with a 47ms standard deviation that proves pattern, not luck. He began building camouflage into the OS: a dual-layer architecture that uses the real data internally while presenting Normal-plausible outputs externally. Mu La Flaga arrived and saw the amber-highlighted anomalies on the secondary display. He recognized them — not intellectually, but the way someone recognizes a word in a language they thought only they spoke. He asked what he's looking at. Autumn's hand is near the key that closes the window. The hangar crew's social temperature has shifted — Tonomura talked, the corridor heard, and the cost of honesty with Lacus is manifesting in missing nods and averted eyes."
+      },
+      "r": ""
+    },
+    {
+      "tx": 276,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Strike cockpit, maintenance cradle. Alone. Amber timestamps glowing. Mu's resonance fading toward officer country. The secret is shared."
+      },
+      "r": ""
+    },
+    {
+      "tx": 277,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Tremor window closed. Painkillers holding. Ribs aching. Emotionally recalibrated — the loneliness of the secret has been replaced by the weight of shared knowledge. Hands steady. Writing code."
+      },
+      "r": ""
+    },
+    {
+      "tx": 278,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "doing",
+        "v": "Completing dual-layer OS rewrite — camouflage architecture validated by Mu | Cost: the secret now has two keepers and shared secrets have a half-life"
+      },
+      "r": ""
+    },
+    {
+      "tx": 279,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "doing",
+        "v": "Retreating to officer country to process having broken a nine-year silence | Cost: vulnerability he hasn't felt since before Endymion"
+      },
+      "r": ""
+    },
+    {
+      "tx": 280,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "MS",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "reads",
+        "k": "pc",
+        "v": "Kin. Not a student — a fellow traveler carrying the same unnamed thing. The kid builds lies as well as Mu does, which means the kid is exactly as scared."
+      },
+      "r": ""
+    },
+    {
+      "tx": 281,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "S",
+      "e": "collision",
+      "id": "naturals-cockpit",
+      "d": {
+        "f": "distance",
+        "v": 3
+      },
+      "r": ""
+    },
+    {
+      "tx": 282,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "TR",
+      "e": "collision",
+      "id": "naturals-cockpit",
+      "d": {
+        "f": "status",
+        "from": "SIMMERING",
+        "to": "ACTIVE"
+      },
+      "r": ""
+    },
+    {
+      "tx": 283,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "S",
+      "e": "collision",
+      "id": "naturals-cockpit",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Mu confirmed he selected Autumn for the cockpit because he recognized the resonance. Both admitted to camouflaging combat data. The secret is shared but unnamed — neither can define what they carry. The dual-layer OS now encodes the truth beneath plausible deniability. Distance closed because the data exists, a second person has seen it, and the camouflage is now a conscious conspiracy rather than individual denial."
+      },
+      "r": ""
+    },
+    {
+      "tx": 284,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "TR",
+      "e": "constraint",
+      "id": "c2-natural-ceiling",
+      "d": {
+        "f": "integrity",
+        "from": "STABLE",
+        "to": "STRESSED"
+      },
+      "r": ""
+    },
+    {
+      "tx": 285,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Tonomura heard Autumn speaking to Lacus with understanding about Kira's defection — seed for crew trust erosion toward the pilot"
+      },
+      "r": ""
+    },
+    {
+      "tx": 286,
+      "t": "[Day 1 - 21:45]",
+      "_ts": "2026-04-03T13:54:03.919Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Mu confronted Autumn about the amber anomalies. Autumn deflected — 'lucky breaks' — but felt Mu's Manifold Resonance for the first time: a warm pressure at the edge of awareness, unmistakable recognition. Realized Mu selected him for the cockpit because Mu carries the same unnamed ability and recognized kin. Mu confirmed without naming: 'I picked you because you moved before the explosion hit.' Admitted to nine years of camouflaging his own gun-camera data. Validated Autumn's dual-layer OS architecture. Neither named the phenomenon. Both acknowledged it exists. Mu retreated to process. Autumn kept coding. The secret has two keepers now. Residue: amber light on cockpit walls, the word 'lucky' stripped of all meaning. Hook: Le Creuset possesses the same ability and the data trail is growing."
+      },
+      "r": ""
+    },
+    {
+      "tx": 287,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Strike cockpit, maintenance cradle. Alone. Amber timestamps closed, sensor data saved. The plan is dead and Autumn knows it. Cold clarity."
+      },
+      "r": ""
+    },
+    {
+      "tx": 288,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "Hangar, Strike cockpit"
+      },
+      "r": ""
+    },
+    {
+      "tx": 289,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Physically stable — painkillers holding, tremor window closed. Psychologically: the architecture of his strategic contribution has collapsed. Cold, precise, running implications. Thumb hovering over bridge comm."
+      },
+      "r": ""
+    },
+    {
+      "tx": 290,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "doing",
+        "v": "Processing the drone discovery. Deciding whether to call the bridge. | Cost: delay costs the ship safety; reporting costs explaining how he found it"
+      },
+      "r": ""
+    },
+    {
+      "tx": 291,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "distance",
+        "v": 1
+      },
+      "r": ""
+    },
+    {
+      "tx": 292,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "TR",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "status",
+        "from": "SIMMERING",
+        "to": "ACTIVE"
+      },
+      "r": ""
+    },
+    {
+      "tx": 293,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "last_manifestation",
+        "v": "ZAFT picket drone NC-7 discovered through Strike diagnostic sensors. The drone has tracked the Archangel since before the course change. Every strategic recommendation Autumn made in the briefing is invalidated. Le Creuset has been watching the entire time — saw the pod recovery, the airlock cycle, the course change, the emissions blackout. The information asymmetry that was supposed to be their only advantage does not exist."
+      },
+      "r": ""
+    },
+    {
+      "tx": 294,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "distance",
+        "v": 3
+      },
+      "r": ""
+    },
+    {
+      "tx": 295,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn deduced from the drone's presence and Le Creuset's silence that the commander knows Lacus is aboard and is deliberately withholding it from ZAFT. The card is being played — Autumn just can't see the game from this side."
+      },
+      "r": ""
+    },
+    {
+      "tx": 296,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "last_manifestation",
+        "v": "The assumption that ZAFT doesn't know about Lacus — the foundation of every decision made in the briefing — is false. Lacus's value as a secret asset has been preempted by Le Creuset's prior knowledge."
+      },
+      "r": ""
+    },
+    {
+      "tx": 297,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "collision",
+      "id": "naturals-cockpit",
+      "d": {
+        "f": "last_manifestation",
+        "v": "The drone was found through the Strike's prototype sensors in diagnostic mode — a detection the Archangel's damaged sensors couldn't make. Reporting it risks questions about how Autumn knew to look. The cockpit continues to be both the thing killing him and the thing that sees what no one else can."
+      },
+      "r": ""
+    },
+    {
+      "tx": 298,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "TR",
+      "e": "constraint",
+      "id": "c1-optimization",
+      "d": {
+        "f": "integrity",
+        "from": "STRESSED",
+        "to": "CRITICAL"
+      },
+      "r": ""
+    },
+    {
+      "tx": 299,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "S",
+      "e": "divination",
+      "id": "",
+      "d": {
+        "f": "last_draw",
+        "v": "XVI — The Tower — Catastrophic revelation. A structure collapses. No one is ready."
+      },
+      "r": ""
+    },
+    {
+      "tx": 300,
+      "t": "[Day 1 - 22:30]",
+      "_ts": "2026-04-03T13:59:04.301Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "[Day 1 - 22:30] Autumn discovered ZAFT picket drone NC-7 through Strike's diagnostic sensor feed during OS work. The drone has shadowed the Archangel since before the briefing — Le Creuset has watched every move including the pod recovery and course change. The entire strategic framework Autumn built (go dark, information asymmetry, silence as strategy) is built on false assumptions. Worse: Autumn deduced Le Creuset knows Lacus is aboard and is choosing silence, meaning the commander is playing a game invisible from the Archangel's side. The plan is dead. Autumn's thumb hovers over the bridge comm, caught between reporting immediately and explaining how he found it. Residue: prismatic phase-shift light on steady hands holding a dead plan. Hook: every hour of delay is another hour Le Creuset learns how the Archangel thinks when scared."
+      },
+      "r": ""
+    },
+    {
+      "tx": 301,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Bridge to corridor. Autumn heading to hangar for combat prep. Mu at his side, wingman posture. Level Two alert across the ship. Thirty minutes to combat readiness."
+      },
+      "r": ""
+    },
+    {
+      "tx": 302,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "Corridor, en route to hangar"
+      },
+      "r": ""
+    },
+    {
+      "tx": 303,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Painkillers wearing off, tremor window approaching, cold clarity hardening into combat focus. Stim supply low. OS half-rewritten. Knows the plan is desperate."
+      },
+      "r": ""
+    },
+    {
+      "tx": 304,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "doing",
+        "v": "Moving to Strike for combat prep | Cost: another sortie on a degrading body, OS incomplete, against enemies with his playbook"
+      },
+      "r": ""
+    },
+    {
+      "tx": 305,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "char",
+      "id": "murrue-ramius",
+      "d": {
+        "f": "doing",
+        "v": "Commanding course change to direct 8th Fleet approach, maximum burn | Cost: announces position, compresses Le Creuset's timeline but also the Archangel's margin for error"
+      },
+      "r": ""
+    },
+    {
+      "tx": 306,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "char",
+      "id": "natarle-badgiruel",
+      "d": {
+        "f": "doing",
+        "v": "Tight-beam burst to 8th Fleet requesting forward escort | Cost: transmission may be intercepted, confirming the rendezvous"
+      },
+      "r": ""
+    },
+    {
+      "tx": 307,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "doing",
+        "v": "Heading to Moebius Zero for combat prep, wingman to Autumn | Cost: outdated mobile armor against four G-weapons"
+      },
+      "r": ""
+    },
+    {
+      "tx": 308,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "MS",
+      "e": "char",
+      "id": "mu-la-flaga",
+      "d": {
+        "f": "reads",
+        "k": "pc",
+        "v": "Wingman. Kin. Someone whose lucky breaks match his own."
+      },
+      "r": ""
+    },
+    {
+      "tx": 309,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "doing",
+        "v": "Ordering combat deployment in 90 minutes, recalculating scenario tree | Cost: compressed timeline, forced to engage before full preparation"
+      },
+      "r": ""
+    },
+    {
+      "tx": 310,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "MS",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "reads",
+        "k": "pc",
+        "v": "An unknown mind on the Archangel worth studying — changed the tempo, forced his hand"
+      },
+      "r": ""
+    },
+    {
+      "tx": 311,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "doing",
+        "v": "Suiting up for combat deployment"
+      },
+      "r": ""
+    },
+    {
+      "tx": 312,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "doing",
+        "v": "Sitting with the klaxon and the weight of what comes next | Cost: everything he verified is about to be used"
+      },
+      "r": ""
+    },
+    {
+      "tx": 313,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "distance",
+        "v": 0
+      },
+      "r": ""
+    },
+    {
+      "tx": 314,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Le Creuset ordering combat deployment using Kira's verified tactical compilation against a ship now running at maximum burn"
+      },
+      "r": ""
+    },
+    {
+      "tx": 315,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "collision",
+      "id": "naturals-cockpit",
+      "d": {
+        "f": "distance",
+        "v": 2
+      },
+      "r": ""
+    },
+    {
+      "tx": 316,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "collision",
+      "id": "naturals-cockpit",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Another sortie imminent on degrading body, OS half-built, stims running low"
+      },
+      "r": ""
+    },
+    {
+      "tx": 317,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "distance",
+        "v": 2
+      },
+      "r": ""
+    },
+    {
+      "tx": 318,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Le Creuset's scenario tree compressed by Archangel's tempo change — the Lacus card must be played sooner than planned"
+      },
+      "r": ""
+    },
+    {
+      "tx": 319,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "collision",
+      "id": "pilots-loyalty",
+      "d": {
+        "f": "distance",
+        "v": 4
+      },
+      "r": ""
+    },
+    {
+      "tx": 320,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "collision",
+      "id": "pilots-loyalty",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn reported drone to bridge without explaining how he found it — crew question deferred by combat alert"
+      },
+      "r": ""
+    },
+    {
+      "tx": 321,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "S",
+      "e": "constraint",
+      "id": "c1-optimization",
+      "d": {
+        "f": "integrity",
+        "v": "CRITICAL"
+      },
+      "r": ""
+    },
+    {
+      "tx": 322,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "TR",
+      "e": "constraint",
+      "id": "c3-adequacy",
+      "d": {
+        "f": "integrity",
+        "from": "STRESSED",
+        "to": "CRITICAL"
+      },
+      "r": ""
+    },
+    {
+      "tx": 323,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Tight-beam burst to 8th Fleet — Halberton receives it or doesn't, and his response determines whether the Archangel reaches escort range"
+      },
+      "r": ""
+    },
+    {
+      "tx": 324,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "A",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Kira hears the combat klaxon — the intelligence he verified is being deployed NOW, against the ship he was promised would be spared"
+      },
+      "r": ""
+    },
+    {
+      "tx": 325,
+      "t": "[Day 1 - 22:50]",
+      "_ts": "2026-04-03T14:06:08.720Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Autumn discovered the drone had been watching all along — reported to Murrue, collapsing the entire strategic framework from the briefing. Deduced Le Creuset knows about Lacus and is weaponizing the silence. Recommended abandoning stealth for speed — force engagement on the Archangel's timeline instead of Le Creuset's. Murrue adopted the plan: maximum burn to 8th Fleet, tight-beam burst to Halberton, Level Two alert. Thirty minutes to combat readiness. Mu met Autumn at the hatch as a wingman. Le Creuset's timeline compressed — combat deployment ordered in 90 minutes. The Defector's Playbook reaches distance zero."
+      },
+      "r": ""
+    },
+    {
+      "tx": 326,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Vesalius, Kira's quarters. Kira alone after Le Creuset's visit. Alert klaxon through bulkheads. Seventy minutes to engagement."
+      },
+      "r": ""
+    },
+    {
+      "tx": 327,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "divination",
+      "id": "",
+      "d": {
+        "f": "last_draw",
+        "v": "XIII - Death"
+      },
+      "r": ""
+    },
+    {
+      "tx": 328,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "condition",
+        "v": "Transformed. Passive compliance dead. Desperate, searching for gaps in his own tactical compilation. Three narrow seams identified. Seventy minutes."
+      },
+      "r": ""
+    },
+    {
+      "tx": 329,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "doing",
+        "v": "Studying the tactical compilation for vulnerabilities he built into it | Cost: every gap he finds is a gap Le Creuset might also see"
+      },
+      "r": ""
+    },
+    {
+      "tx": 330,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "MS",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "reads",
+        "k": "pc",
+        "v": "The Natural. 340ms slower. Absorption-primary. The person breaking themselves in Kira's cockpit. Three needles of hope depend on what this pilot does."
+      },
+      "r": ""
+    },
+    {
+      "tx": 331,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "doing",
+        "v": "Walking away from a precisely detonated crisis | Cost: Kira is no longer passive, which means he's no longer fully controllable"
+      },
+      "r": ""
+    },
+    {
+      "tx": 332,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "MS",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "reads",
+        "k": "kira-yamato",
+        "v": "Asset transformed from depreciating intelligence source to motivated actor — more useful, more dangerous, exactly as intended"
+      },
+      "r": ""
+    },
+    {
+      "tx": 333,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "condition",
+        "v": "Suiting up for engagement. Does not know Lacus is aboard the target. Does not know Le Creuset told Kira. Fighting blind in every way that matters."
+      },
+      "r": ""
+    },
+    {
+      "tx": 334,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "doing",
+        "v": "Combat prep for Aegis deployment | Cost: the promise to spare the crew is about to be tested against live fire"
+      },
+      "r": ""
+    },
+    {
+      "tx": 335,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "distance",
+        "v": 1
+      },
+      "r": ""
+    },
+    {
+      "tx": 336,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Le Creuset played the Lacus card to Kira — not Athrun. Kira's passive cooperation destroyed and replaced with desperate urgency. Le Creuset offered no plan, only a crisis and seventy minutes. Athrun remains uninformed."
+      },
+      "r": ""
+    },
+    {
+      "tx": 337,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "distance",
+        "v": 0
+      },
+      "r": ""
+    },
+    {
+      "tx": 338,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "S",
+      "e": "collision",
+      "id": "defectors-playbook",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Kira is now studying his own tactical compilation for survivable gaps — three narrow timing-dependent seams that require the Strike's pilot to act outside predicted doctrine. The weapon he built may contain its own antidote, but only if the Archangel's pilot does something unpredictable."
+      },
+      "r": ""
+    },
+    {
+      "tx": 339,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Kira hears the combat klaxon — the intelligence he verified is being deployed NOW, against the ship he was promised would be spared"
+      },
+      "r": ""
+    },
+    {
+      "tx": 340,
+      "t": "[Day 1 - 23:10]",
+      "_ts": "2026-04-03T14:26:27.728Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Le Creuset played the Lacus card to Kira, not Athrun. Revealed Lacus is aboard the Archangel six hours before engagement. Kira's hollow compliance shattered — replaced by desperate urgency to find gaps in his own tactical compilation. Three narrow seams identified, all timing-dependent, all requiring the Strike pilot to act outside doctrine. Le Creuset offered no rescue plan, only a crisis and seventy minutes of free will. Athrun deploys to combat without knowing Lacus is on the target ship. The old Kira is dead. What replaces him has fists and needles and no name yet."
+      },
+      "r": ""
+    },
+    {
+      "tx": 341,
+      "t": "",
+      "_ts": "2026-04-03T14:30:04.741Z",
+      "op": "CR",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "kind": "combat",
+        "status": "ACTIVE",
+        "exchange": 1
+      },
+      "r": "system:challenge-engine:auto-seed"
+    },
+    {
+      "tx": 342,
+      "t": "",
+      "_ts": "2026-04-03T14:32:36.945Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "eighth-fleet-reach",
+      "d": {
+        "name": "The 8th Fleet's Reach",
+        "forces": "Archangel burning toward rendezvous vs Le Creuset intercepting before escort range; Halberton's response to tight-beam determines whether help arrives or the Archangel dies alone",
+        "details": "Tight-beam burst sent to 8th Fleet requesting forward escort elements. Unknown whether received. The Archangel's max burn shortens the gap but Le Creuset closed distance simultaneously. If Halberton's advance ships arrive, the engagement math changes. If they don't, two defenders fight five.",
+        "cost": "Every minute of combat before escort arrival is a minute the Strike's battery drains and Autumn's body degrades",
+        "target_constraint": "c3-adequacy",
+        "distance": "3",
+        "status": "ACTIVE",
+        "last_manifestation": "Engagement opened before projected — escort range still distant"
+      },
+      "r": ""
+    },
+    {
+      "tx": 343,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Space — inside Archangel's weapons envelope. Strike in defensive screen, 200m off dorsal hull. Le Creuset team closing in formation. Buster firing from outside Gottfried range. Aegis approaching center. Blitz cloaked. Duel high. CGUE at command distance. Phase-shift active, battery clock running."
+      },
+      "r": ""
+    },
+    {
+      "tx": 344,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "location",
+        "v": "Strike cockpit, defensive screen position"
+      },
+      "r": ""
+    },
+    {
+      "tx": 345,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Painkillers fading, left hand trembling, bruises compressed by restraints. Combat focus overriding degradation. Manifold Resonance active — sensing Blitz approach vector before sensors confirm. OS predictive layer online but untested in combat."
+      },
+      "r": ""
+    },
+    {
+      "tx": 346,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "doing",
+        "v": "Holding defensive screen inside Archangel envelope, assessing threats | Cost: every second of Phase Shift burns battery; screen doesn't solve the Buster at range, the Aegis grapple, or the invisible Blitz"
+      },
+      "r": ""
+    },
+    {
+      "tx": 347,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "participants",
+        "v": "Autumn Yuy (Aile Strike), Mu La Flaga (Moebius Zero), Archangel (fire support)"
+      },
+      "r": ""
+    },
+    {
+      "tx": 348,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "hostiles",
+        "v": "Athrun Zala (Aegis), Yzak Joule (Duel), Dearka Elsman (Buster), Nicol Amalfi (Blitz/cloaked), Rau Le Creuset (CGUE)"
+      },
+      "r": ""
+    },
+    {
+      "tx": 349,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "primary_enemy",
+        "v": "Athrun Zala (Aegis) — assigned to engage Strike directly"
+      },
+      "r": ""
+    },
+    {
+      "tx": 350,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "terrain",
+        "v": "Open space on approach to 8th Fleet rendezvous. Archangel on max burn. Strike inside ship's weapons envelope. Buster outside Gottfried effective range. Archangel port sensor array damaged — wide blind spot."
+      },
+      "r": ""
+    },
+    {
+      "tx": 351,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "situation",
+        "v": "Defensive screen established. Three unresolved vulnerabilities: Buster suppression from outside ship's gun range, Aegis MA-mode grapple threat, Blitz cloaked in sensor blind spot. Mu extending port with gunbarrels. Phase-shift battery clock running."
+      },
+      "r": ""
+    },
+    {
+      "tx": 352,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "threat",
+        "v": "Extreme. Defensive screen buys time but does not resolve numerical/quality disadvantage."
+      },
+      "r": ""
+    },
+    {
+      "tx": 353,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "R",
+      "e": "world",
+      "id": "",
+      "d": {
+        "f": "pressure_points",
+        "v": "Tight-beam burst to 8th Fleet — Halberton receives it or doesn't, and his response determines whether the Archangel reaches escort range"
+      },
+      "r": ""
+    },
+    {
+      "tx": 354,
+      "t": "[Day 1 - 23:55]",
+      "_ts": "2026-04-03T14:35:02.302Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Autumn committed to defensive screen inside Archangel's weapons envelope. Position is sound — ship's guns deter direct approach, extending the 4.7-minute clock. Three vulnerabilities identified: Buster firing from outside Gottfried range, Aegis MA-mode grapple can pull Strike out of envelope, Blitz cloaked in port sensor blind spot. Manifold Resonance already flagging the Blitz's probable vector. Mu extending port with gunbarrels. Awaiting player's refined tactical choice."
+      },
+      "r": ""
+    },
+    {
+      "tx": 355,
+      "t": "",
+      "_ts": "2026-04-03T14:36:58.367Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "situation",
+        "v": "Phase-shift clock started — Buster opened fire at range, first battery tick spent. Aegis closing for grapple. Blitz still cloaked. Information lockdown confirmed: Lacus card unplayed. Autumn weighing broadcast options mid-engagement."
+      },
+      "r": ""
+    },
+    {
+      "tx": 356,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Space — engagement zone. Le Creuset team formation fractured by Lacus broadcast. ZAFT units holding on commander's order. Strike in defensive screen, Archangel burning toward 8th Fleet. Tense silence. Battery draining at idle."
+      },
+      "r": ""
+    },
+    {
+      "tx": 357,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Painkillers gone. Left hand trembling. Bruises pulsing. Phase-shift battery 91%. Combat focus sharp — Resonance active, reading Blitz position and Athrun's emotional state through the void."
+      },
+      "r": ""
+    },
+    {
+      "tx": 358,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "exchange",
+        "v": 2
+      },
+      "r": ""
+    },
+    {
+      "tx": 359,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "situation",
+        "v": "Lacus broadcast sent on ZAFT command frequency — Le Creuset's information monopoly destroyed. Hold order issued. Athrun destabilized, team coordination fractured. Engagement paused but not ended. Window of disruption finite. Battery at 91%, clock still running at idle drain."
+      },
+      "r": ""
+    },
+    {
+      "tx": 360,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "TR",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "status",
+        "from": "SIMMERING",
+        "to": "RESOLVING"
+      },
+      "r": ""
+    },
+    {
+      "tx": 361,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Autumn bypassed Le Creuset entirely, transmitting Lacus's presence to ZAFT command frequency. Le Creuset's scenario tree burned. Athrun learned about Lacus from the enemy, not his commander. The information is propagating beyond anyone's control."
+      },
+      "r": ""
+    },
+    {
+      "tx": 362,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "distance",
+        "v": 1
+      },
+      "r": ""
+    },
+    {
+      "tx": 363,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "collision",
+      "id": "lacus-leverage",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Lacus's name broadcast on open ZAFT frequency — she is now a known variable for every faction. Supreme Council will have the information within fifteen minutes. The Archangel can no longer control who knows."
+      },
+      "r": ""
+    },
+    {
+      "tx": 364,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "condition",
+        "v": "Shattered. Lacus is alive — on the ship he was ordered to kill. Le Creuset knew and didn't tell him. Three seconds from engagement when the hold came. Trust in commander fracturing."
+      },
+      "r": ""
+    },
+    {
+      "tx": 365,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "condition",
+        "v": "Scenario tree burned. Rebuilding. The mind on the Archangel just demonstrated it will go over his head without hesitation. Recalculating Autumn Yuy's threat profile."
+      },
+      "r": ""
+    },
+    {
+      "tx": 366,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "condition",
+        "v": "Aboard Vesalius hearing the same broadcast — Lacus confirmed alive, the ship he armed the weapons against carrying her. Three needles of hope now competing with the knowledge that someone on that ship just did what he couldn't."
+      },
+      "r": ""
+    },
+    {
+      "tx": 367,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "S",
+      "e": "divination",
+      "id": "",
+      "d": {
+        "f": "last_draw",
+        "v": "The High Priestess — Hidden knowledge surfaces. Intuition over logic."
+      },
+      "r": ""
+    },
+    {
+      "tx": 368,
+      "t": "[Day 1 - 23:58]",
+      "_ts": "2026-04-03T14:40:41.343Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "[Day 1 - 23:58] Autumn transmitted Lacus Clyne's presence to ZAFT command frequency mid-combat, bypassing Le Creuset entirely. Strong success — signal propagating through ZAFT relay infrastructure toward Supreme Council. Le Creuset's information monopoly destroyed. Immediate effect: hold order issued, Le Creuset team formation fractured. Athrun learned Lacus is aboard from the enemy broadcast, not his commander — trust in Le Creuset cracking. Engagement paused but not ended. Phase-shift battery at 91%. Resonance active, tracking cloaked Blitz. The hidden knowledge has surfaced and cannot be re-hidden."
+      },
+      "r": ""
+    },
+    {
+      "tx": 369,
+      "t": "[Day 1 - 23:59]",
+      "_ts": "2026-04-03T14:43:33.084Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Strike cockpit, defensive screen. Hold eroding. Kira's 11-byte data fragment confirming Blitz position via OS maintenance port. Resonance painting five hostile intent signatures. Battery 91%. The Magician's tools aligned — every resource converges on one invisible target."
+      },
+      "r": ""
+    },
+    {
+      "tx": 370,
+      "t": "[Day 1 - 23:59]",
+      "_ts": "2026-04-03T14:43:33.084Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Kira transmitted Blitz position data to Strike via OS maintenance channel — first needle threaded, defector actively sabotaging his own intelligence product"
+      },
+      "r": ""
+    },
+    {
+      "tx": 371,
+      "t": "[Day 1 - 23:59]",
+      "_ts": "2026-04-03T14:43:33.084Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "situation",
+        "v": "Hold eroding. Blitz confirmed at port quarter blind spot via Resonance + Kira's data fragment. Nicol stationary under hold but will strike first when it breaks. Aegis pilot destabilized. Le Creuset rebuilding. Battery 91%, idle drain. 11-byte packet from Kira in Strike's buffer — first act of counter-betrayal."
+      },
+      "r": ""
+    },
+    {
+      "tx": 372,
+      "t": "[Day 1 - 23:59]",
+      "_ts": "2026-04-03T14:43:33.084Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Kira Yamato transmitted the Blitz's position to the Strike via the OS maintenance channel only he knows — 11 bytes, no header, confirming what Autumn's Resonance already painted. The Magician's resources align: Resonance, Kira's fragment, Archangel fire support, Mu's gunbarrels. The hold is eroding — Nicol will strike first when it breaks. Autumn must choose how to mark the ghost and what that costs."
+      },
+      "r": ""
+    },
+    {
+      "tx": 373,
+      "t": "[Day 2 - 00:01]",
+      "_ts": "2026-04-03T14:48:56.464Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Strike cockpit, defensive screen. Blitz ambush broken — Nicol retreating with Trikeros damage. Aegis closing in MA-mode, Duel descending, Buster suppressing. Post-Resonance spike — migraine building, both hands trembling. Battery 88%."
+      },
+      "r": ""
+    },
+    {
+      "tx": 374,
+      "t": "[Day 2 - 00:01]",
+      "_ts": "2026-04-03T14:48:56.464Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Post-Resonance crash beginning. Migraine blooming behind left eye. Both hands trembling. Battery 88%. Painkillers gone. The clarity is paid for."
+      },
+      "r": ""
+    },
+    {
+      "tx": 375,
+      "t": "[Day 2 - 00:01]",
+      "_ts": "2026-04-03T14:48:56.464Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "exchange",
+        "v": 3
+      },
+      "r": ""
+    },
+    {
+      "tx": 376,
+      "t": "[Day 2 - 00:01]",
+      "_ts": "2026-04-03T14:48:56.464Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "situation",
+        "v": "Blitz ambush neutralized — Nicol retreating under Mirage Colloid with Trikeros damage. Aegis closing MA-mode with cold renewed focus. Duel descending from high approach, weapons free. Buster maintaining suppressive fire cadence. CGUE holding at command distance — Le Creuset observed the Blitz intercept and is recalculating Autumn's threat profile. Phase-shift battery 88%. Mu's gunbarrel fuel partially spent. Resonance fading post-spike."
+      },
+      "r": ""
+    },
+    {
+      "tx": 377,
+      "t": "[Day 2 - 00:01]",
+      "_ts": "2026-04-03T14:48:56.464Z",
+      "op": "S",
+      "e": "char",
+      "id": "nicol-amalfi",
+      "d": {
+        "f": "condition",
+        "v": "Retreating under Mirage Colloid. Trikeros arm sluggish from gunbarrel hit. Ambush role spent — surprise advantage gone."
+      },
+      "r": ""
+    },
+    {
+      "tx": 378,
+      "t": "[Day 2 - 00:01]",
+      "_ts": "2026-04-03T14:48:56.464Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "condition",
+        "v": "Decision made. MA-mode closing on Strike with cold focus. Whatever he chose between Lacus and duty, it crystallized into action. The broadcast fractured his trust in Le Creuset but not his approach vector."
+      },
+      "r": ""
+    },
+    {
+      "tx": 379,
+      "t": "[Day 2 - 00:01]",
+      "_ts": "2026-04-03T14:48:56.464Z",
+      "op": "S",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "condition",
+        "v": "Observed the Blitz intercept. Processing: the Strike pilot and Mu La Flaga coordinated against an invisible target with precision that shouldn't be possible. Two Resonance signatures on the same ship. Filing this with the attention of a man who recognizes the phenomenon from the inside."
+      },
+      "r": ""
+    },
+    {
+      "tx": 380,
+      "t": "[Day 2 - 00:01]",
+      "_ts": "2026-04-03T14:48:56.464Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Le Creuset released the hold to test the Archangel's new capabilities — and the test revealed two Manifold Resonance users coordinating in real time. His information monopoly on Lacus is destroyed; a new monopoly on Resonance intelligence is forming."
+      },
+      "r": ""
+    },
+    {
+      "tx": 381,
+      "t": "[Day 2 - 00:01]",
+      "_ts": "2026-04-03T14:48:56.464Z",
+      "op": "S",
+      "e": "divination",
+      "id": "",
+      "d": {
+        "f": "last_draw",
+        "v": "The Lovers — A choice between two paths. Relationship tested."
+      },
+      "r": ""
+    },
+    {
+      "tx": 382,
+      "t": "[Day 2 - 00:01]",
+      "_ts": "2026-04-03T14:48:56.464Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Exchange 2 resolved — CRITICAL SUCCESS. Autumn held still and let Resonance open fully for the first time, achieving perfect battlefield clarity. Felt Nicol's position, vector, and attack plan through the sense he won't name. Fed targeting data to Mu (full read, private channel) and CIC (bearing only, sensor cover story). Mu's gunbarrels intercepted the Blitz during decloak transition — two hits, Trikeros damaged, Gleipnir anchor missed by 11m. Ambush neutralized. The Lovers tested Autumn's relationship with his own ability: he chose to trust it fully and it rewarded with crystalline clarity. Post-spike cost arriving as migraine and full-body tremor. Le Creuset observed the coordination and is now tracking two Resonance signatures. Kira's 11-byte fragment confirmed by Resonance — the defector and the replacement chose the same target through different channels."
+      },
+      "r": ""
+    },
+    {
+      "tx": 383,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "current_scene",
+        "v": "Grapple lock — Strike and Aegis physically connected at Archangel's envelope edge. Scylla cannon pressed to Strike chest. Supreme Council ceasefire in effect. Athrun asking about Lacus through the contact point. All other ZAFT units holding. Tense, raw, fragile."
+      },
+      "r": ""
+    },
+    {
+      "tx": 384,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "pc",
+      "id": "",
+      "d": {
+        "f": "condition",
+        "v": "Grappled by Aegis. Battery 79% draining under mechanical stress. Both hands trembling — left arm controls dead from shoulder lock. Migraine active. Ribs screaming from grapple impact. Post-Resonance crash in full effect. Scylla cannon against chest."
+      },
+      "r": ""
+    },
+    {
+      "tx": 385,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "condition",
+        "v": "Composure shattered. Grappled onto the Strike and won't let go. Asking about Lacus — raw, desperate, stripped of rank. The cold focus that carried him through the approach has broken into something younger."
+      },
+      "r": ""
+    },
+    {
+      "tx": 386,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "char",
+      "id": "athrun-zala",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "v": "Now knows Lacus is aboard the Archangel — learned from Autumn's broadcast, not Le Creuset. Knows his commander withheld this. Does not know Kira sent targeting data to the Strike."
+      },
+      "r": ""
+    },
+    {
+      "tx": 387,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "condition",
+        "v": "Complying with ceasefire outwardly. Lost the Lacus card permanently. Already pivoting to Resonance intelligence — two confirmed signatures, combat-coordinated, higher priority than any political hostage."
+      },
+      "r": ""
+    },
+    {
+      "tx": 388,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "char",
+      "id": "rau-le-creuset",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "v": "Lost Lacus information monopoly. Gained Resonance intelligence no one else has framework to value. Does not know Kira transmitted data to the Strike. Does not know Autumn is a Resonance user — suspects, filing evidence."
+      },
+      "r": ""
+    },
+    {
+      "tx": 389,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "condition",
+        "v": "Aboard Vesalius hearing the ceasefire order. The Supreme Council directive confirms Lacus is alive and valued. His 11-byte transmission reached the Strike — the first needle threaded. Two remain."
+      },
+      "r": ""
+    },
+    {
+      "tx": 390,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "char",
+      "id": "kira-yamato",
+      "d": {
+        "f": "knowledge_asymmetry",
+        "v": "Knows Lacus is aboard Archangel (Le Creuset told him). Knows he transmitted Blitz position to Strike. Does not know the ceasefire origin — that Autumn broadcast on ZAFT command frequency. Does not know who is piloting the Strike."
+      },
+      "r": ""
+    },
+    {
+      "tx": 391,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "status",
+        "v": "RESOLVING"
+      },
+      "r": ""
+    },
+    {
+      "tx": 392,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "distance",
+        "v": 0
+      },
+      "r": ""
+    },
+    {
+      "tx": 393,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "collision",
+      "id": "le-creusets-card",
+      "d": {
+        "f": "last_manifestation",
+        "v": "Supreme Council emergency directive — Siegel Clyne's authority reaching into the battlefield to enforce ceasefire. Le Creuset's information monopoly on Lacus destroyed; institutional power has overridden his scenario tree. He is pivoting to Resonance intelligence as replacement leverage."
+      },
+      "r": ""
+    },
+    {
+      "tx": 394,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "exchange",
+        "v": 3
+      },
+      "r": ""
+    },
+    {
+      "tx": 395,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "situation",
+        "v": "Strike grappled by Aegis at envelope edge. Scylla cannon pressed to chest. Supreme Council ceasefire in effect. Duel, Buster, Blitz holding. CGUE holding. Battery 79% draining under grapple stress. Athrun emotionally compromised, asking about Lacus through physical contact. Le Creuset complying outwardly, recalculating internally."
+      },
+      "r": ""
+    },
+    {
+      "tx": 396,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {
+        "f": "threat",
+        "v": "Extreme but suspended. Ceasefire institutional — holds as long as authority holds. Grapple is physical — persists independent of orders. Scylla cannon remains live."
+      },
+      "r": ""
+    },
+    {
+      "tx": 397,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "S",
+      "e": "divination",
+      "id": "",
+      "d": {
+        "f": "last_draw",
+        "v": "Judgement"
+      },
+      "r": ""
+    },
+    {
+      "tx": 398,
+      "t": "[Day 2 - 00:03]",
+      "_ts": "2026-04-03T14:54:49.261Z",
+      "op": "A",
+      "e": "summary",
+      "id": "",
+      "d": {
+        "f": "",
+        "v": "Exchange 3 TRANSFORM. Defensive screen penetrated — Athrun threaded Archangel's fire patterns using Kira's intelligence, reached grapple range. Autumn's post-Resonance tremor caused beam rifle miss at critical moment. Aegis locked onto Strike's left side, Scylla pressed to chest. Yzak intercepted by Mu's gunbarrels. Then: Supreme Council emergency directive — Siegel Clyne ordered full ceasefire, authenticated priority alpha. All ZAFT units complying. Le Creuset obeying outwardly, already pivoting from destroyed Lacus monopoly to Resonance intelligence. Athrun won't release grapple — asking about Lacus through the contact point, composure broken. Battery 79% draining. The Emperor descended: institutional authority seized the battlefield. Le Creuset's Card collision at distance 0."
+      },
+      "r": ""
+    },
+    {
+      "tx": 399,
+      "t": "",
+      "_ts": "2026-04-03T16:22:44.664Z",
+      "op": "CR",
+      "e": "collision",
+      "id": "resonance-hunt",
+      "d": {
+        "name": "The Resonance Hunt",
+        "status": "SEEDED",
+        "distance": "5",
+        "target_constraint": "c2-natural-ceiling"
+      },
+      "r": ""
+    },
+    {
+      "tx": 400,
+      "t": "",
+      "_ts": "2026-04-03T16:22:44.664Z",
+      "op": "D",
+      "e": "combat",
+      "id": "combat-mnj032rp",
+      "d": {},
+      "r": ""
+    }
+  ],
+  "snapshots": [],
+  "lastTxId": 401,
+  "createdAt": "2026-04-03T10:23:36.121Z",
+  "updatedAt": "2026-04-03T16:22:44.664Z"
+}
