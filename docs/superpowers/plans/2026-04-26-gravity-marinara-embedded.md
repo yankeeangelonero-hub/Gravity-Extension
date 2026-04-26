@@ -1489,7 +1489,7 @@ export function createDirectorAgent(db: DB) {
         recentTail,
         pendingCorrections,
         chatSummary: context.chatSummary ?? null,
-        activatedLorebookTitles: context.activatedLorebookEntries?.map((e: { title: string }) => e.title) ?? [],
+        activatedLorebookTitles: context.activatedLorebookEntries?.map((e: { name: string }) => e.name) ?? [],
       });
 
       // ── 5. LLM call ───────────────────────────────────────────────────────────
@@ -1536,7 +1536,10 @@ export function createDirectorAgent(db: DB) {
           // 8. Update state cache for this swipe
           const allStagedTxns = [...acceptedTxns, ...validAfterTransitions, ...tickResult.tickTxns];
           const finalState = computeState(allStagedTxns);
-          await stateCacheStore.upsertForSwipe(tx as DB, chatId, messageId, swipeIndex, finalState, acceptedTxns, mode);
+          // Pass allStagedTxns (not just acceptedTxns) so recentTail reflects the newly
+          // staged transactions — acceptance later only flips accepted=1 and the cache
+          // row must already have the correct tail when the next director reads it.
+          await stateCacheStore.upsertForSwipe(tx as DB, chatId, messageId, swipeIndex, finalState, allStagedTxns, mode);
 
           // 9. Upsert gravity_chat_state
           const newCorrections = buildNewCorrections(allErrors, proposal.transactions, pendingCorrections);
@@ -1696,11 +1699,13 @@ Find the section where `trackerParts.push` lines appear. Add this block immediat
 
 ```ts
 // Gravity Ledger inject
+// resolvedAgents is already the enabled set — existence is the only guard needed
 const gravityInjectAgent = resolvedAgents.find((a) => a.type === "gravity-ledger-inject");
-if (gravityInjectAgent?.enabled) {
+if (gravityInjectAgent) {
   const gravityInject = await gravityInjectStore.loadGravityInjectForChat(input.chatId);
   if (gravityInject) {
     trackerParts.push(wrapContent(gravityInject.text, "Gravity Ledger", wrapFormat));
+    // Skip saveRun — no messageId exists yet at pre-gen time; just emit the SSE event
     const injectResult = {
       agentId: gravityInjectAgent.id,
       agentType: "gravity-ledger-inject",
@@ -1711,7 +1716,6 @@ if (gravityInjectAgent?.enabled) {
       success: true,
       error: null,
     };
-    await agentsStore.saveRun({ agentConfigId: gravityInjectAgent.id, chatId: input.chatId, messageId: null, result: injectResult });
     sendAgentEvent(injectResult);
   }
 }
@@ -1733,38 +1737,38 @@ Find the block that ends the editor section (search for the comment `// editor b
 
 ```ts
 // ── Gravity Director (runs after editor — sees post-edit message text) ──────
+// resolvedAgents is already the enabled set; no .enabled guard needed.
+// runInterval gating is intentionally omitted: Gravity must process every turn
+// because structural changes in skipped turns would be lost with no backlog.
 const directorAgent = resolvedAgents.find((a) => a.type === "gravity-ledger-director");
-if (directorAgent?.enabled && messageId && !abortController.signal.aborted) {
-  const chatState = await db
-    .select({ counter: gravityChatState.userTurnsSinceLastDirector })
-    .from(gravityChatState)
-    .where(eq(gravityChatState.chatId, input.chatId))
-    .limit(1)
-    .then((rows) => rows[0] ?? null);
-  const interval = (directorAgent.settings?.runInterval as number | undefined) ?? 1;
-  if ((chatState?.counter ?? 0) >= interval) {
-    // Read post-edit message text (editor may have rewritten it)
-    const finalMessages = await chats.listMessages(input.chatId);
-    const finalAsstMsg = [...finalMessages].reverse().find((m) => m.id === messageId);
-    const finalText = finalAsstMsg?.swipes?.[finalAsstMsg.activeSwipeIndex ?? 0]?.text ?? "";
+if (directorAgent && messageId && !abortController.signal.aborted) {
+  // Read post-edit message text via Marinara's swipe API (not listMessages — that
+  // returns plain message rows without swipe content).
+  // Look at how generate.routes.ts reads active-swipe text after the editor block
+  // and use the same method. Two likely forms:
+  //   (a) const swipes = await chats.getSwipes(messageId);
+  //       const finalText = swipes[targetSwipeIndex ?? 0]?.text ?? "";
+  //   (b) const finalText = await chats.getActiveSwipeText(messageId);
+  // Grep for "getSwipes\|getActiveSwipeText\|activeSwipe" in generate.routes.ts to confirm.
+  const swipes = await chats.getSwipes(messageId);
+  const finalText = swipes?.[targetSwipeIndex ?? 0]?.text ?? "";
 
-    // Resolve provider from directorAgent.connectionId / directorAgent.model
-    const directorProvider = await resolveProviderForAgent(directorAgent, app);
-    if (directorProvider) {
-      const dirResult = await gravityDirectorAgent.runGravityDirector({
-        chatId: input.chatId,
-        messageId,
-        swipeIndex: targetSwipeIndex ?? 0,
-        assistantMessage: finalText,
-        agentConfig: directorAgent,
-        context: agentContext,
-        provider: directorProvider.provider,
-        model: directorProvider.model,
-        signal: abortController.signal,
-      });
-      await agentsStore.saveRun({ agentConfigId: directorAgent.id, chatId: input.chatId, messageId, result: dirResult });
-      sendAgentEvent(dirResult);
-    }
+  // Resolve provider from directorAgent.connectionId / directorAgent.model
+  const directorProvider = await resolveProviderForAgent(directorAgent, app);
+  if (directorProvider) {
+    const dirResult = await gravityDirectorAgent.runGravityDirector({
+      chatId: input.chatId,
+      messageId,
+      swipeIndex: targetSwipeIndex ?? 0,
+      assistantMessage: finalText,
+      agentConfig: directorAgent,
+      context: agentContext,
+      provider: directorProvider.provider,
+      model: directorProvider.model,
+      signal: abortController.signal,
+    });
+    await agentsStore.saveRun({ agentConfigId: directorAgent.id, chatId: input.chatId, messageId, result: dirResult });
+    sendAgentEvent(dirResult);
   }
 }
 ```
@@ -1875,6 +1879,8 @@ export const gravityRoutes: FastifyPluginAsync = async (app) => {
       const { chatId } = req.params;
       const body = req.body as {
         transactions?: unknown[];
+        stateCache?: unknown[];
+        snapshots?: unknown[];
         chatState?: unknown;
       };
 
@@ -1882,7 +1888,7 @@ export const gravityRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(400).send({ error: "transactions must be an array" });
       }
 
-      // Refuse pending rows (accepted !== 1) unless allow_pending flag set
+      // Refuse pending rows (accepted !== 1)
       const toImport = (body.transactions as Array<{ accepted?: number }>).filter(
         (t) => t.accepted === 1,
       );
@@ -1903,6 +1909,36 @@ export const gravityRoutes: FastifyPluginAsync = async (app) => {
             })),
           );
         }
+
+        // Restore state-cache rows (pre-rendered state views)
+        if (Array.isArray(body.stateCache) && body.stateCache.length > 0) {
+          await tx.insert(gravityStateCache).values(
+            (body.stateCache as Record<string, unknown>[]).map((c) => ({
+              chatId,
+              messageId: (c["message_id"] ?? c["messageId"]) as string,
+              swipeIndex: (c["swipe_index"] ?? c["swipeIndex"] ?? 0) as number,
+              stateView: (c["state_view"] ?? c["stateView"]) as string,
+              recentTail: (c["recent_tail"] ?? c["recentTail"]) as string,
+              archiveVersion: (c["archive_version"] ?? c["archiveVersion"]) as string,
+            })),
+          );
+        }
+
+        // Restore snapshots (SNAP/ROLL history)
+        if (Array.isArray(body.snapshots) && body.snapshots.length > 0) {
+          await tx.insert(gravitySnapshots).values(
+            (body.snapshots as Record<string, unknown>[]).map((s) => ({
+              id: s["id"] as string,
+              chatId,
+              messageId: (s["message_id"] ?? s["messageId"] ?? null) as string | null,
+              swipeIndex: (s["swipe_index"] ?? s["swipeIndex"] ?? null) as number | null,
+              label: s["label"] as string,
+              payload: s["payload"] as string,
+              createdAt: (s["created_at"] ?? s["createdAt"]) as number ?? Math.floor(Date.now() / 1000),
+            })),
+          );
+        }
+
         if (body.chatState) {
           const cs = body.chatState as Record<string, unknown>;
           await tx
@@ -1928,8 +1964,15 @@ export const gravityRoutes: FastifyPluginAsync = async (app) => {
         }
       });
 
-      logger.info("[gravity-import] chat=%s imported %d transactions", chatId, toImport.length);
-      return reply.send({ imported: toImport.length });
+      logger.info(
+        "[gravity-import] chat=%s imported %d transactions, %d cache rows, %d snapshots",
+        chatId, toImport.length, (body.stateCache?.length ?? 0), (body.snapshots?.length ?? 0),
+      );
+      return reply.send({
+        imported: toImport.length,
+        cacheRows: body.stateCache?.length ?? 0,
+        snapshots: body.snapshots?.length ?? 0,
+      });
     },
   );
 };
