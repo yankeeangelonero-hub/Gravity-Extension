@@ -14,16 +14,25 @@ test('validateTransaction accepts a well-formed CR char', () => {
   assert.equal(result.violations.length, 0, JSON.stringify(result.violations));
 });
 
-test('validateTransaction accepts any operation (format checking deferred to validateBatch)', () => {
-  const tx = { op: 'BADOP', e: 'char', id: 'x', d: {} };
+test('validateTransaction passes a well-formed relationship CR with valid card, orientation and nuance', () => {
+  const tx = {
+    op: 'CR',
+    e: 'relationship',
+    id: 'pc-lacus',
+    d: { card: 'the-lovers', orientation: 'upright', nuance: 'bound by shared idealism' },
+  };
   const result = validateTransaction(tx);
-  assert.equal(result.violations.length, 0);
+  assert.equal(result.violations.length, 0, JSON.stringify(result.violations));
 });
 
-test('validateTransaction accepts missing entity type (format checking deferred to validateBatch)', () => {
-  const tx = { op: 'CR', id: 'x', d: {} };
+test('validateTransaction catches invalid faction.tier on CR (must be KNOWN, TRACKED, or PRINCIPAL)', () => {
+  const tx = { op: 'CR', e: 'faction', id: 'zaft', d: { name: 'ZAFT', tier: 'ALLY' } };
   const result = validateTransaction(tx);
-  assert.equal(result.violations.length, 0);
+  assert.ok(result.violations.length > 0, 'Expected at least one violation for invalid tier');
+  assert.ok(
+    result.violations.some(v => v.field === 'tier'),
+    `Expected a tier violation, got: ${JSON.stringify(result.violations)}`,
+  );
 });
 
 test('validateBatch returns errors array', () => {
