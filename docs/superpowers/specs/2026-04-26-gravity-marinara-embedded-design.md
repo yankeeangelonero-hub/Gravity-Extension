@@ -109,6 +109,19 @@ GRAVITY_LEDGER_DIRECTOR: "gravity-ledger-director",
 
 **Name-collision check.** `BUILT_IN_AGENT_IDS.DIRECTOR = "director"` already exists at `agent.ts:157` as "Narrative Director" (pre_generation event-injector, `category: "writer"`). Different responsibility; different id. No conflict — never reuse `"director"`.
 
+### 3.1.1 Custom dispatch must manually honor the built-in config surface
+
+Because §3.2 special-cases Gravity out of the standard pipeline, the framework no longer applies these fields automatically. The dispatch code must read each from the resolved agent config and act on it:
+
+| Config field | Where the standard pipeline applies it | Where Gravity must apply it |
+|---|---|---|
+| `enabled` | Pipeline skips disabled agents implicitly when resolving | Both inject (§3.2(b)) and director (§3.2(c)) gate on `agent.enabled` before any work |
+| `connectionId` + `model` | Resolved into a `BaseLLMProvider` instance and passed to `executeAgent` | Director resolves the same way (already in `AgentExecConfig`); inject is deterministic and ignores both |
+| `promptTemplate` (per-agent override in `agent_configs`) | `executeAgent` reads override, falls back to `getDefaultAgentPrompt(agentType)` | Director must do the same lookup explicitly: `const sysPrompt = agent.promptTemplate ?? getDefaultAgentPrompt("gravity-ledger-director")`. Inject has no prompt template (deterministic) |
+| `runInterval` | Framework counts turns since last run and skips otherwise | Director gates on `gravity_chat_state.userTurnsSinceLastDirector >= agent.runInterval`; resets the counter to 0 after a successful run. Inject ignores `runInterval` — context injection is required every turn |
+
+The acceptance hook (§3.2(a)) is the single point that increments `userTurnsSinceLastDirector`, so the gate stays consistent with Marinara's "real new user turn only" definition (skip-on-impersonate, not on swipes/regens).
+
 ### 3.2 Special-case dispatch in `packages/server/src/routes/generate.routes.ts`
 
 Three additions in this file. All three model after Marinara's existing `editor` / `lorebook-keeper` / world-state-tracker patterns.
@@ -124,12 +137,15 @@ export async function commitAcceptedGravityTurn(
   messageId: string,
   swipeIndex: number,
 ): Promise<void> {
-  // single transaction:
+  // single SQL transaction:
   // 1. UPDATE gravity_transactions SET accepted=1 WHERE chat_id=? AND message_id=? AND swipe_index=?
-  // 2. UPDATE gravity_chat_state SET acceptedMessageId=?, acceptedSwipeIndex=? WHERE chat_id=?
+  // 2. UPDATE gravity_chat_state
+  //      SET accepted_message_id=?, accepted_swipe_index=?,
+  //          user_turns_since_last_director = user_turns_since_last_director + 1
+  //      WHERE chat_id=?
 }
 ```
-Called from `generate.routes.ts:~334`, right next to `gameStateStore.commit(gs.id)`. Real-new-turn semantics inherit automatically from the surrounding `if (!input.impersonate && (input.userMessage || input.attachments?.length))` guard.
+Called from `generate.routes.ts:~334`, right next to `gameStateStore.commit(gs.id)`. Real-new-turn semantics inherit automatically from the surrounding `if (!input.impersonate && (input.userMessage || input.attachments?.length))` guard. The counter increment is the single source of truth for `runInterval` gating (§3.1.1).
 
 **(b) Pre-generation: filter Gravity from the standard pipeline; inject deterministic context**
 
@@ -166,25 +182,38 @@ If there's no accepted state yet (newly initialized chat), returns an empty/setu
 
 **(c) Post-generation, post-editor: director special-case**
 
-Editor block ends around `:~6151`. Director runs immediately after (no later than the SSE stream close):
+Editor block ends around `:~6151`. Director runs immediately after (no later than the SSE stream close), with explicit handling of the four config fields per §3.1.1:
+
 ```ts
-if (resolvedAgents.some((a) => a.type === "gravity-ledger-director") && messageId && !abortController.signal.aborted) {
-  const directorAgent = resolvedAgents.find((a) => a.type === "gravity-ledger-director")!;
-  const finalAssistantText = await chats.getMessageActiveSwipeText(messageId);
-  // ↑ resolves to the editor-rewritten content if editor ran, else original mainResponse
-  const result = await runGravityDirector({
-    chatId: input.chatId,
-    messageId,
-    swipeIndex: targetSwipeIndex,
-    assistantMessage: finalAssistantText,
-    agentConfig: directorAgent,
-    context: agentContext,
-    signal: abortController.signal,
-  });
-  await agentsStore.saveRun({ agentConfigId: result.agentId, chatId: input.chatId, messageId, result });
-  sendAgentEvent(result);
+const directorAgent = resolvedAgents.find((a) => a.type === "gravity-ledger-director");
+if (
+  directorAgent &&
+  directorAgent.enabled &&                                    // honor `enabled`
+  messageId &&
+  !abortController.signal.aborted
+) {
+  const chatState = await gravityChatStateStore.get(input.chatId);
+  const interval = directorAgent.runInterval ?? 1;
+  if ((chatState?.userTurnsSinceLastDirector ?? 0) >= interval) {  // honor `runInterval`
+    const finalAssistantText = await resolveActiveSwipeText(messageId);
+    // ↑ post-edit text if editor ran, else original mainResponse
+    const result = await runGravityDirector({
+      chatId: input.chatId,
+      messageId,
+      swipeIndex: targetSwipeIndex,
+      assistantMessage: finalAssistantText,
+      agentConfig: directorAgent,                             // carries connectionId/model/promptTemplate
+      context: agentContext,
+      signal: abortController.signal,
+    });
+    await agentsStore.saveRun({ agentConfigId: result.agentId, chatId: input.chatId, messageId, result });
+    sendAgentEvent(result);
+    // counter reset happens inside runGravityDirector's commit transaction (§4)
+  }
 }
 ```
+
+Inside `runGravityDirector`, the system prompt is resolved as `directorAgent.promptTemplate ?? getDefaultAgentPrompt("gravity-ledger-director")`, the provider is built from `directorAgent.connectionId` + `directorAgent.model` (already done by Marinara's `resolvedAgents` step that produces `AgentExecConfig`).
 
 `runGravityDirector` is the orchestration entrypoint exported from `services/gravity/agents/director-agent.ts`. See §4 for its internal sequence.
 
@@ -263,11 +292,12 @@ export const gravitySnapshots = sqliteTable("gravity_snapshots", {
 ```ts
 export const gravityChatState = sqliteTable("gravity_chat_state", {
   chatId: text("chat_id").primaryKey().references(() => chats.id, { onDelete: "cascade" }),
-  mode: text("mode").notNull().default("regular"),        // regular | advance | combat | intimacy | integration
-  pendingCorrections: text("pending_corrections"),        // JSON CorrectionsPayload | null
-  acceptedMessageId: text("accepted_message_id"),         // null until first accepted turn
+  mode: text("mode").notNull().default("regular"),                // regular | advance | combat | intimacy | integration
+  pendingCorrections: text("pending_corrections"),                // JSON CorrectionsPayload | null
+  acceptedMessageId: text("accepted_message_id"),                 // null until first accepted turn
   acceptedSwipeIndex: integer("accepted_swipe_index"),
-  nextTxSeq: integer("next_tx_seq").notNull().default(1), // monotonic per-chat sequence allocator for gravity_transactions.seq
+  nextTxSeq: integer("next_tx_seq").notNull().default(1),         // monotonic per-chat sequence allocator for gravity_transactions.seq
+  userTurnsSinceLastDirector: integer("user_turns_since_last_director").notNull().default(0),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 ```
@@ -313,29 +343,45 @@ Per Marinara CLAUDE.md: never `console.log/warn/error` in server code; use Pino 
 
 ## 4. Director runtime
 
-The director executor is **not** a Marinara `executeAgent`-compatible function. It's invoked directly from `generate.routes.ts` (§3.2(c)) and runs the following sequence:
+The director executor is **not** a Marinara `executeAgent`-compatible function. It's invoked directly from `generate.routes.ts` (§3.2(c)) and runs the following sequence. **Steps 4–8 (everything from `validateAndStage` through the chat-state upsert) execute in a single SQL transaction** so `nextTxSeq`, the staged transaction rows, the engine-tick rows, the per-swipe state-cache row, and the shared-state pointer can never drift relative to each other. Failure at any step rolls the whole turn back; the AgentResult is recorded `success: false` and no partial state escapes.
 
 ```
 runGravityDirector(input)
-├── load shared state from gravity_chat_state           (mode, pendingCorrections)
-├── load last-accepted state-cache row                  (stateView, recentTail)
-├── build director input
-│   ├── mode
-│   ├── editor-final assistant message                  (post text_rewrite if editor ran)
-│   ├── stateView, recentTail
-│   ├── pendingCorrections
-│   ├── chatSummary, activatedLorebookEntries           (from AgentContext)
-├── callDirector(input, provider, model, signal)        (one LLM call; json_object hint + tolerant parse)
-├── validateAndStage(chatId, messageId, swipeIndex, txns)
-│   ├── consistency.validateBatch
-│   ├── state-machine.validateTransitions
-│   ├── allocate gravity_chat_state.nextTxSeq under tx
-│   └── INSERT gravity_transactions rows with accepted=0
-├── engineTick(mode, stagedState)                       (declarative — see §4.1)
-├── updateStateCacheForSwipe(chatId, messageId, swipeIndex)
-├── upsert gravity_chat_state                           (mode if changed; pendingCorrections from validation errors)
+├── 1. resolve system prompt: agentConfig.promptTemplate ?? getDefaultAgentPrompt("gravity-ledger-director")
+├── 2. load shared state from gravity_chat_state               (mode, pendingCorrections)  [read]
+├── 3. load last-accepted state-cache row                      (stateView, recentTail)     [read]
+├── 4. build director input
+│      ├── mode
+│      ├── editor-final assistant message                      (post text_rewrite if editor ran)
+│      ├── stateView, recentTail
+│      ├── pendingCorrections
+│      └── chatSummary, activatedLorebookEntries               (from AgentContext)
+├── 5. callDirector(input, provider, model, signal)            (one LLM call; json_object hint + tolerant parse)
+│
+│   ─── BEGIN SQL TRANSACTION ──────────────────────────────────────────
+├── 6. validateAndStage(chatId, messageId, swipeIndex, txns)
+│      ├── consistency.validateBatch
+│      ├── state-machine.validateTransitions
+│      ├── allocate seq range from gravity_chat_state.nextTxSeq
+│      │     (UPDATE ... SET next_tx_seq = next_tx_seq + N RETURNING old next_tx_seq;
+│      │      atomic under the transaction — prevents concurrent allocation collisions)
+│      └── INSERT gravity_transactions rows with accepted=0, seq=allocated[i]
+├── 7. engineTick(mode, stagedState)                           (declarative — see §4.1;
+│        any tick-generated transactions are appended via the same staging path
+│        and share the same allocated seq range / accepted=0 flag)
+├── 8. updateStateCacheForSwipe(chatId, messageId, swipeIndex) (re-render stateView+recentTail; UPSERT)
+├── 9. upsert gravity_chat_state
+│      ├── mode (if director changed it)
+│      ├── pendingCorrections (from validation errors this turn)
+│      └── userTurnsSinceLastDirector = 0   (counter reset)
+│   ─── COMMIT or ROLLBACK ─────────────────────────────────────────────
+│
 └── return AgentResult { type: "gravity_state_update", data: { committed, rejected, errors, durationMs, model } }
 ```
+
+**Concurrency.** Two director runs for the same chat would conflict at step 6's `nextTxSeq` allocation. SQLite's serializable transactions handle this — the second waits, reads the post-commit `nextTxSeq`, and gets a non-overlapping range. The counter at step 9 is reset only inside the successful transaction; a failed director run leaves `userTurnsSinceLastDirector` untouched, so the next turn's gate behaves correctly.
+
+**Failure handling.** If step 5 (LLM call) fails, no transaction was opened — return an error AgentResult, leave state untouched. If steps 6–9 fail, the transaction rolls back and no rows changed; the failure manifests as `success: false` plus the user-visible chat continues. The next director run will retry from a clean slate (and may pick up corrections that the validator wrote in a separate path; see §4.3 for that path's transactional boundary).
 
 **No reads from `agent_memory`.** All Gravity persistent state is in `gravity_chat_state`. The reasoning: persistent state needs to be shared between the inject and director agents (different `agentConfigId`s), and `agent_memory`'s composite key would split the namespaces.
 
@@ -415,9 +461,33 @@ Five Gravity-owned tables, all FK'd to `chats.id` with `onDelete: "cascade"`:
 - `gravity_transactions` (per-swipe, with `accepted` gate)
 - `gravity_state_cache` (per-swipe pre-rendered snapshot)
 - `gravity_snapshots` (explicit SNAP/ROLL)
-- `gravity_chat_state` (single row per chat; shared persistent state + acceptance pointer)
+- `gravity_chat_state` (single row per chat; shared persistent state + acceptance pointer + run-interval counter)
 
-**Acceptance flow:** §3.2(a). On real new user turn, the helper marks the prior assistant message's active swipe's transactions as `accepted = 1` and updates `acceptedMessageId/acceptedSwipeIndex`. Other swipes' transactions stay `accepted = 0` — they're effectively dead but kept for forensic value (and trivially purged later if needed).
+**Acceptance flow:** §3.2(a). On real new user turn, the helper marks the prior assistant message's active swipe's transactions as `accepted = 1`, updates `acceptedMessageId/acceptedSwipeIndex`, and increments `userTurnsSinceLastDirector` — all in one SQL transaction.
+
+### 6.1 Lifecycle of unaccepted (pending) staged rows
+
+When the user swipes or regenerates instead of accepting, the rejected swipe's `gravity_transactions` rows stay at `accepted = 0` indefinitely. Concrete policy:
+
+| Concern | Phase 1 behavior |
+|---|---|
+| **State replay / state compute** | `accepted = 1` only. State derivation never sees pending rows. The pre-step inject loader in §5 reads `gravity_state_cache` for the **last accepted** swipe — never a pending one |
+| **Snapshots (`SNAP`)** | Capture accepted-only state. A SNAP taken mid-turn (before acceptance) anchors to the most recently accepted `(messageId, swipeIndex)` |
+| **Rollback (`ROLL`)** | Targets accepted snapshots only. Cannot ROLL to a pending swipe |
+| **Per-swipe state cache** | `gravity_state_cache` rows are kept for both accepted and pending swipes (so swipe-back UI could one day show "what would have been"). State replay still ignores pending rows |
+| **Default export (§8)** | `accepted = 1` only. Pending rows are excluded |
+| **Debug export** | `?include_pending=true` flag returns all rows including pending ones, plus their `(messageId, swipeIndex, accepted)` triples for forensic inspection |
+| **Import** | Refuses pending rows by default. Round-trip is accepted-only. A `?allow_pending=true` admin flag accepts them but is not advertised to end users |
+| **Garbage collection** | Phase 1 ships **no automatic GC** — pending rows are tiny (a few KB per rejected swipe) and have audit value. A manual cleanup endpoint (`POST /api/gravity/gc/:chatId`) is a phase-2 ergonomics item. A scheduled background job is phase-3 only if storage becomes a real concern |
+
+**Single canonical view.** All Gravity reads — inject, director input building, OOC eval, UI panel, export — go through helpers that filter `accepted = 1` by default. `services/gravity/engine/ledger-store.ts` exposes `getAcceptedTransactions(chatId)` and `getAllTransactions(chatId, { includePending })`; the second form is debug-only.
+
+**Snapshot/rollback vs. Marinara branching:** Phase 1 keeps `snapshot-mgr` (Gravity-owned). Marinara's branching copies messages + metadata under a new `chat_id`; Gravity rows don't follow because they're keyed by chat_id. Three options later:
+- A. Keep snapshot-mgr Gravity-internal (recommended, phase 1).
+- B. Hook into branching: on branch creation, copy Gravity rows under the new chat_id. Marinara doesn't currently emit a branching event; would require a small storage-layer hook.
+- C. Hybrid: branching auto-snapshots Gravity. Most coupled.
+
+Defer B/C. `commitAcceptedGravityTurn` in §3.2(a) is the only acceptance integration in phase 1.
 
 **Snapshot/rollback vs. Marinara branching:** Phase 1 keeps `snapshot-mgr` (Gravity-owned). Marinara's branching copies messages + metadata under a new `chat_id`; Gravity rows don't follow because they're keyed by chat_id. Three options later:
 - A. Keep snapshot-mgr Gravity-internal (recommended, phase 1).
