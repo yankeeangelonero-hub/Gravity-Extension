@@ -4,6 +4,6 @@ Thumbs.db
 .claude/
 .worktrees/
 
-# Local read-only reference clone of Marinara Engine — see Documentation/superpowers specs.
-# Treat as vendored source. Real Marinara fork happens in a separate clone.
+# Active Marinara fork for the embedded Gravity port — has its own .git/ and tracks
+# its own commits on `gravity-integration`. Excluded from the outer Gravity-Extension repo.
 Marinara Engine/

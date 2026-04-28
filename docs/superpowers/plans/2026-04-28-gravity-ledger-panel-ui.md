@@ -145,24 +145,38 @@ export interface PcEntity {
 
 export interface CollisionEntity {
   id: string;
+  name?: string;
   status: string;
-  reach?: string;
-  remaining?: number;
-  description?: string;
+  /** Engine's distance bucket: SHORT / MID / LONG. */
+  distanceCategory?: string;
+  /** Numeric distance (smaller = closer). */
+  distance?: number;
   [k: string]: unknown;
 }
 
 export interface PressureEntity {
   id: string;
-  description?: string;
+  name?: string;
+  source?: string;
+  relatedTo?: string[];
   [k: string]: unknown;
 }
 
 export interface ConstraintEntity {
   id: string;
-  status?: string;
-  description?: string;
-  charId?: string | string[];
+  name?: string;
+  /** Engine integrity tier: STABLE / STRESSED / CRITICAL / BREACHED. */
+  integrity?: string;
+  /** Bare char id this constraint belongs to (no `char:` prefix). Engine field. */
+  ownerId?: string;
+  profile?: string;
+  prevents?: string;
+  threshold?: string;
+  replacement?: string;
+  sheddingOrder?: string;
+  currentPressure?: string;
+  /** Mirror of ownerId for the char-linkage convention (single id only; engine has no multi-char today). */
+  charId?: string;
   [k: string]: unknown;
 }
 
@@ -394,27 +408,42 @@ function projectPc(raw: Bag): PcEntity {
 function projectCollision(id: string, raw: Bag): CollisionEntity {
   return {
     id,
+    name: asString(raw.name),
     status: asString(raw.status) ?? "UNKNOWN",
-    reach: asString(raw.reach),
-    remaining: typeof raw.remaining === "number" ? raw.remaining : undefined,
-    description: asString(raw.description) ?? asString(raw.title),
+    distanceCategory: asString(raw.distance_category),
+    distance: typeof raw.distance === "number" ? raw.distance : undefined,
   };
 }
 
 function projectPressure(id: string, raw: Bag): PressureEntity {
-  return { id, description: asString(raw.description) ?? asString(raw.title) };
+  return {
+    id,
+    name: asString(raw.name),
+    source: asString(raw.source),
+    relatedTo: asStringArray(raw.related_to),
+  };
 }
 
 function projectConstraint(id: string, raw: Bag): ConstraintEntity {
+  // Engine writes `owner_id` (and historically the alias `char`) as the bare char id.
+  const ownerRaw = (raw.owner_id ?? raw.char) as unknown;
+  const ownerId =
+    typeof ownerRaw === "string" && ownerRaw.length > 0
+      ? ownerRaw.replace(/^char:/, "")
+      : undefined;
   const out: ConstraintEntity = {
     id,
-    status: asString(raw.status),
-    description: asString(raw.description) ?? asString(raw.title),
+    name: asString(raw.name),
+    integrity: asString(raw.integrity),
+    ownerId,
+    profile: asString(raw.profile),
+    prevents: asString(raw.prevents),
+    threshold: asString(raw.threshold),
+    replacement: asString(raw.replacement),
+    sheddingOrder: asString(raw.shedding_order),
+    currentPressure: asString(raw.current_pressure),
   };
-  // Optional charId field (engine schema add tracked separately — degraded mode if absent).
-  const cid = raw.charId ?? raw.char_id;
-  if (typeof cid === "string") out.charId = cid;
-  else if (Array.isArray(cid) && cid.every((x) => typeof x === "string")) out.charId = cid as string[];
+  if (ownerId) out.charId = ownerId;
   return out;
 }
 
@@ -433,17 +462,13 @@ function projectWorld(raw: Bag): WorldEntity {
   };
 }
 
-/** Resolve constraintIds for each char from the constraints array (uses explicit charId only). */
+/** Resolve constraintIds for each char from the constraints array using engine's owner_id linkage. */
 function attachConstraintIds(chars: CharEntity[], constraints: ConstraintEntity[]): void {
-  const charIds = new Set(chars.map((c) => c.id));
+  const byId = new Map(chars.map((c) => [c.id, c]));
   for (const cs of constraints) {
-    const cid = cs.charId;
-    const targets = typeof cid === "string" ? [cid] : Array.isArray(cid) ? cid : [];
-    for (const t of targets) {
-      if (!charIds.has(t)) continue;
-      const char = chars.find((c) => c.id === t);
-      if (char) char.constraintIds.push(cs.id);
-    }
+    if (!cs.charId) continue;
+    const char = byId.get(cs.charId);
+    if (char) char.constraintIds.push(cs.id);
   }
 }
 
@@ -509,14 +534,6 @@ Modify `packages/server/src/routes/gravity.routes.ts`. At the top, add imports n
 ```ts
 import { computeState } from "../services/gravity/engine/state-compute.js";
 import { projectEntities } from "../services/gravity/engine/entities-projection.js";
-import { ledgerStore as makeLedgerStore } from "../services/gravity/engine/ledger-store.js";
-```
-
-Wait — verify the actual export names. Open `packages/server/src/services/gravity/engine/ledger-store.ts` and `state-compute.ts` first; the `ledger-store` export is `createLedgerStore`. Use this exact import:
-
-```ts
-import { computeState } from "../services/gravity/engine/state-compute.js";
-import { projectEntities } from "../services/gravity/engine/entities-projection.js";
 import { createLedgerStore } from "../services/gravity/engine/ledger-store.js";
 ```
 
@@ -570,30 +587,20 @@ Replace with:
 
 ```ts
 // Build entities from the same transaction set that produced this cache row's stateView.
-// The cache row may be the accepted cache (normal path) OR the most-recent staged cache
-// (fallback path when acceptedMessageId is null — e.g. turn 1 before acceptance runs).
-// A global getAcceptedTransactions() would diverge from the staged stateView on that path,
-// so we bound the query to transactions at or before cache.messageId and include staged
-// rows only for the exact swipe that this cache row describes.
-const { lte: lteOp, or: orOp } = await import("drizzle-orm");
-const boundedTxns = await app.db
-  .select()
-  .from(gravityTransactions)
-  .where(
-    and(
-      eq(gravityTransactions.chatId, chatId),
-      lteOp(gravityTransactions.messageId, cache.messageId),
-      orOp(
-        eq(gravityTransactions.accepted, 1),
-        and(
-          eq(gravityTransactions.messageId, cache.messageId),
-          eq(gravityTransactions.swipeIndex, cache.swipeIndex),
-        ),
-      ),
-    ),
-  )
-  .orderBy(gravityTransactions.txSeq);
-const computedState = computeState(null, boundedTxns);
+// `getAcceptedTransactions` returns RawTransaction[] (deserialized from payload JSON, ordered
+// by `seq`) so we can feed it directly to computeState. When acceptedMessageId is null the
+// cache row is staged (e.g. turn 1 before acceptance), so we union accepted + this swipe's
+// staged transactions to reproduce the staged stateView.
+const ledgerStore = createLedgerStore(app.db);
+let txns;
+if (chatState?.acceptedMessageId) {
+  txns = await ledgerStore.getAcceptedTransactions(chatId);
+} else {
+  const accepted = await ledgerStore.getAcceptedTransactions(chatId);
+  const staged = await ledgerStore.getSwipeTransactions(chatId, cache.messageId, cache.swipeIndex);
+  txns = [...accepted, ...staged];
+}
+const computedState = computeState(null, txns);
 const entities = projectEntities(computedState);
 
 return reply.send({
@@ -606,7 +613,7 @@ return reply.send({
 });
 ```
 
-> **Note on imports:** `lte`, `or` are from `drizzle-orm` — add them to the existing import line alongside `eq`, `and`, `desc`. The dynamic `import()` above is illustrative; merge into the static import at the top of the file. `gravityTransactions` is already imported. Verify `cache.swipeIndex` is the correct column name against the schema before running `pnpm check`.
+> **Why this is correct:** `getAcceptedTransactions` already deserializes `payload` into `RawTransaction[]` and orders by the real `seq` column (see `ledger-store.ts:18-25`). We do not need a custom DB query, and we do not use `messageId` as a chronological boundary (it is an opaque text id, not sortable by turn). The accepted-vs-staged branch handles the case where the route fell back to a staged cache row at the top of this handler.
 
 - [ ] **Step 2: Run `pnpm check`**
 
@@ -896,6 +903,8 @@ interface GravityState {
   totalCommitted: number;
   /** Running total of rejected transactions across the full session. */
   totalRejected: number;
+  /** Monotonic counter — increments on every director run. Uncapped, unlike history.length. */
+  runCounter: number;
   /** Archive version fingerprint from the last inject run — drives state-tab refetch. */
   archiveVersion: string | null;
 
@@ -908,6 +917,7 @@ export const useGravityStore = create<GravityState>((set) => ({
   history: [],
   totalCommitted: 0,
   totalRejected: 0,
+  runCounter: 0,
   archiveVersion: null,
 
   addDirectorRun: (run) =>
@@ -918,12 +928,14 @@ export const useGravityStore = create<GravityState>((set) => ({
         history: trimmed,
         totalCommitted: s.totalCommitted + run.committed,
         totalRejected: s.totalRejected + run.rejected,
+        runCounter: s.runCounter + 1,
       };
     }),
 
   setArchiveVersion: (archiveVersion) => set({ archiveVersion }),
 
-  reset: () => set({ history: [], totalCommitted: 0, totalRejected: 0, archiveVersion: null }),
+  reset: () =>
+    set({ history: [], totalCommitted: 0, totalRejected: 0, runCounter: 0, archiveVersion: null }),
 }));
 ```
 
@@ -1182,11 +1194,12 @@ Create `packages/client/src/hooks/use-gravity-state.ts`:
 // ──────────────────────────────────────────────
 // Hook: Gravity Ledger state fetcher (TanStack Query).
 // Cache key includes BOTH archiveVersion (bumped by the inject agent) AND
-// directorRunCount (incremented by every director run via addDirectorRun).
+// runCounter (incremented by every director run via addDirectorRun).
 // archiveVersion alone is insufficient: the inject agent runs at the START of
 // the next user turn, so the State tab would stay stale for the entire turn
-// after the director commits. Including directorRunCount ensures the State tab
-// refetches immediately after each director run completes.
+// after the director commits. Including runCounter ensures the State tab
+// refetches immediately after each director run completes. runCounter is
+// monotonic and uncapped, unlike history.length which the store trims to 50.
 // ──────────────────────────────────────────────
 import { useQuery } from "@tanstack/react-query";
 import type { GravityStateResponse } from "@marinara-engine/shared";
@@ -1194,15 +1207,16 @@ import { api } from "../lib/api-client";
 import { useGravityStore } from "../stores/gravity.store";
 
 const gravityStateKeys = {
-  state: (chatId: string, archiveVersion: string | null, directorRunCount: number) =>
-    ["gravity-state", chatId, archiveVersion ?? "initial", directorRunCount] as const,
+  state: (chatId: string, archiveVersion: string | null, runCounter: number) =>
+    ["gravity-state", chatId, archiveVersion ?? "initial", runCounter] as const,
 };
 
 export function useGravityState(chatId: string | null) {
   const archiveVersion = useGravityStore((s) => s.archiveVersion);
-  const directorRunCount = useGravityStore((s) => s.history.length);
+  // runCounter (not history.length) — history is capped at 50; runCounter is monotonic and uncapped.
+  const runCounter = useGravityStore((s) => s.runCounter);
   return useQuery({
-    queryKey: gravityStateKeys.state(chatId ?? "", archiveVersion, directorRunCount),
+    queryKey: gravityStateKeys.state(chatId ?? "", archiveVersion, runCounter),
     queryFn: () => api.get<GravityStateResponse>(`/gravity/state/${chatId}`),
     enabled: Boolean(chatId),
     staleTime: 60_000,
@@ -1985,10 +1999,10 @@ function CharacterDetailModal({
               </div>
               <ul className="mt-1 space-y-0.5">
                 {linkedConstraints.map((cs) => (
-                  <li key={cs.id} className="flex justify-between">
-                    <span>{cs.id}</span>
-                    {cs.status ? (
-                      <span className="font-mono text-[0.5625rem] opacity-60">[{cs.status}]</span>
+                  <li key={cs.id} className="flex items-center justify-between gap-2">
+                    <span className="truncate">{cs.name ?? cs.id}</span>
+                    {cs.integrity ? (
+                      <span className="font-mono text-[0.5625rem] opacity-60 shrink-0">[{cs.integrity}]</span>
                     ) : null}
                   </li>
                 ))}
@@ -2167,14 +2181,16 @@ Below the PC section in `StructuredStateView`, add the following blocks in order
       {data.entities.collisions.map((c) => (
         <li key={c.id} className="text-[0.6875rem]">
           <div className="flex items-center gap-2">
-            <span className="font-mono">{c.id}</span>
+            <span className="font-medium truncate">{c.name ?? c.id}</span>
             <span className="font-mono text-[0.5625rem] text-[var(--muted-foreground)]">[{c.status}]</span>
-            {c.reach ? <span className="font-mono text-[0.5625rem] opacity-60">{c.reach}</span> : null}
-            {typeof c.remaining === "number" ? (
-              <span className="ml-auto tabular-nums opacity-60">{c.remaining} remaining</span>
+            {c.distanceCategory ? (
+              <span className="font-mono text-[0.5625rem] opacity-60">{c.distanceCategory}</span>
+            ) : null}
+            {typeof c.distance === "number" ? (
+              <span className="ml-auto font-mono text-[0.5625rem] tabular-nums opacity-60">dist:{c.distance}</span>
             ) : null}
           </div>
-          {c.description ? <div className="ml-2 italic opacity-70">"{c.description}"</div> : null}
+          <div className="ml-2 font-mono text-[0.5625rem] opacity-50">{c.id}</div>
         </li>
       ))}
     </ul>
@@ -2187,9 +2203,14 @@ Below the PC section in `StructuredStateView`, add the following blocks in order
   ) : (
     <ul className="space-y-1 text-[0.6875rem]">
       {data.entities.pressures.map((p) => (
-        <li key={p.id} className="flex gap-2">
-          <span className="font-mono shrink-0">{p.id}</span>
-          {p.description ? <span className="opacity-70">"{p.description}"</span> : null}
+        <li key={p.id} className="flex flex-wrap items-center gap-2">
+          <span className="font-medium">{p.name ?? p.id}</span>
+          {p.source ? (
+            <span className="font-mono text-[0.5625rem] opacity-60">[{p.source}]</span>
+          ) : null}
+          {p.relatedTo && p.relatedTo.length > 0 ? (
+            <span className="font-mono text-[0.5625rem] opacity-50">→ {p.relatedTo.join(", ")}</span>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -2200,12 +2221,22 @@ Below the PC section in `StructuredStateView`, add the following blocks in order
   {data.entities.constraints.length === 0 ? (
     <div className="text-[0.625rem] text-[var(--muted-foreground)]/50">—</div>
   ) : (
-    <ul className="space-y-1 text-[0.6875rem]">
+    <ul className="space-y-1.5 text-[0.6875rem]">
       {data.entities.constraints.map((c) => (
-        <li key={c.id} className="flex gap-2">
-          <span className="font-mono shrink-0">{c.id}</span>
-          {c.status ? <span className="font-mono text-[0.5625rem] opacity-60">[{c.status}]</span> : null}
-          {c.description ? <span className="opacity-70">"{c.description}"</span> : null}
+        <li key={c.id}>
+          <div className="flex items-center gap-2">
+            <span className="font-medium truncate">{c.name ?? c.id}</span>
+            {c.integrity ? (
+              <span className="font-mono text-[0.5625rem] opacity-60">[{c.integrity}]</span>
+            ) : null}
+            {c.ownerId ? (
+              <span className="font-mono text-[0.5625rem] opacity-60">@{c.ownerId}</span>
+            ) : null}
+          </div>
+          {c.profile ? <div className="ml-2 italic opacity-70">{c.profile}</div> : null}
+          {c.currentPressure ? (
+            <div className="ml-2 text-[0.5625rem] opacity-60">Pressure: {c.currentPressure}</div>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -2282,7 +2313,7 @@ git commit -m "feat(client): collisions/pressures/constraints/places/factions/wo
 - [ ] Raw toggle switches between structured view and `<pre>` text dump
 - [ ] Empty (`initialized: false`) chat shows the "send a message to begin" hint
 - [ ] Loading skeleton appears briefly on initial open
-- [ ] Constraints linked to a character appear in the modal's Constraints subsection (requires engine `charId` field — degraded mode shows nothing if absent)
+- [ ] Constraints linked to a character (via engine's `owner_id` field) appear in the modal's Constraints subsection with the correct integrity tier
 
 ---
 
@@ -2302,8 +2333,8 @@ Replace the existing `function TurnsTab() { ... }` placeholder in `GravityLedger
 ```tsx
 function TurnsTab() {
   const history = useGravityStore((s) => s.history);
-  const totalRuns = useGravityStore((s) => s.history.length); // for visible runs
-  // The store caps at 50; if you ever needed total, plumb it via store separately.
+  const runCounter = useGravityStore((s) => s.runCounter);
+  const truncated = runCounter > history.length;
 
   if (history.length === 0) {
     return (
@@ -2322,9 +2353,9 @@ function TurnsTab() {
   const reversed = [...history].reverse();
   return (
     <div role="tabpanel" id="gravity-tabpanel-turns" aria-labelledby="gravity-tab-turns" className="divide-y divide-[var(--border)]/50">
-      {totalRuns === 50 ? (
+      {truncated ? (
         <div className="px-4 py-2 text-[0.625rem] text-[var(--muted-foreground)]/60 italic">
-          Showing last 50 runs (older runs dropped from session memory).
+          Showing last {history.length} of {runCounter} runs (older runs dropped from session memory).
         </div>
       ) : null}
       {reversed.map((run) => (
@@ -2635,7 +2666,7 @@ This UI work doesn't bump versions; skip unless you're preparing a release.
 
 **Spec coverage:** Drawer shell ✓, two-row header ✓, mode badge w/ projection ✓, session strip ✓, tab bar ✓, State tab w/ collapsibles ✓, character rows + modal ✓, PC ✓, other entity sections ✓, Raw toggle ✓, empty/loading/error states ✓, Turns tab ✓, committed/rejected dropdowns w/ op codes ✓, director notes w/ clamp ✓, confidence dot w/ caveat ✓, export ✓, store history+cap+reset ✓, agent passthrough ✓, accessibility ✓.
 
-**Out of spec scope (deferred, separate plans):** engine `charId` schema add (constraints subsection in modal renders empty until that lands); engine mode-enum consolidation (UI projection layer absorbs current 5-mode shape today); PC-vs-Char schema unification (UI projection makes them render uniformly without engine change).
+**Out of spec scope (deferred, separate plans):** engine mode-enum consolidation (UI projection layer absorbs current 5-mode shape today); PC-vs-Char schema unification (UI projection makes them render uniformly without engine change). Note: the spec called out a future `charId` engine schema add, but the engine *already* has `owner_id` on constraints linking them to characters — no separate engine change is needed; the projection in this plan reads `owner_id` directly.
 
 **Known caveats:**
 - `RoleplayHUD.tsx` had threading complexity due to multiple call sites — verify all `<RoleplayHUD ... />` usages received `onOpenGravityDrawer` correctly; if `pnpm check` complains about missing prop, add it where missing.

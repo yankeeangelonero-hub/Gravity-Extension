@@ -646,6 +646,12 @@ const exploreProfile = Object.freeze({
     },
 
     isResolved(runtime, entity, state, committedTxns) {
+        // Dual-check is intentional. The engine may call this in a turn where
+        // the LLM emits both `TR status RESOLVED` and `D explore` in the same
+        // ---LEDGER--- block. Depending on ordering, `entity` may already be
+        // gone from state but the TR still shows up in `committedTxns`.
+        // Checking both sides prevents the runtime from failing to unlock on
+        // that race. Keep both branches.
         const resolvedInState = String(entity?.status || '').toUpperCase() === 'RESOLVED';
         const resolvedInTx = (committedTxns || []).some(tx => {
             if (tx.e !== runtime.entity_type || tx.id !== runtime.entity_id) return false;
@@ -1442,9 +1448,9 @@ At `ui-panel.js:390-412`, the combat in-panel select and custom-DC input handler
     });
 ```
 
-- [ ] **Step 9: Add a `syncExploreDifficultyControls()` call at panel init**
+- [ ] **Step 9: Add a `syncExploreDifficultyControls()` call inside `renderAllSections`**
 
-At `ui-panel.js:447`, immediately after `syncCombatDifficultyControls();`, add:
+At `ui-panel.js:447`, immediately after `syncCombatDifficultyControls();`, add the explore sync. This placement matters: line 447 sits *inside* `renderAllSections()` (just before its closing `}` at line 448), so the sync fires on every panel re-render — not only at initial creation. Mirroring the combat pattern keeps the explore difficulty select and custom-DC inputs in lockstep with any state change that triggers a re-render.
 
 ```js
     syncExploreDifficultyControls();
@@ -1684,7 +1690,15 @@ On TRANSFORM: do not frame it as "the PC finds nothing." Frame it as "the PC fin
 Close each clash with a concrete forward lead (a clickable option row) or a clean exit beat if the location is tapped out.
 ```
 
-Match the order/position/insertion-mode fields of the corresponding combat entry exactly, adjusting only the `key` array and the body text.
+Match the order/position/insertion-mode fields of the corresponding combat entry exactly, adjusting only the `key` array and the body text. Specifically, use these values (verified from the combat entries — uid:3 at order:100, uid:5 at order:110, uid:11 at order:120):
+
+| New entry | Match against combat entry | `order` | `position` | `disable` |
+|---|---|---|---|---|
+| `gravity_mode_explore_core` | `gravity_mode_combat_core` (uid:3) | **100** | 0 | false |
+| `gravity_mode_explore_optional_examples` | `gravity_mode_combat_optional_examples` (uid:5) | **110** | 0 | **true** |
+| `gravity_prose_explore` | `gravity_prose_combat` (uid:11) | **120** | 0 | false |
+
+The ascending 100 → 110 → 120 ordering is load-bearing: core doctrine must render before optional examples, which must render before prose guidance, so the prompt stacks coherently when all three fire together. Do not pick a different triple — keep the existing combat pattern.
 
 - [ ] **Step 3: Verify JSON is valid**
 
@@ -1793,7 +1807,7 @@ For a profile called `foo`:
 
 1. **`challenge-profile-foo.js`** — write the profile module (see combat and explore as references).
 2. **`challenge-profiles.js`** — import and add to `PROFILES`.
-3. **`state-machine.js`** — if `foo` has a state machine:
+3. **`state-machine.js`** — **required.** Every challenge profile entity type must register a state machine, even if it only has two states (`ACTIVE → RESOLVED` like explore). Without registration, `validateTransition()` (called from `index.js:1514` at commit time) silently passes every `TR` through, so illegal transitions land in the ledger and corrupt `_currentState` on replay. If `foo`'s lifecycle genuinely only needs one state, still register `FOO_STATES = ['ACTIVE']` with `FOO_TRANSITIONS = { ACTIVE: {} }` so `getStateMachineField` resolves and any stray `TR foo:<id> status -> X` is rejected.
    - Add `FOO_STATES` and `FOO_TRANSITIONS`.
    - Register in `validateTransition`'s `machines` literal.
    - Register in `getValidNextStates`'s `machines` literal.

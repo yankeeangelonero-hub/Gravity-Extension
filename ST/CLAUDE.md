@@ -21,7 +21,7 @@ There is no linter and no CI. The relationship module has a test harness at `scr
 
 ## Repo Position
 
-This file lives at `ST/CLAUDE.md`. The repository root has its own `CLAUDE.md` that maps the wider repo (sibling areas: `Marinara Engine/` reference clone, `docs/superpowers/` specs and plans, root preset assets). All extension code lives under `ST/`; paths in this file are relative to `ST/` unless absolute.
+This file lives at `ST/CLAUDE.md`. The repository root has its own `CLAUDE.md` that maps the wider repo (sibling areas: `Marinara Engine/Marinara-Engine/` active fork on branch `gravity-integration`, `docs/superpowers/` specs and plans, root preset assets). All extension code lives under `ST/`; paths in this file are relative to `ST/` unless absolute.
 
 ## Project Docs
 
