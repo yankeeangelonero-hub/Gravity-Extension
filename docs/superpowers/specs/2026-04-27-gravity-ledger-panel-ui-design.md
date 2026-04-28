@@ -3,6 +3,10 @@
 ## Date
 `2026-04-27`
 
+## Status
+**Implemented** — 2026-04-28  
+Implementation plan: [`2026-04-28-gravity-ledger-panel-ui.md`](../plans/2026-04-28-gravity-ledger-panel-ui.md)
+
 ## Summary
 
 Redesign the Gravity Ledger HUD panel from a compact WidgetPopover into a full-height Side Drawer with two tabs (State · Turns) that let the user verify Gravity is actively tracking state and assess the quality of the director model's ledgering turn by turn.
