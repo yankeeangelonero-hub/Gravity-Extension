@@ -101,7 +101,22 @@ Related: `2026-04-26-gravity-marinara-embedded-design.md` (the architectural spe
 
 **Estimated scope:** Small-to-medium. Pure additive. ~1 week or a single sprint of work.
 
-## 5. Other deferred items (already known)
+## 5. Setup should use the main chat connection, not the director (agent) connection
+
+**The gap:** `gravity.routes.ts` POST `/setup/:chatId` currently resolves the LLM provider via the gravity-ledger-director agent's connection chain (per-agent connectionId → default-for-agents → chat.connectionId). In practice users configure agent connections to **cheaper/faster** models (Haiku, GPT-4o-mini, Flash) because agents fire on every turn; the **chat connection** is typically a stronger model (Opus, GPT-4, Sonnet) reserved for prose generation. Setup needs to seed the entire opening ledger in one shot — that's a high-stakes, complex-reasoning operation more like prose generation than per-turn agent extraction.
+
+**Why this matters:** Setup runs once per chat. Cost isn't the constraint; quality is. The 2026-04-28 smoke confirmed: with a weaker agent model, the director skipped PC initialization, used the wrong field name on constraints (`character` vs `owner_id`), missed knowledge_asymmetry MS ops entirely, and generated full-name slugs instead of first-name slugs. A stronger model is more likely to follow the now-rewritten prompt's structural requirements first time.
+
+**What to change:**
+- `gravity.routes.ts` setup route: invert the resolution chain. Try `chat.connectionId` first; fall back to per-agent connectionId only if the chat has none configured.
+- Or: take the chat connection unconditionally for setup (simplest; matches the user's stated intent).
+- The director agent config's `promptTemplate` override should still be honored — only the connection/model resolution changes.
+
+**Scope:** Tiny — ~10 lines in the route's connection-resolution block, one commit. Could ship alongside or before the regular-director guardrails (#2).
+
+**Related:** `2026-04-28-gravity-marinara-setup-design.md` §4.3 doesn't pin down the connection source; this clarifies that decision.
+
+## 6. Other deferred items (already known)
 
 These were called out in `2026-04-26-gravity-marinara-embedded-design.md` and aren't included above to avoid duplication:
 
@@ -114,9 +129,10 @@ These were called out in `2026-04-26-gravity-marinara-embedded-design.md` and ar
 
 If forced to pick a sequence:
 
-1. **Director over-emission guardrails (#2)** first — small commit, immediately reduces bundle bloat, doesn't block anything else.
-2. **Mode controls (#3)** next — unlocks the gameplay loop (advance/combat/intimacy turns); higher impact than #1 or #4 once the user actually plays.
-3. **Ledger maintenance (#1)** after — once the user is putting more turns through the system, the bloat becomes acute and maintenance is the obvious next investment.
-4. **Divination (#4)** as a discrete creative-tool addition whenever it's wanted; doesn't block other work.
+1. **Setup uses main connection (#5)** first — tiny route change, materially improves setup quality immediately, no design work required.
+2. **Director over-emission guardrails (#2)** next — small additive prompt commit; reduces bundle bloat going forward.
+3. **Mode controls (#3)** — unlocks the gameplay loop (advance/combat/intimacy turns); higher impact than #1 or #4 once the user actually plays.
+4. **Ledger maintenance (#1)** — once the user is putting more turns through the system, the bloat becomes acute and maintenance is the obvious next investment.
+5. **Divination (#4)** — discrete creative-tool addition whenever it's wanted; doesn't block other work.
 
-Each of these is its own spec → plan → implementation cycle, like the setup turn was.
+Each of #1-#4 is its own spec → plan → implementation cycle, like the setup turn was. #5 is a single-commit fix.
