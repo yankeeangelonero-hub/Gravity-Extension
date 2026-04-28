@@ -116,7 +116,35 @@ Related: `2026-04-26-gravity-marinara-embedded-design.md` (the architectural spe
 
 **Related:** `2026-04-28-gravity-marinara-setup-design.md` §4.3 doesn't pin down the connection source; this clarifies that decision.
 
-## 6. Other deferred items (already known)
+## 6. Collision-system engine of escalation (the heart of Gravity)
+
+**The gap:** The schema for collisions is wired (entities, projection, state-machine transitions), and `engine-tick.ts` ports ST's tick logic — but **nothing drives it through the play loop**. A user setting up a chat gets collisions seeded into state and they sit there frozen. You can't sense the engine because the engine isn't running.
+
+Sub-pieces:
+
+- **6a. Tick never fires.** `engineTick` is gated on `mode === "advance"`. Setup sets `regular`. No UI to flip into `advance` (subset of #3 mode controls). Distances are frozen at director-set values forever.
+
+- **6b. Arrival decision gate not consumed.** When tick fires and a collision hits distance 0, `engineTick` pushes the id into `newArrivalIds`. director-agent.ts forwards it on the AgentResult. **Nothing in inject-agent.ts reads it back to fire the ON-SCREEN / OFF-SCREEN (REFRAME or DISSOLVE) / IMPLODE single-turn sanity-check.** ST tracks fired arrivals in `_firedCollisionArrivals` Set and injects via `_arrival` slot. Not ported.
+
+- **6c. Foreshadow nudge missing.** ST's `_foreshadow` slot ("approaching/imminent/converging collision foreshadow nudge") fires building-pressure cues as collisions close in. Not ported.
+
+- **6d. Resolved/crashed collisions clutter state-view.** No filter in state-view.ts. (Subset of #1 maintenance.)
+
+- **6e. Combat collisions are a distinct subtype.** Power assessments, advantages, wounds, distance-in-combat all missing. (Subset of #3 mode controls.)
+
+**Why this matters:** Gravity is named for collisions. The pitch is "narrative state machine that tracks pressures and forces them to converge." Without the engine of escalation, the system stores collisions but never makes them happen — collisions become free-form prose tags, indistinguishable from any other tracker. The whole loop loses its teeth.
+
+**What to build (consolidated):**
+- Wire `newArrivalIds` from director-agent's AgentResult into a one-shot inject the next turn (mirrors ST's `_arrival` slot). Track fired arrivals in `gravity_chat_state` (single column or JSON array) so the gate fires once per arrival.
+- Port the foreshadow check (read distances from state, inject `_foreshadow` text when collisions are SHORT/MEDIUM and ACTIVE).
+- State-view filter for `RESOLVED` and `CRASHED` collisions — keep them in transactions for replay; hide from prompt.
+- Mode controls (#3) so users can actually run advance turns.
+
+**Estimated scope:** Medium-large. Arrival gate + foreshadow are 1 sub-spec; state-view filter overlaps with #1 maintenance; full combat-collision subtype is its own thing. Probably 2-3 weeks across the bits.
+
+**Dependencies:** Mostly orthogonal to #1-#5. Arrival gate needs a `firedArrivalIds` field on `gravity_chat_state` (small migration) and inject-agent rewrite to consume `newArrivalIds`. Foreshadow is purely additive in the inject agent. Both can ship before #1 / #3 are complete.
+
+## 7. Other deferred items (already known)
 
 These were called out in `2026-04-26-gravity-marinara-embedded-design.md` and aren't included above to avoid duplication:
 
@@ -131,8 +159,11 @@ If forced to pick a sequence:
 
 1. **Setup uses main connection (#5)** first — tiny route change, materially improves setup quality immediately, no design work required.
 2. **Director over-emission guardrails (#2)** next — small additive prompt commit; reduces bundle bloat going forward.
-3. **Mode controls (#3)** — unlocks the gameplay loop (advance/combat/intimacy turns); higher impact than #1 or #4 once the user actually plays.
-4. **Ledger maintenance (#1)** — once the user is putting more turns through the system, the bloat becomes acute and maintenance is the obvious next investment.
-5. **Divination (#4)** — discrete creative-tool addition whenever it's wanted; doesn't block other work.
+3. **Collision engine of escalation (#6)** — Gravity is named after collisions; without arrival gate + foreshadow + tick it's a tracker, not an engine. Highest narrative-impact gap.
+4. **Mode controls (#3)** — unlocks the gameplay loop (advance/combat/intimacy turns); also makes #6's tick reachable.
+5. **Ledger maintenance (#1)** — once the user is putting more turns through the system, the bloat becomes acute and maintenance is the obvious next investment.
+6. **Divination (#4)** — discrete creative-tool addition whenever it's wanted; doesn't block other work.
 
-Each of #1-#4 is its own spec → plan → implementation cycle, like the setup turn was. #5 is a single-commit fix.
+Note: #3 and #6 are intertwined. Arrival gate + foreshadow (#6) can ship without #3 (they're inject-agent additions independent of mode UI). But the tick part of #6 is unreachable without #3's advance-mode button. Practical sequence: ship arrival gate + foreshadow first, then mode controls, which immediately makes the tick mechanism reachable end-to-end.
+
+Each of #1-#4 and #6 is its own spec → plan → implementation cycle, like the setup turn was. #5 is a single-commit fix.
