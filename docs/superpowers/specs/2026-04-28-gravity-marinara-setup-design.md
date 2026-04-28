@@ -71,8 +71,9 @@ Browser                 /api/gravity/setup           director (LLM)        DB
    │                          │ 2. Build setup payload     │                │
    │                          │    (form + card + persona) │                │
    │                          │                            │                │
-   │                          │ 3. callDirector(setup,     │                │
-   │                          │    payload, signal)        │                │
+   │                          │ 3. callSetupDirector(      │                │
+   │                          │    {systemPrompt,          │                │
+   │                          │     userPrompt, signal})   │                │
    │                          │ ─────────────────────────► │                │
    │                          │ ◄───  { transactions } ─── │                │
    │                          │                            │                │
@@ -111,16 +112,22 @@ The setup turn touches a small, mostly-additive surface. Listed in dependency or
 
 ```
 packages/server/src/services/gravity/agents/setup-agent.ts
-  — runGravitySetup({ chatId, answers, agentConfig, signal })
+  — runGravitySetup({ chatId, answers, agentConfig, setupContext, signal })
   — orchestrates: guard, payload build, director call, stage, cache, chat-state upsert
   — single SQL transaction for steps 4-7 of the sequence diagram
   — returns { success, committed, rejected, errors, durationMs, model }
+  — setupContext is the assembled context (see §4.3); the route assembles it
+    before calling runGravitySetup so this function stays storage-free
 
 packages/server/src/services/gravity/director/setup-input.ts
-  — buildSetupPayload(answers, agentContext)
-  — same AgentContext fields as the regular director: characters, user, scenario,
-    activatedLorebookEntries
+  — buildSetupPayload(answers, setupContext): { systemPrompt, userPrompt }
   — exports SetupAnswers type (mirrors ST setup-wizard form fields)
+  — exports SetupContext type: { user: PersonaSnapshot,
+                                 principal: CharacterSnapshot,
+                                 scenario: string | null,
+                                 activatedLorebookEntries: LorebookEntrySnapshot[] }
+  — renders the setup user prompt with form answers + context, returns it ready
+    for callSetupDirector
 
 packages/client/src/components/chat/GravitySetupModal.tsx
   — Marinara-styled modal (Tailwind; mirrors ChatGalleryDrawer's existing modal pattern)
@@ -130,7 +137,7 @@ packages/client/src/components/chat/GravitySetupModal.tsx
 
 packages/client/src/hooks/use-gravity-setup.ts
   — TanStack mutation hook: POST /api/gravity/setup
-  — on success: programmatic send of "OOC: Begin the opening scene." via existing send hook
+  — on success: two-step "send and generate" sequence (see §4.4)
   — on 409/422/5xx: surface error in modal, preserve form state for retry
 ```
 
@@ -149,12 +156,24 @@ packages/server/src/routes/gravity.routes.ts
     422 validator rejected all transactions, 502 LLM call failed
 
 packages/server/src/services/gravity/engine/ledger-store.ts
-  — stageTransactions(): accept an optional acceptedImmediately flag
-  — when true, INSERT rows with accepted=1
-  — only setup-agent.ts uses this; regular director continues to insert accepted=0
+  — stageTransactions(): accept an optional acceptedImmediately flag (default false)
+  — when true, INSERT rows with accepted=1; that is the only behavior change
+  — the existing nextTxSeq upsert on gravity_chat_state stays unchanged
+  — only setup-agent.ts uses acceptedImmediately=true; regular director continues
+    to insert accepted=0
+
+packages/server/src/services/gravity/director/client.ts
+  — add callSetupDirector({ systemPrompt, userPrompt, provider, model, signal })
+  — builds its own messages array (system + single user); does NOT use
+    DirectorInput / renderDirectorUserPrompt
+  — reuses the existing tolerant JSON extractor and thinking-block stripping
+    from callDirector (factor those into shared helpers if not already)
+  — returns { transactions: RawTransaction[], model, durationMs }
 
 packages/server/src/services/gravity/engine/state-cache.ts
   — cache key tolerates "__setup__" sentinel for messageId
+  — upsertForSwipe is called with mode='regular' on setup commit; buildNudge
+    on a fresh state will return its empty/default; harmless
   — no schema change; the column is text and accepts any string
 
 packages/client/src/components/chat/GravityLedgerDrawer.tsx
@@ -168,7 +187,61 @@ packages/client/src/hooks/use-generate.ts (or the existing send hook)
   — no behavior change for normal sends
 ```
 
-### 4.3 Files NOT modified
+### 4.3 Server-side context assembly (where AgentContext fields come from)
+
+The setup route runs out-of-band; the generate pipeline never assembled an `AgentContext` for this request. The route assembles a minimal `SetupContext` itself using the same storage helpers `generate.routes.ts` uses:
+
+```ts
+// In gravity.routes.ts POST /api/gravity/setup handler:
+const chats = createChatsStorage(db);
+const characters = createCharactersStorage(db);
+const personas = createPersonasStorage(db);
+const lorebooks = createLorebooksStorage(db);
+
+const chat = await chats.getById(chatId);
+if (!chat) return reply.code(404).send(...);
+
+const principalCard = await characters.getById(chat.characterId);
+const userPersona = chat.personaId ? await personas.getById(chat.personaId) : defaultPersona;
+
+// Greeting-time lorebook activation: run with empty chat history,
+// just the character card and persona; surface any constant or first-message-keyed entries.
+const activatedLorebookEntries = await processLorebooks({
+  chatId, character: principalCard, persona: userPersona, recentMessages: [],
+});
+
+const setupContext: SetupContext = {
+  user: { name: userPersona.name, description: userPersona.description },
+  principal: {
+    name: principalCard.name,
+    description: principalCard.description,
+    scenario: principalCard.scenario,
+    personality: principalCard.personality,
+  },
+  scenario: chat.scenario ?? principalCard.scenario,
+  activatedLorebookEntries: activatedLorebookEntries.map(toSnapshot),
+};
+```
+
+The exact storage builder names and `processLorebooks` signature follow Marinara's existing pattern; the implementation plan verifies them against the live source. The contract here is: **the route, not `setup-agent`, owns context assembly**, so `setup-agent` stays free of `db`-storage imports and is testable with synthetic `SetupContext`.
+
+### 4.4 Client-side programmatic send sequence
+
+After a successful POST to `/api/gravity/setup`, `use-gravity-setup` fires the synthetic opening turn through the existing two-step API:
+
+```ts
+// inside use-gravity-setup.ts onSuccess
+const userMsg = await createMessage.mutateAsync({
+  chatId,
+  role: "user",
+  content: "OOC: Begin the opening scene.",
+});
+await generate({ chatId, userMessageId: userMsg.id });
+```
+
+This mirrors what `ChatInput.tsx` does on submit. The hook depends on the existing `useCreateMessage` and `useGenerate` (or whatever the current generate hook is named) — no new "send and generate" abstraction is required for phase 1. If `ChatInput.tsx` later extracts a reusable `useSendAndGenerate` helper, the setup hook should switch to that to stay aligned.
+
+### 4.5 Files NOT modified
 
 - `packages/server/src/routes/generate.routes.ts` — setup runs through its own route, never touches the generation pipeline. The four edits described in the embedded spec §3.2 (acceptance hook, filter, inject, director) remain the only edits there.
 - `packages/server/src/services/agents/agent-executor.ts` — setup is not an `executeAgent`-style call; it's invoked directly from the route, the same way the regular director is.
@@ -262,22 +335,16 @@ The 200-with-partial-rejection case is intentional: the regular director already
 
 No correction loop on setup. Corrections are a regular-turn ergonomic where the next director call retries; for a one-shot opening, retrying the whole setup is simpler and clearer.
 
-## 6.1 Acceptance-hook interaction with the setup sentinel
+## 6.1 Acceptance-hook behavior post-setup
 
-After setup commits, `gravity_chat_state` has:
-- `acceptedMessageId = '__setup__'`
-- `acceptedSwipeIndex = 0`
-- `userTurnsSinceLastDirector = 0`
+The acceptance hook needs no sentinel-specific logic. Its `UPDATE gravity_transactions SET accepted=1` filters by the *new* assistant `messageId` being committed (the just-accepted message), not by the prior `acceptedMessageId` from `gravity_chat_state`. The setup-sentinel rows (`messageId='__setup__'`) are never matched by that UPDATE because the new assistant message has a different id.
 
-When the synthetic "OOC: Begin the opening scene." user message arrives, the standard acceptance hook (`commitAcceptedGravityTurn` at `generate.routes.ts:~334`) fires because it's a real new user turn. The hook tries to flip the prior assistant message's transactions to `accepted=1` — but there is no prior assistant message; the only "prior" record is the setup batch under sentinel `messageId='__setup__'`, which is already `accepted=1`.
+Concretely:
+- After setup: `acceptedMessageId='__setup__'`, sentinel rows already at `accepted=1`, `userTurnsSinceLastDirector=0`.
+- Synthetic user message → standard generation runs → assistant produces opening scene → post-processing director stages new transactions at `(messageId=<asst1>, swipeIndex=<chosen>)` with `accepted=0`.
+- On user turn 2: acceptance hook fires, UPDATEs the `<asst1>` rows to `accepted=1` (sentinel rows untouched), overwrites the pointer to `(<asst1>, <chosen>)`, increments `userTurnsSinceLastDirector` to 1.
 
-**Required hook behavior** (already captured in the helper signature, but the implementation must respect it): if `acceptedMessageId` is the setup sentinel `'__setup__'`, the hook still increments `userTurnsSinceLastDirector` (so the runInterval gate works correctly) but skips the `UPDATE gravity_transactions SET accepted=1` step (no rows match anyway, but the SQL still runs — making it a no-op on the sentinel is documentation-explicit and a guard against future schema drift). The pointer (`acceptedMessageId`, `acceptedSwipeIndex`) is left at the sentinel until the actual first assistant message gets accepted on user turn 2.
-
-After turn 1: the assistant has produced its opening scene; the post-processing director has staged new transactions under `(messageId=<asst1>, swipeIndex=<chosen>)` with `accepted=0`.
-
-On user turn 2: the acceptance hook fires again, flips those transactions to `accepted=1`, and updates the pointer to the real `(<asst1>, <chosen>)`. The setup sentinel rows remain in the table — they're part of the canonical history and contribute to state replay just like any other accepted batch.
-
-State replay continues to work because `state-compute` orders by `seq` (not by `messageId`); the setup batch has the lowest seq values for the chat, so it replays first.
+The sentinel rows persist in `gravity_transactions` and contribute to state replay normally — `state-compute` orders by `seq`, and the setup batch has the lowest seq values for the chat, so it replays first.
 
 ## 7. Concurrency
 
@@ -287,7 +354,7 @@ Mitigation in phase 1: the SQL transaction at step 4-7 is serializable per SQLit
 
 To prevent this cleanly, the route disables the modal's Start Game button on submit (no double-click possible) and the route itself adds a per-`chatId` in-memory lock for the duration of the request. The lock is process-local; in a multi-instance Marinara deployment the user would need to be load-balanced consistently. Phase 1 doesn't ship multi-instance.
 
-A composite unique index on `gravity_transactions (chat_id, seq)` is added (already implied by the schema's `seq` index but not currently `UNIQUE`) to fail-fast if the lock is bypassed.
+No schema change for concurrency in phase 1. (An earlier draft proposed a `UNIQUE (chat_id, seq)` index on `gravity_transactions` as belt-and-suspenders against lock bypass; that's a Drizzle migration this spec doesn't otherwise need. If the lock turns out to be insufficient, the unique index can be added as a follow-up.)
 
 ## 8. Setup-mode flag (deferred)
 
