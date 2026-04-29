@@ -39,11 +39,6 @@ function checkPhaseCompletion(committedTxns, state) {
     }
 }
 
-function getPhasePrompt() {
-    // The setup prompt is now set via _pendingOOCInjection in handleSetupButton
-    return null;
-}
-
 function getPhaseLabel() {
     return _active ? 'Setup in progress' : '';
 }
@@ -246,7 +241,6 @@ export {
     startSetup,
     cancelSetup,
     checkPhaseCompletion,
-    getPhasePrompt,
     getPhaseLabel,
     setPhaseCallback,
     showSetupPopup,

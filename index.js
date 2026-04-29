@@ -16,7 +16,7 @@ import { formatStateView, formatReadme, computeArchiveVersion } from './state-vi
 import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
 import { createPanel, updatePanel, setCallbacks, setBookName, showSetupPhase, setStaleWarning } from './ui-panel.js';
-import { isActive as isSetupActive, getPhasePrompt, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
+import { isActive as isSetupActive, checkPhaseCompletion, startSetup, cancelSetup, getPhaseLabel, setPhaseCallback, showSetupPopup, buildSetupPrompt } from './setup-wizard.js';
 import { getStateMachineField } from './state-machine.js';
 import {
     buildChallengePrompt,
@@ -1359,9 +1359,8 @@ function injectPrompt(mode) {
         const readme = formatReadme(isIntegration ? 'full' : 'core');
         _setPrompt(`${MODULE_NAME}_readme`, readme);
 
-        // Setup wizard phase prompt (overrides corrections when active)
-        const setupPrompt = getPhasePrompt();
-        _setPrompt(`${MODULE_NAME}_setup`, setupPrompt || '');
+        // Setup wizard phase prompt (active phase injected via _pendingOOCInjection from handleSetupButton)
+        _setPrompt(`${MODULE_NAME}_setup`, '');
 
         // OOC command injection (from buttons)
         // Only update when there's a new injection — don't clear on re-inject
