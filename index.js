@@ -94,7 +94,7 @@ function reconstructArrivalState(state) {
         }
         if (col.status !== 'ACTIVE') continue;
         if (col.distance_category === 'IMMEDIATE') continue;
-        const start = { IMMEDIATE: 1, SHORT: 3, MEDIUM: 10, LONG: 15 }[col.distance_category];
+        const start = CATEGORY_DISTANCES[col.distance_category];
         if (!start) continue;
         const dist = typeof col.distance === 'number' ? col.distance : parseFloat(col.distance);
         if (isNaN(dist) || dist <= 0) continue;

@@ -6,7 +6,7 @@
  */
 
 // NOTE: spec §2 uses state.chars as shorthand; codebase keeps state.characters (D1 decision).
-const CATEGORY_DISTANCES = { IMMEDIATE: 1, SHORT: 3, MEDIUM: 10, LONG: 15 };
+const CATEGORY_DISTANCES = { IMMEDIATE: 1, SHORT: 3, MEDIUM: 5, LONG: 10 };
 const MAX_COLLISION_ARCHIVE = 20;
 const CHARACTER_TAGS_MAX = 5;
 
