@@ -765,6 +765,7 @@ export {
     createEmptyState,
     applyTransaction,
     computeState,
+    diffStates,
     getCollectionName,
     validateTravel,
     getFieldHistory,

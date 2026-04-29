@@ -7,10 +7,11 @@
  * Format: Command-style lines with self-correcting feedback loop
  */
 
-import { init as initLedger, reset as resetLedger, append, getAllTransactions, getTransactionsForEntity, exportData, importData } from './ledger-store.js';
+import { init as initLedger, reset as resetLedger, append, getAllTransactions, getTransactionsForEntity, exportData, importData, compactTransactions, getSnapshots } from './ledger-store.js';
 import { initSnapshots, computeCurrentState, createSnapshot, onRollback } from './snapshot-mgr.js';
 import { validateBatch, formatErrors, validateTransitions, findMissingArchiveEntries, validateBlock } from './consistency.js';
-import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel, CATEGORY_DISTANCES } from './state-compute.js';
+import { computeState, applyTransaction, createEmptyState, getArrayItemHistory, validateTravel, CATEGORY_DISTANCES, diffStates } from './state-compute.js';
+import * as compactor from './ledger-compactor.js';
 import { formatStateView, formatReadme, computeArchiveVersion } from './state-view.js';
 import { extractUpdateBlock, getReinforcement, buildCorrectionInjection } from './regex-intercept.js';
 import { processOOC } from './ooc-handler.js';
@@ -972,6 +973,53 @@ No multi-turn delay. This collision is decided this turn.
 Commit the decision in the ledger this turn. No waiting.`;
 }
 
+// ── Per-turn rolling compaction ───────────────────────────────────────────────
+
+async function runPerTurnCompaction() {
+    const snapshots = getSnapshots();
+    if (snapshots.length === 0) return;  // nothing to do until first snapshot exists
+    const oldestRetained = Math.min(...snapshots.map(s => s.lastTxId || 0));
+    if (!oldestRetained) return;
+
+    const cheapCompactors = [
+        compactor.coalesceLastWriteWins,
+        compactor.coalesceMSLastWriteWins,
+        compactor.dropDestroyedEntityTxs,
+        compactor.cancelAppendRemovePairs,
+    ];
+
+    await compactTransactions((all) => {
+        const safe = all.filter(tx => tx.tx < oldestRetained);
+        const unsafe = all.filter(tx => tx.tx >= oldestRetained);
+        const { result, diverged } = compactor.compactWithIntegrityCheck(
+            safe, cheapCompactors, computeState, diffStates,
+        );
+        if (diverged) return all;  // abort cleanly
+        return result.concat(unsafe);
+    });
+}
+
+async function runDeepCompaction() {
+    const snapshots = getSnapshots();
+    if (snapshots.length === 0) return;
+    const oldestRetained = Math.min(...snapshots.map(s => s.lastTxId || 0));
+
+    const deepCompactors = [
+        compactor.stripResolvedCollisionIntermediates,
+        (txs) => compactor.cullSnapAndRoll(txs, oldestRetained),
+    ];
+
+    await compactTransactions((all) => {
+        const safe = all.filter(tx => tx.tx < oldestRetained);
+        const unsafe = all.filter(tx => tx.tx >= oldestRetained);
+        const { result, diverged } = compactor.compactWithIntegrityCheck(
+            safe, deepCompactors, computeState, diffStates,
+        );
+        if (diverged) return all;
+        return result.concat(unsafe);
+    });
+}
+
 async function buildAndInjectArrivals(ids, state) {
     const blocks = [];
     // Collect arrival collisions so we can auto-append their involved_chars to pc.scene_cast
@@ -1914,6 +1962,13 @@ async function onMessageReceived(messageId) {
 
             if (_turnCounter % _autoSnapshotInterval === 0) {
                 await createSnapshot(_currentState, `Auto-snapshot turn ${_turnCounter}`);
+                try { await runDeepCompaction(); }
+                catch (e) { console.warn('[GravityLedger] Deep compaction failed:', e); }
+            }
+
+            if (_lastCompletedMode === 'regular' || _lastCompletedMode === 'combat' || _lastCompletedMode === 'intimacy') {
+                try { await runPerTurnCompaction(); }
+                catch (e) { console.warn('[GravityLedger] Per-turn compaction failed:', e); }
             }
 
             console.log(`${LOG_PREFIX} Committed ${committed.length} TX, ${allErrors.length} errors. Turn ${_turnCounter}.`);
