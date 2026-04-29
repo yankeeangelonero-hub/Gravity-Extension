@@ -65,6 +65,57 @@ let _pendingManualDivination = null; // one-shot player-supplied divination roll
 // Both reset on chat change, snapshot rollback, and import.
 let _firedCollisionArrivals = new Set();
 let _foreshadowedCollisions = new Map();
+
+// Foreshadow percentage thresholds — must match the pipeline in buildForeshadowLines().
+// APPROACHING fires at ≤80% of starting distance, IMMINENT at ≤50%, CONVERGING at ≤20%.
+const FORESHADOW_PCT = { APPROACHING: 0.80, IMMINENT: 0.50, CONVERGING: 0.20 };
+
+/**
+ * Reconstruct _firedCollisionArrivals and _foreshadowedCollisions from current state.
+ * Called during initialize(), handleRevertTurn(), and any rollback path so that
+ * stale Set/Map entries don't survive a page reload or revert.
+ *
+ * RESOLVED/CRASHED collisions go straight into `fired` (arrival already happened).
+ * ACTIVE collisions at distance ≤ their threshold percentage populate `foreshadow`.
+ * ACTIVE distance-0 collisions are NOT pre-seeded into `fired` — the arrival pipeline
+ * catches them naturally on the next turn (pre-seeding would suppress an arrival that
+ * never actually fired, e.g. if the user closed the tab before the LLM responded).
+ */
+function reconstructArrivalState(state) {
+    const fired = new Set();
+    const foreshadow = new Map();
+    const collisions = state?.collisions || {};
+    for (const [id, col] of Object.entries(collisions)) {
+        if (!col) continue;
+        if (col.status === 'RESOLVED' || col.status === 'CRASHED') {
+            fired.add(id);
+            continue;
+        }
+        if (col.status !== 'ACTIVE') continue;
+        if (col.distance_category === 'IMMEDIATE') continue;
+        const start = { IMMEDIATE: 1, SHORT: 3, MEDIUM: 10, LONG: 15 }[col.distance_category];
+        if (!start) continue;
+        const dist = typeof col.distance === 'number' ? col.distance : parseFloat(col.distance);
+        if (isNaN(dist) || dist <= 0) continue;
+        const pct = dist / start;
+        const levels = new Set();
+        // Mirror subsumption logic from buildForeshadowLines(): firing a higher-urgency
+        // level implies all lower levels have also been seen.
+        if (pct <= FORESHADOW_PCT.CONVERGING) {
+            levels.add('CONVERGING');
+            levels.add('IMMINENT');
+            levels.add('APPROACHING');
+        } else if (pct <= FORESHADOW_PCT.IMMINENT) {
+            levels.add('IMMINENT');
+            levels.add('APPROACHING');
+        } else if (pct <= FORESHADOW_PCT.APPROACHING) {
+            levels.add('APPROACHING');
+        }
+        if (levels.size > 0) foreshadow.set(id, levels);
+    }
+    return { fired, foreshadow };
+}
+
 // Dedup keys for relationship-module corrections (§13 — missing relationship,
 // orphaned relational collision, missing rel update, scene cast overflow).
 // Cleared on chat change, rollback, import, and when the underlying condition resolves.
@@ -1480,6 +1531,11 @@ async function initialize(force = false) {
         await initLedger(chatId);
         initSnapshots();
         _currentState = computeCurrentState();
+        // Reconstruct arrival/foreshadow sets from persisted state so that
+        // page reloads don't re-fire prompts for already-resolved collisions.
+        const _reconstructed = reconstructArrivalState(_currentState);
+        _firedCollisionArrivals = _reconstructed.fired;
+        _foreshadowedCollisions = _reconstructed.foreshadow;
         _initialized = true;
 
         const txCount = getAllTransactions().length;
