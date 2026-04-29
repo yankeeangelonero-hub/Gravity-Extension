@@ -127,6 +127,8 @@ Realistically 2-3 weeks of focused work, or split into sub-specs per stream so e
 
 ## 6. Collision-system engine of escalation (the heart of Gravity)
 
+> **Updated 2026-04-30:** §6b (arrival gate) and §6c (foreshadow) below are *superseded* by `2026-04-30-collision-surfacing-protocol.md`, which replaces single-turn arrival forcing with a four-phase advance-turn machine (conclude / tick / surface / foreshadow). §6d (state-view filter) ships as part of that protocol. §6a (tick never fires) and §6e (combat subtype) remain in this tracker — both depend on mode controls (#3) rather than the surfacing protocol. The text below is preserved for history; for current direction read the surfacing spec.
+
 **The gap:** The schema for collisions is wired (entities, projection, state-machine transitions), and `engine-tick.ts` ports ST's tick logic — but **nothing drives it through the play loop**. A user setting up a chat gets collisions seeded into state and they sit there frozen. You can't sense the engine because the engine isn't running.
 
 Sub-pieces:
