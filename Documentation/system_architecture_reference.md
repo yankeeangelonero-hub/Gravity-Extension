@@ -110,7 +110,7 @@ Historical handoffs, plans, and audit logs live under `Deprecated/`.
 
 Advance turns follow the same parse/commit path, then:
 
-1. `world.timeskip_scale` is read from committed state.
+1. `world.timeskip_scale` (set by the LLM: HOURS|DAYS|WEEKS|MONTHS) is read from committed state.
 2. `index.js::applyAdvanceTick()` decrements collision clocks.
 3. WEEKS/MONTHS pressure cleanup runs.
 4. Arrivals, foreshadowing, archive handling, and collision-health nudges run.
@@ -156,7 +156,6 @@ Primary slots to keep in sync when mechanics change:
 - `_arrival`
 - `_foreshadow`
 - `_challenge`
-- `_combat`
 - `_faction`
 - `_dormant`
 - `_exemplars`
