@@ -198,17 +198,11 @@ const ADVANCE_FOCUS_TABLE = [
 ];
 
 const MODE_LOREBOOK_KEYS = Object.freeze({
-    advanceCore: 'gravity_mode_advance_core',
-    advanceOptional: 'gravity_mode_advance_optional_examples',
-    combatCore: 'gravity_mode_combat_core',
-    combatOptional: 'gravity_mode_combat_optional_examples',
     intimacyCore: 'gravity_mode_intimacy_core',
     intimacyOptional: 'gravity_mode_intimacy_optional_examples',
     // prose modulation keys (fired alongside mode gameplay keys)
     proseRegular: 'gravity_prose_regular',
-    proseCombat: 'gravity_prose_combat',
     proseIntimacy: 'gravity_prose_intimacy',
-    proseAdvance: 'gravity_prose_advance',
 });
 
 function getCollectionForEntityType(state, entityType) {
