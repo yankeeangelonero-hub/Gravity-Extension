@@ -28,7 +28,6 @@ let _onExport = null;
 let _onImport = null;
 let _onNew = null;
 let _onSetup = null;
-let _onTimeskip = null;
 let _onRegister = null;
 let _onAdvance = null;
 let _onRevertTurn = null;
@@ -63,12 +62,11 @@ function syncCombatDifficultyControls() {
     }
 }
 
-function setCallbacks({ onExport, onImport, onNew, onSetup, onTimeskip, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onPowerReview, onDivinationChange, onIntimacy }) {
+function setCallbacks({ onExport, onImport, onNew, onSetup, onRegister, onAdvance, onRevertTurn, onGoodTurn, onCombat, onPowerReview, onDivinationChange, onIntimacy }) {
     _onExport = onExport;
     _onImport = onImport;
     _onNew = onNew;
     _onSetup = onSetup;
-    _onTimeskip = onTimeskip;
     _onRegister = onRegister;
     _onAdvance = onAdvance;
     _onRevertTurn = onRevertTurn;
@@ -248,7 +246,6 @@ function createPanel() {
         </div>
         <div class="gl-cmd-bar" id="gl-cmd-bar">
             <button class="gl-cmd-btn" data-cmd="setup" title="New game setup (or cancel in-progress)"><i class="fa-solid fa-wand-magic-sparkles"></i> Setup</button>
-            <button class="gl-cmd-btn" data-cmd="timeskip" title="Timeskip"><i class="fa-solid fa-forward"></i> Skip</button>
             <button class="gl-cmd-btn" data-cmd="register" title="Register/promote NPC"><i class="fa-solid fa-user-plus"></i> Register</button>
             <button class="gl-cmd-btn" data-cmd="advance" title="Yield initiative — let the world move"><i class="fa-solid fa-play"></i> Advance</button>
             <button class="gl-cmd-btn" data-cmd="combat" title="Initiate combat — fight this"><i class="fa-solid fa-burst"></i> Combat</button>
@@ -297,7 +294,6 @@ function createPanel() {
 
         switch (cmd) {
             case 'setup': if (_onSetup) _onSetup(); break;
-            case 'timeskip': if (_onTimeskip) _onTimeskip(); break;
             case 'register': if (_onRegister) _onRegister(); break;
             case 'advance': if (_onAdvance) _onAdvance(); break;
             case 'combat': if (_onCombat) _onCombat(); break;

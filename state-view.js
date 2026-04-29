@@ -768,7 +768,7 @@ function formatReadmeCore() {
     return `=== GRAVITY STATE DELTA - QUICK REFERENCE ===
 
 Normal prose turns use a compact ---STATE--- block.
-Structural turns (setup, timeskip, heavy cleanup) may still use full ---LEDGER--- syntax.
+Structural turns (setup, heavy cleanup) may still use full ---LEDGER--- syntax.
 
 STANDARD SHAPE:
 ---STATE---
@@ -877,7 +877,7 @@ DISCIPLINE:
     - accumulator: fires when repeated small beats cross a threshold (e.g., "third Flay incident that the crew can no longer explain away")
   Pressure points (pressure:<id>) are seeds — small tensions not yet a collision. Cap is 5; oldest auto-drops on overflow. Destroy when consumed: D pressure:<id>.
   If 3+ related pressure points accumulate, combine them into a collision (CR collision) and destroy the consumed pressures.
-  WEEKS or MONTHS timeskips automatically clear all pressure points — the engine handles this.
+  WEEKS or MONTHS advance scales automatically clear all pressure points — the engine handles this.
   Collision closure grammar: inside ---STATE--- blocks use dotted-path form — collision:id.status: RESOLVED (and .outcome_type, .aftermath). Do NOT use ledger verb syntax (TR collision:id field=status from=ACTIVE to=RESOLVED) inside STATE blocks — verb syntax is REJECTED; move it to a ---LEDGER--- block.
   key_moments are permanent under 100 entries per character. When a character's key_moments list hits 100, drop the oldest or least load-bearing entry with a full-array SET (not a partial REMOVE) before adding a new one. This is infrequent given the high cap.
   Cleanup is still capped on normal turns; save bulk pruning for eval or OOC: eval.
@@ -889,7 +889,7 @@ DISCIPLINE:
 
 /**
  * Full readme — complete reference with all examples and field documentation.
- * Used on integration turns (timeskip, setup) where heavy ledger work is needed.
+ * Used on integration turns (setup, heavy cleanup) where heavy ledger work is needed.
  */
 function formatReadmeFull() {
     return `═══ GRAVITY LEDGER — COMMAND FORMAT ═══
@@ -1126,7 +1126,7 @@ HYGIENE — keep arrays clean (incrementally, 2–3 REMOVEs per turn max):
   - Before APPEND: check if a similar entry already exists. Update or skip, don't duplicate.
 
 VOLUME PER TURN (HARD CAP: 20 lines — excess lines are DROPPED):
-  Quiet dialogue: 1–2 | Normal: 2–4 | Action: 4–6 | Heavy (setup, timeskip): 6–12
+  Quiet dialogue: 1–2 | Normal: 2–4 | Action: 4–6 | Heavy (setup): 6–12
   NEVER dump bulk REMOVE operations. Prune 2–3 stale entries per turn.
 
 PRIORITY ORDER — when near the cap, emit in this order:

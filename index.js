@@ -122,7 +122,7 @@ function reconstructArrivalState(state) {
 // Cleared on chat change, rollback, import, and when the underlying condition resolves.
 let _firedRelationshipCorrections = new Set();
 
-// Phase 2: Timeskip multipliers (§3.2)
+// Advance tick multipliers — collisions tick by this much per advance scale (§3.2)
 const TICK = { HOURS: 1, DAYS: 3, WEEKS: 10, MONTHS: 20 };
 // Phase 2: Pool caps (§4.1, §4.2, §2.2.1)
 const MAX_PRESSURE_POINTS = 5;
@@ -204,7 +204,6 @@ const MODE_LOREBOOK_KEYS = Object.freeze({
     combatOptional: 'gravity_mode_combat_optional_examples',
     intimacyCore: 'gravity_mode_intimacy_core',
     intimacyOptional: 'gravity_mode_intimacy_optional_examples',
-    timeskipCore: 'gravity_mode_timeskip_core',
     // prose modulation keys (fired alongside mode gameplay keys)
     proseRegular: 'gravity_prose_regular',
     proseCombat: 'gravity_prose_combat',
@@ -2114,7 +2113,7 @@ async function onMessageReceived(messageId) {
         }
 
         // ── Advance tick pipeline (§3.7 steps 5–10) ────────────────────────────────
-        // Runs AFTER LLM transactions have committed so world.timeskip_scale reflects
+        // Runs AFTER LLM transactions have committed so world.timeskip_scale (the advance scale field) reflects
         // the current turn's declaration, not the previous one.
         if (_lastCompletedMode === 'advance') {
             await applyAdvanceTick();
@@ -2359,7 +2358,7 @@ async function handleSetupButton() {
 
 // ─── Advance Tick Pipeline (§3.7 steps 5–10) ──────────────────────────────────
 // Runs from onMessageReceived AFTER the LLM's advance-turn transactions have
-// committed. Reads the just-committed world.timeskip_scale, ticks collisions,
+// committed. Reads the just-committed world.timeskip_scale (set by the LLM), ticks collisions,
 // clears pressure on WEEKS/MONTHS, detects new arrivals, fires collision_health.
 async function applyAdvanceTick() {
     if (!_currentState) return;
@@ -2466,7 +2465,7 @@ async function handleAdvanceButton() {
         // Advisory: PC in active combat
         const pcInCombat = Object.values(_currentState.combats || {}).some(c => (c.status || '').toUpperCase() === 'ACTIVE');
         if (pcInCombat) {
-            toastr.warning('PC is not in a safe position to timeskip. Consider resolving the current situation before advancing.');
+            toastr.warning('PC is not in a safe position to advance. Consider resolving the current situation before advancing.');
         }
     }
 
@@ -2582,47 +2581,6 @@ async function handleGoodTurnButton() {
 function handleRegisterButton() {
     insertChatMessage('OOC: promote ');
 }
-
-async function handleTimeskipButton() {
-    const { Popup } = SillyTavern.getContext();
-    const duration = await Popup.show.input('Timeskip', 'How much time passes? (e.g., "3 days", "a week", "until morning")');
-    if (!duration) return;
-
-    if (_currentState) {
-        try {
-            await createSnapshot(_currentState, 'Pre-timeskip snapshot');
-            console.log(`${LOG_PREFIX} Pre-timeskip snapshot created.`);
-        } catch (err) {
-            console.warn(`${LOG_PREFIX} Pre-timeskip snapshot failed:`, err);
-        }
-    }
-
-    const timeskipDraw = drawDivination();
-    // Engine auto-commit: record this draw so the LLM never needs to write divination.last_draw
-    try {
-        await append([{ op: 'S', e: 'divination', id: '', d: { f: 'last_draw', v: timeskipDraw.label }, r: 'engine:timeskip:auto-draw' }]);
-    } catch (err) {
-        console.warn(`${LOG_PREFIX} Timeskip draw auto-commit failed:`, err);
-    }
-
-    _pendingOOCInjection = buildModeInjection(
-        'GRAVITY TIMESKIP',
-        `The user requested a time skip of "${duration}". For this response only, narrate as an impartial omniscient voice called "The Passage of Time."
-
-${formatDrawInstruction(timeskipDraw, 'The draw shapes the character of the elapsed time - what kind of pressure, drift, or convergence defines this skip. It does not override continuity or collision logic.')}
-
-First, sanity-check whether active danger, pursuit, or unresolved pressure would interrupt the skip. If yes, abort early and drop the player into that interruption.
-
-Advance the world honestly across 3-6 beats: the PC's rhythm, at least one off-screen faction or tracked character, a collision or pressure point tightening, and the landing scene that demands response now.
-
-Use a full LEDGER block for the structural updates across characters, factions, collisions, world, and pressure points. The engine has already recorded divination.last_draw — do NOT write it yourself.`,
-        [MODE_LOREBOOK_KEYS.timeskipCore],
-    );
-
-    injectPrompt('integration');
-    insertChatMessage(`OOC: Timeskip - ${duration}`);
-}
-
 
 async function handleRevertTurn(txIds) {
     if (!txIds || txIds.length === 0) {
@@ -2751,7 +2709,6 @@ async function handleImportData(data) {
         onExport: handleExportData,
         onImport: handleImportData,
         onSetup: handleSetupButton,
-        onTimeskip: handleTimeskipButton,
         onRegister: handleRegisterButton,
         onAdvance: handleAdvanceButton,
         onRevertTurn: handleRevertTurn,
@@ -2808,15 +2765,13 @@ function createInputButtons() {
         <button class="gl-input-btn" id="gl-input-advance" title="Advance — world takes a turn"><i class="fa-solid fa-play"></i> Advance</button>
         <button class="gl-input-btn" id="gl-input-combat" title="Initiate combat"><i class="fa-solid fa-burst"></i> Combat</button>
         <button class="gl-input-btn" id="gl-input-intimacy" title="Initiate intimate scene"><i class="fa-solid fa-heart"></i> Intimacy</button>
-        <button class="gl-input-btn" id="gl-input-skip" title="Timeskip"><i class="fa-solid fa-forward"></i> Skip</button>
-        <button class="gl-input-btn" id="gl-input-good" title="Flag good prose — paste exemplar"><i class="fa-solid fa-thumbs-up"></i> Good</button>
+<button class="gl-input-btn" id="gl-input-good" title="Flag good prose — paste exemplar"><i class="fa-solid fa-thumbs-up"></i> Good</button>
     `;
     sendForm.insertBefore(bar, sendForm.firstChild);
 
     document.getElementById('gl-input-advance').addEventListener('click', handleAdvanceButton);
     document.getElementById('gl-input-combat').addEventListener('click', handleCombatButton);
     document.getElementById('gl-input-intimacy').addEventListener('click', handleIntimacyButton);
-    document.getElementById('gl-input-skip').addEventListener('click', handleTimeskipButton);
     document.getElementById('gl-input-good').addEventListener('click', handleGoodTurnButton);
 }
 

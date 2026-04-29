@@ -69,7 +69,7 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_dormant`** - Dormant character nudge (every 15 regular turns)
 - **`_exemplars`** - Last 5 good prose paragraphs for style reference
 
-Turn modes: `regular` (player prose), `advance` (world moves), `integration` (setup, timeskip).
+Turn modes: `regular` (player prose), `advance` (world moves), `integration` (setup).
 
 ### Deduction Templates
 
