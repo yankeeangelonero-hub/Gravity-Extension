@@ -6,6 +6,8 @@ import { createSnapshot, listSnapshots, rollback, computeCurrentState } from './
 import {
     getAllTransactions,
     getTransactionsForEntity,
+    exportData,
+    getSnapshots,
     append,
 } from './ledger-store.js';
 
@@ -58,10 +60,39 @@ async function handleRollback() {
     return lines.join('\n');
 }
 
+function validateRollbackTarget(targetId) {
+    const snapshots = getSnapshots();
+    if (snapshots.length === 0) {
+        return { ok: false, message: 'No snapshots available — nothing to roll back to.' };
+    }
+    const found = snapshots.find(s => s.id === targetId || s.lastTxId === targetId);
+    if (found) return { ok: true };
+    const available = snapshots.map(s => `#${s.id ?? s.lastTxId}`).join(', ');
+    return {
+        ok: false,
+        message: `Snapshot #${targetId} is no longer retained. Available snapshots: ${available}. Rollback window is bounded — older snapshots are pruned.`,
+    };
+}
+
 async function handleRollbackConfirm(match) {
     const targetId = parseInt(match[1], 10);
+    const check = validateRollbackTarget(targetId);
+    if (!check.ok) {
+        return `[Gravity] ${check.message}`;
+    }
     await rollback(targetId);
     return `[LEDGER: Rolled back to snapshot #${targetId}. State restored.]`;
+}
+
+function summarizeOpTypes(transactions) {
+    const counts = {};
+    for (const tx of transactions) {
+        counts[tx.op] = (counts[tx.op] || 0) + 1;
+    }
+    return Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([op, n]) => `${op}=${n}`)
+        .join(' ');
 }
 
 async function handleEval() {
@@ -70,10 +101,19 @@ async function handleEval() {
 
     await createSnapshot(state, 'Pre-eval safety snapshot');
 
+    const data = exportData();
+    const lastCompacted = data.compactionMetrics?.lastSize ?? null;
+    const ratio = lastCompacted !== null
+        ? `${Math.round((1 - allTxns.length / Math.max(lastCompacted, 1)) * 100)}%`
+        : 'n/a';
+    const opSummary = summarizeOpTypes(allTxns);
+    const compactionLine = `Compaction: ${allTxns.length} txs (last pre-compact: ${lastCompacted ?? 'n/a'}, savings: ${ratio}). By op: ${opSummary}`;
+
     const lines = [];
     lines.push('=== LEDGER: SYSTEM EVALUATION ===');
     lines.push('');
     lines.push(`Ledger: ${allTxns.length} transactions total`);
+    lines.push(compactionLine);
     lines.push(`Characters: ${Object.keys(state.characters).length}`);
     lines.push(`Constraints: ${Object.keys(state.constraints).length}`);
     lines.push(`Collisions: ${Object.keys(state.collisions).length}`);

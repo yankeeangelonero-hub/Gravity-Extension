@@ -1371,7 +1371,7 @@ git commit -m "feat(compactor): integrity-check wrapper with revert-on-divergenc
 **Files:**
 - Modify: `index.js`
 
-- [ ] **Step 1: Add the static imports**
+- [x] **Step 1: Add the static imports**
 
 `index.js` is an ES module (it uses `import` statements). Near the existing imports at the top of the file, add:
 
@@ -1384,7 +1384,7 @@ import { compactTransactions, getSnapshots } from './ledger-store.js';
 
 Use STATIC imports only. Do not use `await import(...)` inside function bodies — `index.js` already statically imports from `ledger-store.js`, and adding dynamic imports inside the function body introduces module-load timing ambiguity in the browser context.
 
-- [ ] **Step 2: Add the per-turn compaction function**
+- [x] **Step 2: Add the per-turn compaction function**
 
 Add near other turn-lifecycle helpers in `index.js`:
 
@@ -1414,7 +1414,7 @@ async function runPerTurnCompaction() {
 }
 ```
 
-- [ ] **Step 3: Call after every commit**
+- [x] **Step 3: Call after every commit**
 
 Find the commit-completion point in `index.js` (around the auto-snapshot call at ~line 1803). After the commit completes and before the prompt-injection refresh, add:
 
@@ -1427,7 +1427,7 @@ if (mode === 'regular' || mode === 'combat' || mode === 'intimacy') {
 
 (Skip on `advance` and `integration` to avoid double work alongside the engine's own writes.)
 
-- [ ] **Step 4: Add the deep compaction at the auto-snapshot point**
+- [x] **Step 4: Add the deep compaction at the auto-snapshot point**
 
 In the same commit-completion block, where the existing 15-turn auto-snapshot fires, add after the snapshot completes:
 
@@ -1456,7 +1456,7 @@ async function runDeepCompaction() {
 
 Then call `await runDeepCompaction()` immediately after `createSnapshot(...)` returns.
 
-- [ ] **Step 5: Syntax check**
+- [x] **Step 5: Syntax check**
 
 Run: `node -c "G:/My Drive/AI RPG/Gravity 2/index.js"`
 Expected: no output.
@@ -1470,7 +1470,7 @@ Expected: no output.
 5. Take enough turns to cross a 15-turn boundary. Confirm an additional drop in count from deep compaction.
 6. Open the state panel and verify entities look identical to before compaction (no missing characters, collisions, factions).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add index.js
@@ -1484,11 +1484,11 @@ git commit -m "feat(compactor): wire per-turn + deep compaction into commit path
 **Files:**
 - Modify: `ooc-handler.js`
 
-- [ ] **Step 1: Read the current `handleEval` body**
+- [x] **Step 1: Read the current `handleEval` body**
 
 Open `ooc-handler.js` and find `handleEval` (or wherever `OOC: eval` is handled). Note the existing output format.
 
-- [ ] **Step 2: Add op-type breakdown**
+- [x] **Step 2: Add op-type breakdown**
 
 Inside `handleEval`, after the existing output block, add:
 
@@ -1518,7 +1518,7 @@ const compactionLine = `Compaction: ${allTxs.length} txs (last pre-compact: ${la
 
 Append `compactionLine` to the eval output.
 
-- [ ] **Step 3: Record `compactionMetrics.lastSize` in `compactTransactions`**
+- [x] **Step 3: Record `compactionMetrics.lastSize` in `compactTransactions`**
 
 Back in `ledger-store.js`, modify `compactTransactions` to write the pre-compaction size into the chatMetadata:
 
@@ -1538,7 +1538,7 @@ async function compactTransactions(compactFn) {
 }
 ```
 
-- [ ] **Step 4: Add rollback-target validation to `OOC: rollback to #N`**
+- [x] **Step 4: Add rollback-target validation to `OOC: rollback to #N`**
 
 After compaction lands, the rollback window is bounded by the oldest retained snapshot. If the user requests a snapshot ID that's been culled, the current `rollback()` in `snapshot-mgr.js` throws `Snapshot N not found` with no human-friendly explanation.
 
@@ -1569,7 +1569,7 @@ if (!check.ok) {
 
 Match the actual snapshot ID field used in `snapshot-mgr.js` — it may be `id`, `lastTxId`, or `index`. Read the snapshot-creation code in `snapshot-mgr.js` to confirm.
 
-- [ ] **Step 5: Syntax check**
+- [x] **Step 5: Syntax check**
 
 Run:
 ```bash
@@ -1584,7 +1584,7 @@ Expected: no output for either.
 2. Confirm output includes the compaction line with op-type breakdown and savings ratio.
 3. Type `OOC: rollback to #999` (an ID that doesn't exist). Confirm a friendly message lists available snapshot IDs instead of an error.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add ooc-handler.js ledger-store.js
