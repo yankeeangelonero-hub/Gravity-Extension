@@ -50,6 +50,8 @@ Historical handoffs, roadmaps, plans, and Phase 2 audit/fix logs were moved into
 - Divination cards (`relationship.card`, `divination.last_draw`, `divination.card`, `divination.orientation`) are engine-owned. The engine rolls and commits; the LLM cannot author or update these fields directly.
 - Per-turn rolling ledger compaction added 2026-04-29: cheap dedup runs every regular/combat/intimacy commit; deep compaction runs alongside the 15-turn auto-snapshot. Compaction is bounded by the oldest retained snapshot's lastTxId so rollback windows remain intact.
 - AMEND caveat: AMEND cannot retcon a RESOLVED or CRASHED collision back to ACTIVE. If a resolution was committed in error, use rollback to the pre-resolution snapshot, then re-commit the correct outcome.
+- Collision distance constants tuned 2026-04-30: `SHORT=3, MEDIUM=5, LONG=10` (was 10/20/50). Live in `state-compute.js::CATEGORY_DISTANCES`. The readme table in `gravity_v15.json` mirrors these values; keep them in sync.
+- Foreshadow simplified to a single trigger per collision 2026-04-30: fires once when distance hits the per-category absolute threshold (`FORESHADOW_DISTANCES = { SHORT: 2, MEDIUM: 3, LONG: 7 }` in `index.js`). Replaces the earlier 3-level percentage system (APPROACHING/IMMINENT/CONVERGING). `_foreshadowedCollisions` is now a flat `Set<id>`.
 
 ## Open Constraints
 

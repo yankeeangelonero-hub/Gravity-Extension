@@ -61,7 +61,7 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_ooc`** - OOC command injection (from buttons)
 - **`_arrival`** - Collision arrival sanity-check (ON-SCREEN / OFF-SCREEN / IMPLODE — §3.5)
 - **`_dist_warn`** - Distance-increase error corrections
-- **`_foreshadow`** - Approaching/imminent/converging collision foreshadow nudge
+- **`_foreshadow`** - Single-trigger collision foreshadow nudge (fires once per collision when distance hits its per-category threshold: SHORT=2, MEDIUM=3, LONG=7)
 - **`_challenge`** - Challenge-session mechanics + task block (when a challenge is locked)
 - **`_faction`** - Faction heartbeat (every 10 regular turns)
 - **`_dormant`** - Dormant character nudge (every 15 regular turns)
