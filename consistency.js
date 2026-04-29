@@ -35,9 +35,13 @@ const ENTITY_TO_COLLECTION = {
 // LLM-rejected fields owned by the engine. SET writes here are dropped at
 // validation time so state-compute never sees them. distance is decremented
 // by the timeskip engine; pressure.created_at_tx is stamped from tx.tx in CR.
+// relationship.card and divination fields are rolled by drawDivination() and
+// committed by the engine — the LLM must never SET these directly.
 const ENGINE_OWNED_FIELDS = {
     collision: new Set(['distance']),
     pressure: new Set(['created_at_tx']),
+    relationship: new Set(['card']),
+    divination: new Set(['last_draw', 'card', 'orientation']),
 };
 
 // ─── Relationship Constants ────────────────────────────────────────────────────

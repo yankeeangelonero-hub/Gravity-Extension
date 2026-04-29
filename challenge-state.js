@@ -950,7 +950,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
 
         if (runtime.phase === 'setup_buffered' && runtime.pending_roll) {
             if (profile.usesD20 && !runtime.pending_roll.skip && !recordedLastDraw && !resolved) {
-                return challengeCorrection('The buffered setup action had a fixed rolled result, but this turn did not consume it. Resolve that stored action now, use the injected threshold/d20/draw, record divination.last_draw, then offer next options if the challenge continues.', profile);
+                return challengeCorrection('The buffered setup action had a fixed rolled result, but this turn did not consume it. Resolve that stored action now, use the injected threshold/d20/draw, then offer next options if the challenge continues. (The engine records divination draws automatically — do NOT write divination.last_draw yourself.)', profile);
             }
 
             let next = {
@@ -1053,7 +1053,7 @@ async function processChallengeAssistantTurn(state, committedTxns, messageText) 
                 return null;
             }
             await setChallengeRuntime(runtime);
-            return challengeCorrection('A fixed rolled result is waiting, but this turn did not consume it. Resolve the stored action now, use the injected threshold/d20/draw, record divination.last_draw, then offer next options if the challenge continues.', profile);
+            return challengeCorrection('A fixed rolled result is waiting, but this turn did not consume it. Resolve the stored action now, use the injected threshold/d20/draw, then offer next options if the challenge continues. (The engine records divination draws automatically — do NOT write divination.last_draw yourself.)', profile);
         }
 
         let next = {

@@ -303,7 +303,7 @@ const combatProfile = Object.freeze({
                     } else {
                         lines.push('A pending action and pending roll payload are already stored. Use them. Do not reinterpret the scene draw as the resolution roll.');
                         lines.push('Do not downgrade this buffered declared action into a fresh assessment step or a replacement option set first. Resolve the stored action now using the injected category, threshold, d20, and draw.');
-                        lines.push('If this buffered action was rolled, record divination.last_draw in the update block this same turn.');
+                        lines.push('The engine records divination draws automatically — do NOT write divination.last_draw yourself.');
                         lines.push('End with the next 3-4 clickable options if combat continues.');
                     }
                 } else {
@@ -344,7 +344,7 @@ const combatProfile = Object.freeze({
                     lines.push('- On critical transform: the draw determines the catastrophic transformation.');
                     lines.push('- On tonal mismatch: interpret from the opposition\'s perspective or as ironic contrast.');
                     lines.push('Low rolls are not ordinary "failure." They are the world forcing a new angle, trade, complication, or opening.');
-                    lines.push('Record divination.last_draw in the update block for rolled clashes.');
+                    lines.push('The engine records divination draws automatically — do NOT write divination.last_draw yourself.');
                 }
                 lines.push('If combat resolves, write status=RESOLVED plus outcome/aftermath and clean up the combat entity in the same turn if possible.');
                 break;

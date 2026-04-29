@@ -841,7 +841,6 @@ COMMON PATHS:
   pressure:id.source
   pressure:id.related_to
   world.collision_archive+
-  divination.last_draw
 
 STATE MACHINES:
   char tier: UNKNOWN -> KNOWN -> TRACKED -> PRINCIPAL
@@ -1057,8 +1056,8 @@ FACTIONS — create and manage factions as organizations with territory, agenda,
   > CREATE collision:closing-perimeter name="The Closing Perimeter" distance_category=SHORT ignition_class=clock fires_when="demon scouts reach the perimeter and PC has not evacuated or fortified" forces="demon advance, trapped survivors" cost="The demon scouts will breach the church perimeter. If PC hasn't evacuated or fortified by then, survivors die in the crossfire." involved_chars=[pc] location=church -- Seam graduates
   > DESTROY pressure:perimeter-tension -- Consumed into collision
 
-DIVINATION — record current draw only (no history accumulation)
-  > SET divination field=last_draw value="XIV — Temperance" -- Record draw (overwrites previous)
+DIVINATION — engine-owned (do NOT write these yourself)
+  The engine commits divination draws automatically. Do NOT write divination.last_draw, divination.card, or divination.orientation yourself.
 
 STATE MACHINES (MOVE between adjacent states only, no skipping):
   Character tier:       UNKNOWN → KNOWN → TRACKED → PRINCIPAL

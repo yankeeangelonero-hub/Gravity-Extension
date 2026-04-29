@@ -1066,6 +1066,28 @@ group('AMEND validation', () => {
     });
 });
 
+// ─── ENGINE_OWNED_FIELDS tests ────────────────────────────────────────────────
+
+group('ENGINE_OWNED_FIELDS — relationship.card and divination', () => {
+    test('S relationship:r1 card="x" is rejected', () => {
+        const tx = { tx: 1, op: 'S', e: 'relationship', id: 'r1', d: { f: 'card', v: 'the-tower' } };
+        const { errors } = consistency.validateTransitions([tx], null);
+        assert(errors.length > 0, 'expected validation error');
+    });
+
+    test('CR relationship:r1 with card field is allowed', () => {
+        const tx = { tx: 1, op: 'CR', e: 'relationship', id: 'pc-c1', d: { card: 'the-fool', orientation: 'upright', distance: 'fresh', intensity: 'cold' } };
+        const { errors } = consistency.validateTransitions([tx], null);
+        assertEqual(errors.length, 0, 'CR must be allowed');
+    });
+
+    test('S divination last_draw="..." is rejected', () => {
+        const tx = { tx: 1, op: 'S', e: 'divination', id: 'main', d: { f: 'last_draw', v: 'XIV — Temperance' } };
+        const { errors } = consistency.validateTransitions([tx], null);
+        assert(errors.length > 0, 'expected validation error');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

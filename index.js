@@ -985,6 +985,12 @@ async function buildAndInjectArrivals(ids, state) {
         if (!col) continue;
         arrivalCollisions.push(col);
         const draw = drawDivination();
+        // Engine auto-commit: record this draw so the LLM never needs to write divination.last_draw
+        try {
+            await append([{ op: 'S', e: 'divination', id: '', d: { f: 'last_draw', v: draw.label }, r: 'engine:arrival:auto-draw' }]);
+        } catch (err) {
+            console.warn(`${LOG_PREFIX} Arrival draw auto-commit failed:`, err);
+        }
         const proximity = checkProximity(col, state);
         const involvedSummary = buildInvolvedCharsSummary(col, state);
         const placeName = col.location
@@ -2426,7 +2432,14 @@ async function handleAdvanceButton() {
 
 async function handleCombatButton() {
     if (!isChallengeSessionLocked()) {
-        await startChallengeRuntime('combat', drawDivination());
+        const combatDraw = drawDivination();
+        // Engine auto-commit: record this draw so the LLM never needs to write divination.last_draw
+        try {
+            await append([{ op: 'S', e: 'divination', id: '', d: { f: 'last_draw', v: combatDraw.label }, r: 'engine:combat:auto-draw' }]);
+        } catch (err) {
+            console.warn(`${LOG_PREFIX} Combat draw auto-commit failed:`, err);
+        }
+        await startChallengeRuntime('combat', combatDraw);
         _currentState = computeCurrentState();
         _pendingDeductionType = 'combat';
         injectPrompt('advance');
@@ -2435,7 +2448,7 @@ async function handleCombatButton() {
     }
 }
 
-function handleIntimacyButton() {
+async function handleIntimacyButton() {
     _pendingDeductionType = 'intimacy';
     const pcName = _currentState?.pc?.name || '{{user}}';
 
@@ -2448,6 +2461,12 @@ function handleIntimacyButton() {
     }
 
     const intimacyDraw = drawDivination();
+    // Engine auto-commit: record this draw so the LLM never needs to write divination.last_draw
+    try {
+        await append([{ op: 'S', e: 'divination', id: '', d: { f: 'last_draw', v: intimacyDraw.label }, r: 'engine:intimacy:auto-draw' }]);
+    } catch (err) {
+        console.warn(`${LOG_PREFIX} Intimacy draw auto-commit failed:`, err);
+    }
     const historyBlock = histories.length
         ? `INTIMATE HISTORY:\n${histories.map(h => `  ${h}`).join('\n')}`
         : 'No intimate history exists yet. Treat this as discovery.';
@@ -2524,6 +2543,12 @@ async function handleTimeskipButton() {
     }
 
     const timeskipDraw = drawDivination();
+    // Engine auto-commit: record this draw so the LLM never needs to write divination.last_draw
+    try {
+        await append([{ op: 'S', e: 'divination', id: '', d: { f: 'last_draw', v: timeskipDraw.label }, r: 'engine:timeskip:auto-draw' }]);
+    } catch (err) {
+        console.warn(`${LOG_PREFIX} Timeskip draw auto-commit failed:`, err);
+    }
 
     _pendingOOCInjection = buildModeInjection(
         'GRAVITY TIMESKIP',
@@ -2535,7 +2560,7 @@ First, sanity-check whether active danger, pursuit, or unresolved pressure would
 
 Advance the world honestly across 3-6 beats: the PC's rhythm, at least one off-screen faction or tracked character, a collision or pressure point tightening, and the landing scene that demands response now.
 
-Use a full LEDGER block for the structural updates across characters, factions, collisions, world, and pressure points. Record divination.last_draw in the update block.`,
+Use a full LEDGER block for the structural updates across characters, factions, collisions, world, and pressure points. The engine has already recorded divination.last_draw — do NOT write it yourself.`,
         [MODE_LOREBOOK_KEYS.timeskipCore],
     );
 
