@@ -62,9 +62,7 @@ All injections use `setExtensionPrompt()` at depth 0 (in-chat, before user messa
 - **`_arrival`** - Collision arrival sanity-check (ON-SCREEN / OFF-SCREEN / IMPLODE — §3.5)
 - **`_dist_warn`** - Distance-increase error corrections
 - **`_foreshadow`** - Approaching/imminent/converging collision foreshadow nudge
-- **`_intimacy`** - (Phase 2: retained slot, now unused — cleared every turn; boundary lives in prose + knowledge_asymmetry)
 - **`_challenge`** - Challenge-session mechanics + task block (when a challenge is locked)
-- **`_combat`** - Legacy combat-mode injection
 - **`_faction`** - Faction heartbeat (every 10 regular turns)
 - **`_dormant`** - Dormant character nudge (every 15 regular turns)
 - **`_exemplars`** - Last 5 good prose paragraphs for style reference

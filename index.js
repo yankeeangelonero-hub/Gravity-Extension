@@ -1516,10 +1516,6 @@ function injectPrompt(mode) {
             _setPrompt(`${MODULE_NAME}_dist_warn`, '');
         }
 
-        // Intimacy boundary enforcement is now Phase 2: carried in prose + knowledge_asymmetry
-        // (hiding/misreading buckets). No runtime slot injection needed.
-        _setPrompt(`${MODULE_NAME}_intimacy`, '');
-
         // Nudge now only signals the active deduction mode; the preset owns the actual protocol.
         const reasonMode = nextReasonMode || 'regular';
 
