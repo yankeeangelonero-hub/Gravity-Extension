@@ -643,6 +643,32 @@ function queueCorrections(errors) {
 }
 
 /**
+ * Returns true when the engine-pushed correction condition still applies.
+ * Called by clearMatchedCorrections to drop engine raws whose underlying
+ * condition is satisfied without waiting for an LLM entity match.
+ */
+function engineConditionStillTrue(entityType, entityId, condition, state) {
+    if (entityType === 'collision' && condition === 'missing-distance-category') {
+        const c = state?.collisions?.[entityId];
+        return !!c && !c.distance_category;
+    }
+    if (entityType === 'pressure' && condition === 'excess-created-at-tx') {
+        // Once the engine has stamped created_at_tx, the warning is moot — always clear.
+        return false;
+    }
+    if (entityType === 'char' && condition === 'missing-agenda-on-promotion') {
+        const c = state?.characters?.[entityId];
+        return !!c && (c.tier === 'TRACKED' || c.tier === 'PRINCIPAL') && !c.agenda;
+    }
+    if (entityType === 'collision' && condition === 'pool-cap-exceeded') {
+        const activeNonImmediate = Object.values(state?.collisions || {})
+            .filter(c => (c.status || '').toUpperCase() === 'ACTIVE' && c.distance_category !== 'IMMEDIATE');
+        return activeNonImmediate.length > MAX_COLLISIONS;
+    }
+    return false;
+}
+
+/**
  * Check if incoming transactions fix any pending corrections.
  * A correction is "fixed" if a new valid transaction matches the same entity+op.
  */
@@ -662,6 +688,23 @@ function clearMatchedCorrections(committedTxns) {
             if (bareRe.test(corr.raw)) return false;
         }
         return true;
+    });
+
+    // Engine corrections (raw starting with '[engine:') clear when their underlying
+    // condition is satisfied, rather than waiting for an LLM entity match.
+    const stillNeeded = new Set();
+    for (const corr of _pendingCorrections) {
+        if (!corr.raw || !corr.raw.startsWith('[engine:')) continue;
+        const m = corr.raw.match(/^\[engine:(\w+):([^:]+):([^\]]+)\]$/);
+        if (!m) continue;
+        const [, entityType, entityId, condition] = m;
+        if (engineConditionStillTrue(entityType, entityId, condition, _currentState)) {
+            stillNeeded.add(corr.raw);
+        }
+    }
+    _pendingCorrections = _pendingCorrections.filter(corr => {
+        if (!corr.raw || !corr.raw.startsWith('[engine:')) return true;
+        return stillNeeded.has(corr.raw);
     });
 }
 
@@ -1874,16 +1917,16 @@ async function onMessageReceived(messageId) {
     // applies its own defaults), so the CR-side hygiene warnings stay.
     for (const tx of committedTxns) {
         if (tx.op === 'CR' && tx.e === 'collision' && !tx.d?.distance_category) {
-            _pendingCorrections.push({
-                text: `Collision ${tx.id} was created without distance_category. Add distance_category=IMMEDIATE|SHORT|MEDIUM|LONG on CR — the engine resolves the numeric distance.`,
-                attempts: 0,
-            });
+            queueCorrections([{
+                raw: `[engine:collision:${tx.id}:missing-distance-category]`,
+                error: 'Collision is missing distance_category — engine cannot tick distance. Please SET collision.distance_category to one of: IMMEDIATE, IMMINENT, NEAR, FAR.',
+            }]);
         }
         if (tx.op === 'CR' && tx.e === 'pressure' && tx.d?.created_at_tx !== undefined) {
-            _pendingCorrections.push({
-                text: `Pressure ${tx.id} was created with created_at_tx in the payload. Do not set this field — the engine stamps it from tx.tx. Remove it from future pressure CRs.`,
-                attempts: 0,
-            });
+            queueCorrections([{
+                raw: `[engine:pressure:${tx.id}:excess-created-at-tx]`,
+                error: 'Pressure entity carries created_at_tx, which is engine-owned. Drop that field on creation; the engine assigns it.',
+            }]);
         }
     }
 
@@ -1897,10 +1940,10 @@ async function onMessageReceived(messageId) {
         if (toTier !== 'TRACKED' && toTier !== 'PRINCIPAL') continue;
         const char = _currentState?.characters?.[tx.id];
         if (!char || (typeof char.agenda === 'string' && char.agenda.trim())) continue;
-        _pendingCorrections.push({
-            text: `char:${tx.id} was promoted to ${toTier} but has no agenda. Set: S char:${tx.id} field=agenda value="..." — what this character is working toward.`,
-            attempts: 0,
-        });
+        queueCorrections([{
+            raw: `[engine:char:${tx.id}:missing-agenda-on-promotion]`,
+            error: `Character ${tx.id} was promoted to ${toTier} but has no agenda. SET char:${tx.id} field=agenda value="<short noun phrase>".`,
+        }]);
     }
 
     // ── Archive presence check (§2.2.1) ────────────────────────────────────────
@@ -2036,10 +2079,10 @@ async function onMessageReceived(messageId) {
                 .filter(c => (c.status || '').toUpperCase() === 'ACTIVE'
                     && c.distance_category !== 'IMMEDIATE');
             if (activeNonImmediate.length > MAX_COLLISIONS) {
-                _pendingCorrections.push({
-                    text: `Collision pool has ${activeNonImmediate.length} active non-IMMEDIATE collisions (cap ${MAX_COLLISIONS}). Consolidate: merge two with the MERGE flow, or IMPLODE the least relevant one. IMMEDIATE collisions are exempt.`,
-                    attempts: 0,
-                });
+                queueCorrections([{
+                    raw: `[engine:collision:pool:pool-cap-exceeded]`,
+                    error: `Collision pool has ${activeNonImmediate.length} active non-IMMEDIATE collisions (cap ${MAX_COLLISIONS}). Consolidate: merge two with the MERGE flow, or IMPLODE the least relevant one. IMMEDIATE collisions are exempt.`,
+                }]);
             }
         }
 
