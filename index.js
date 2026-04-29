@@ -2734,36 +2734,10 @@ async function handleImportData(data) {
         if (_initialized) injectPrompt();
     });
 
-    // Quick-access buttons above chat input
-    createInputButtons();
-
     // Intimacy clickable actions handled by st-clickable-actions extension
     // LLM outputs: <span class="act" data-value="intimate: action">Display</span>
 
     console.log(`${LOG_PREFIX} Extension registered.`);
     initialize().catch(err => console.error(`${LOG_PREFIX} Init error:`, err));
 })();
-
-function createInputButtons() {
-    const sendForm = document.getElementById('form_sheld');
-    if (!sendForm) return;
-
-    const bar = document.createElement('div');
-    bar.id = 'gl-input-bar';
-    bar.innerHTML = `
-        <button class="gl-input-btn" id="gl-input-advance" title="Advance — world takes a turn"><i class="fa-solid fa-play"></i> Advance</button>
-        <button class="gl-input-btn" id="gl-input-combat" title="Initiate combat"><i class="fa-solid fa-burst"></i> Combat</button>
-        <button class="gl-input-btn" id="gl-input-intimacy" title="Initiate intimate scene"><i class="fa-solid fa-heart"></i> Intimacy</button>
-<button class="gl-input-btn" id="gl-input-good" title="Flag good prose — paste exemplar"><i class="fa-solid fa-thumbs-up"></i> Good</button>
-    `;
-    sendForm.insertBefore(bar, sendForm.firstChild);
-
-    document.getElementById('gl-input-advance').addEventListener('click', handleAdvanceButton);
-    document.getElementById('gl-input-combat').addEventListener('click', handleCombatButton);
-    document.getElementById('gl-input-intimacy').addEventListener('click', handleIntimacyButton);
-    document.getElementById('gl-input-good').addEventListener('click', handleGoodTurnButton);
-}
-
-
-
 
