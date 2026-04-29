@@ -568,12 +568,15 @@ function buildClassicDraw(total, source = 'extension', sourceText = '', d1 = nul
 function buildArcanaDraw(num, source = 'extension', sourceText = '') {
     const cardName = ARCANA_TABLE[num].split(' — ')[0];
     const cardMeaning = ARCANA_TABLE[num].split(' — ')[1] || '';
+    const cardSlug = cardName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const prefix = source === 'manual' && sourceText ? `MANUAL ROLL: ${sourceText}\n` : '';
     return {
         system: 'arcana',
         label: 'THE ARCANA DREW',
         num,
         index: num,
+        cardName,
+        cardSlug,
         reading: `${prefix}#${num} — ${ARCANA_TABLE[num]}\nUSE THIS EXACT CARD. Do not override or pick a different one.\n${getNarrativeForcingText(source)}`,
         html: `<div style="background:linear-gradient(180deg,#0a0a1a 0%,#1a0a2e 100%);border:1px solid #d4af37;border-radius:8px;padding:20px;margin:16px auto;max-width:280px;text-align:center;box-shadow:0 0 15px rgba(212,175,55,0.2);"><div style="color:#d4af37;font-size:0.75em;letter-spacing:3px;text-transform:uppercase;">The Arcana</div><div style="color:#f0e6d3;font-size:1.8em;margin:12px 0 4px 0;font-weight:bold;">${cardName}</div><div style="color:#d4af37;font-size:0.9em;font-style:italic;">${ARCANA_ROMAN[num]}</div><div style="width:40px;height:1px;background:#d4af37;margin:12px auto;"></div><div style="color:#a89070;font-size:0.85em;line-height:1.4;">${cardMeaning}</div></div>`,
     };
@@ -602,6 +605,7 @@ function drawDivination() {
             system: 'classic',
             label: 'THE DICE ROLLED',
             num: total,
+            cardSlug: null,
             reading: `${d1} + ${d2} = ${total}\n${CLASSIC_TABLE}\n${NARRATIVE_FORCING}`,
             html: '',
         };
@@ -611,11 +615,14 @@ function drawDivination() {
     const num = Math.floor(Math.random() * 22);
     const cardName = ARCANA_TABLE[num].split(' — ')[0];
     const cardMeaning = ARCANA_TABLE[num].split(' — ')[1] || '';
+    const cardSlug = cardName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     return {
         system: 'arcana',
         label: 'THE ARCANA DREW',
         num,
         index: num,
+        cardName,
+        cardSlug,
         reading: `#${num} — ${ARCANA_TABLE[num]}\nUSE THIS EXACT CARD. Do not override or pick a different one.\n${NARRATIVE_FORCING}`,
         html: `<div style="background:linear-gradient(180deg,#0a0a1a 0%,#1a0a2e 100%);border:1px solid #d4af37;border-radius:8px;padding:20px;margin:16px auto;max-width:280px;text-align:center;box-shadow:0 0 15px rgba(212,175,55,0.2);"><div style="color:#d4af37;font-size:0.75em;letter-spacing:3px;text-transform:uppercase;">The Arcana</div><div style="color:#f0e6d3;font-size:1.8em;margin:12px 0 4px 0;font-weight:bold;">${cardName}</div><div style="color:#d4af37;font-size:0.9em;font-style:italic;">${ARCANA_ROMAN[num]}</div><div style="width:40px;height:1px;background:#d4af37;margin:12px auto;"></div><div style="color:#a89070;font-size:0.85em;line-height:1.4;">${cardMeaning}</div></div>`,
     };
