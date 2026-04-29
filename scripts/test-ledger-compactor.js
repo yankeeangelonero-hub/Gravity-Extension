@@ -104,5 +104,68 @@ test('cancelAppendRemovePairs drops matched A/R', () => {
     assertEqual(out[1].d.v, 'kind', 'kind tag remains');
 });
 
+test('stripResolvedCollisionIntermediates keeps only terminal TR + outcome S', () => {
+    const { stripResolvedCollisionIntermediates } = require('../ledger-compactor.js');
+    const txs = [
+        { tx: 1, op: 'CR', e: 'collision', id: 'col1', d: { distance_category: 'NEAR', name: 'Test' } },
+        { tx: 2, op: 'S', e: 'collision', id: 'col1', d: { f: 'distance', v: 2 } },
+        { tx: 3, op: 'S', e: 'collision', id: 'col1', d: { f: 'name', v: 'Test v2' } },
+        { tx: 4, op: 'S', e: 'collision', id: 'col1', d: { f: 'forces', v: 'a vs b' } },
+        { tx: 5, op: 'TR', e: 'collision', id: 'col1', d: { f: 'status', from: 'ACTIVE', to: 'RESOLVED' } },
+        { tx: 6, op: 'S', e: 'collision', id: 'col1', d: { f: 'outcome_type', v: 'on-screen' } },
+    ];
+    const out = stripResolvedCollisionIntermediates(txs);
+    // Keep: CR (entity birth), TR (terminal), S outcome_type. Drop: distance/name/forces.
+    const kept = out.map(t => t.tx);
+    assert(kept.includes(1) && kept.includes(5) && kept.includes(6), 'CR/TR/outcome must survive');
+    assert(!kept.includes(2) && !kept.includes(3) && !kept.includes(4), 'intermediates must be stripped');
+});
+
+test('stripResolvedCollisionIntermediates leaves ACTIVE collisions untouched', () => {
+    const { stripResolvedCollisionIntermediates } = require('../ledger-compactor.js');
+    const txs = [
+        { tx: 1, op: 'CR', e: 'collision', id: 'col1', d: { distance_category: 'NEAR', name: 'Test' } },
+        { tx: 2, op: 'S', e: 'collision', id: 'col1', d: { f: 'distance', v: 2 } },
+    ];
+    const out = stripResolvedCollisionIntermediates(txs);
+    assertEqual(out.length, 2, 'ACTIVE collision intermediates must remain');
+});
+
+test('cullSnapAndRoll removes SNAP/ROLL beyond retained window', () => {
+    const { cullSnapAndRoll } = require('../ledger-compactor.js');
+    const txs = [
+        { tx: 1, op: 'SNAP', e: 'system', id: 's1', d: {} },
+        { tx: 2, op: 'CR', e: 'char', id: 'c1', d: { tier: 'KNOWN', name: 'A' } },
+        { tx: 3, op: 'SNAP', e: 'system', id: 's2', d: {} },
+        { tx: 4, op: 'CR', e: 'char', id: 'c2', d: { tier: 'KNOWN', name: 'B' } },
+    ];
+    // Earliest retained snapshot's lastTxId is 3 — anything earlier than 3 can drop SNAP/ROLL.
+    const out = cullSnapAndRoll(txs, 3);
+    assert(!out.some(t => t.tx === 1), 'old SNAP must be culled');
+    assert(out.some(t => t.tx === 3), 'retained-window SNAP must survive');
+});
+
+test('compactWithIntegrityCheck reverts on divergence', () => {
+    const { compactWithIntegrityCheck } = require('../ledger-compactor.js');
+    const { computeState } = require('../state-compute.js');
+    // Synthetic broken compactor that destroys data.
+    const broken = (txs) => txs.filter(tx => tx.op !== 'CR');
+    const txs = [
+        { tx: 1, op: 'CR', e: 'char', id: 'c1', d: { tier: 'TRACKED', name: 'Alice' } },
+        { tx: 2, op: 'S', e: 'char', id: 'c1', d: { f: 'agenda', v: 'x' } },
+    ];
+    // diffStates may not exist with ignore; pass a stub if needed.
+    const stubDiff = (a, b) => {
+        const d = {};
+        for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+            if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) d[k] = true;
+        }
+        return d;
+    };
+    const { result, diverged } = compactWithIntegrityCheck(txs, [broken], computeState, stubDiff);
+    assert(diverged, 'must detect divergence');
+    assertEqual(result.length, 2, 'must return original');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
