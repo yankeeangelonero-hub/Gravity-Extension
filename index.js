@@ -62,29 +62,30 @@ let _pendingManualDivination = null; // one-shot player-supplied divination roll
 
 // ─── Collision Arrival / Foreshadow Tracking ─────────────────────────────────
 // One-shot dedup: once a collision fires the sanity-check gate it doesn't fire again.
-// Foreshadow map: id → Set<'APPROACHING'|'IMMINENT'|'CONVERGING'> — each level fires once.
+// Foreshadow Set: collision ids that have already fired their single foreshadow trigger.
 // Both reset on chat change, snapshot rollback, and import.
 let _firedCollisionArrivals = new Set();
-let _foreshadowedCollisions = new Map();
+let _foreshadowedCollisions = new Set();
 
 // Foreshadow percentage thresholds — must match the pipeline in buildForeshadowLines().
-// APPROACHING fires at ≤80% of starting distance, IMMINENT at ≤50%, CONVERGING at ≤20%.
-const FORESHADOW_PCT = { APPROACHING: 0.80, IMMINENT: 0.50, CONVERGING: 0.20 };
+// Single foreshadow trigger per collision, fired when distance <= the per-category
+// absolute threshold below. IMMEDIATE collisions never foreshadow (they fire on creation).
+const FORESHADOW_DISTANCES = { SHORT: 2, MEDIUM: 3, LONG: 7 };
 
 /**
  * Reconstruct _firedCollisionArrivals and _foreshadowedCollisions from current state.
  * Called during initialize(), handleRevertTurn(), and any rollback path so that
- * stale Set/Map entries don't survive a page reload or revert.
+ * stale Set entries don't survive a page reload or revert.
  *
  * RESOLVED/CRASHED collisions go straight into `fired` (arrival already happened).
- * ACTIVE collisions at distance ≤ their threshold percentage populate `foreshadow`.
+ * ACTIVE collisions already past their per-category foreshadow distance populate `foreshadow`.
  * ACTIVE distance-0 collisions are NOT pre-seeded into `fired` — the arrival pipeline
  * catches them naturally on the next turn (pre-seeding would suppress an arrival that
  * never actually fired, e.g. if the user closed the tab before the LLM responded).
  */
 function reconstructArrivalState(state) {
     const fired = new Set();
-    const foreshadow = new Map();
+    const foreshadow = new Set();
     const collisions = state?.collisions || {};
     for (const [id, col] of Object.entries(collisions)) {
         if (!col) continue;
@@ -94,25 +95,11 @@ function reconstructArrivalState(state) {
         }
         if (col.status !== 'ACTIVE') continue;
         if (col.distance_category === 'IMMEDIATE') continue;
-        const start = CATEGORY_DISTANCES[col.distance_category];
-        if (!start) continue;
+        const threshold = FORESHADOW_DISTANCES[col.distance_category];
+        if (typeof threshold !== 'number') continue;
         const dist = typeof col.distance === 'number' ? col.distance : parseFloat(col.distance);
         if (isNaN(dist) || dist <= 0) continue;
-        const pct = dist / start;
-        const levels = new Set();
-        // Mirror subsumption logic from buildForeshadowLines(): firing a higher-urgency
-        // level implies all lower levels have also been seen.
-        if (pct <= FORESHADOW_PCT.CONVERGING) {
-            levels.add('CONVERGING');
-            levels.add('IMMINENT');
-            levels.add('APPROACHING');
-        } else if (pct <= FORESHADOW_PCT.IMMINENT) {
-            levels.add('IMMINENT');
-            levels.add('APPROACHING');
-        } else if (pct <= FORESHADOW_PCT.APPROACHING) {
-            levels.add('APPROACHING');
-        }
-        if (levels.size > 0) foreshadow.set(id, levels);
+        if (dist <= threshold) foreshadow.add(id);
     }
     return { fired, foreshadow };
 }
@@ -1098,23 +1085,17 @@ async function buildAndInjectArrivals(ids, state) {
 
 // ─── Foreshadowing ────────────────────────────────────────────────────────────
 
-function buildForeshadowBlock(col, level) {
+function buildForeshadowBlock(col) {
     const placeName = col.location ? (_currentState.places?.[col.location]?.name || col.location) : 'unspecified';
     const involved = buildInvolvedCharsSummary(col, _currentState);
     const current = Math.round(parseFloat(col.distance));
-    const guidance = {
-        APPROACHING: 'A distant rumble. An offhand remark. Plant the seed.',
-        IMMINENT: "Someone moves differently. A name surfaces. The collision's forces are near.",
-        CONVERGING: "The forces are visibly in motion. Every other beat should carry their weight.",
-    }[level];
     const costLine = col.cost ? `\nScenario: ${col.cost}` : '';
-    return `[FORESHADOW — ${level}]
+    return `[FORESHADOW]
 "${col.name || col.id}" is drawing closer (${current} ticks remaining).
 Forces: ${col.forces || '(unspecified)'}${costLine}
 Anchored at: ${placeName} | Involved: ${involved}
-${guidance}
-If the player has already addressed this scenario, DISSOLVE the collision instead of forcing its arrival.
-Weave its approach into the scene without making it the focus.`;
+The collision's forces are near. Someone moves differently. A name surfaces. Weave its approach into the scene without making it the focus.
+If the player has already addressed this scenario, DISSOLVE the collision instead of forcing its arrival.`;
 }
 
 function buildForeshadowingInjection(state) {
@@ -1122,30 +1103,17 @@ function buildForeshadowingInjection(state) {
     for (const [id, col] of Object.entries(state.collisions || {})) {
         if (col.distance_category === 'IMMEDIATE') continue;
         if ((col.status || '').toUpperCase() !== 'ACTIVE') continue;
+        if (_foreshadowedCollisions.has(id)) continue;
 
-        const start = CATEGORY_DISTANCES[col.distance_category] ?? 10;
+        const threshold = FORESHADOW_DISTANCES[col.distance_category];
+        if (typeof threshold !== 'number') continue;
+
         const current = parseFloat(col.distance);
         if (isNaN(current) || current <= 0) continue;
+        if (current > threshold) continue;
 
-        const pct = current / start;
-        const fired = _foreshadowedCollisions.get(id) || new Set();
-
-        let level = null;
-        if (pct <= 0.20 && !fired.has('CONVERGING')) level = 'CONVERGING';
-        else if (pct <= 0.50 && !fired.has('IMMINENT')) level = 'IMMINENT';
-        else if (pct <= 0.80 && !fired.has('APPROACHING')) level = 'APPROACHING';
-
-        if (!level) continue;
-        fired.add(level);
-        // Subsumption — firing a higher-urgency level implies all lower levels were skipped
-        if (level === 'CONVERGING') {
-            fired.add('IMMINENT');
-            fired.add('APPROACHING');
-        } else if (level === 'IMMINENT') {
-            fired.add('APPROACHING');
-        }
-        _foreshadowedCollisions.set(id, fired);
-        lines.push(buildForeshadowBlock(col, level));
+        _foreshadowedCollisions.add(id);
+        lines.push(buildForeshadowBlock(col));
     }
     return lines.length > 0 ? lines.join('\n\n') : null;
 }
@@ -1602,7 +1570,7 @@ async function initialize(force = false) {
     _pendingDeductionType = null;
     _pendingManualDivination = null;
     _firedCollisionArrivals = new Set();
-    _foreshadowedCollisions = new Map();
+    _foreshadowedCollisions = new Set();
     _firedRelationshipCorrections = new Set();
     _arrivalLastFiredTurn = -1;
     _archiveCorrectionAttempts = new Map();
@@ -2638,7 +2606,7 @@ async function handleNewLedger() {
     _pendingCorrections = [];
     _pendingReinforcement = null;
     _firedCollisionArrivals = new Set();
-    _foreshadowedCollisions = new Map();
+    _foreshadowedCollisions = new Set();
     _firedRelationshipCorrections = new Set();
     _arrivalLastFiredTurn = -1;
     _archiveCorrectionAttempts = new Map();
@@ -2664,7 +2632,7 @@ async function handleImportData(data) {
     _pendingCorrections = [];
     _pendingReinforcement = null;
     _firedCollisionArrivals = new Set();
-    _foreshadowedCollisions = new Map();
+    _foreshadowedCollisions = new Set();
     _firedRelationshipCorrections = new Set();
     _arrivalLastFiredTurn = -1;
     _archiveCorrectionAttempts = new Map();
@@ -2684,7 +2652,7 @@ async function handleImportData(data) {
     // (OOC text, future programmatic calls, snapshot UI). PHASE2-SPEC §8 step 8b.
     onRollback(() => {
         _firedCollisionArrivals = new Set();
-        _foreshadowedCollisions = new Map();
+        _foreshadowedCollisions = new Set();
         _firedRelationshipCorrections = new Set();
         _arrivalLastFiredTurn = -1;
         _archiveCorrectionAttempts = new Map();
