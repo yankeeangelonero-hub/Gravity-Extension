@@ -2557,9 +2557,13 @@ async function handleRevertTurn(txIds) {
             await saveMetadata();
         }
 
-        // Reinitialize to recompute state
+        // Reinitialize to recompute state (initialize resets all runtime sets and
+        // calls reconstructArrivalState, so arrival/foreshadow/corrections are clean).
         await clearChallengeRuntime();
         resetLedger();
+        _pendingCorrections = [];
+        _archiveCorrectionAttempts = new Map();
+        _firedRelationshipCorrections = new Set();
         await initialize(true);
         toastr.success(`Reverted ${txIds.length} transactions.`);
     } catch (err) {
