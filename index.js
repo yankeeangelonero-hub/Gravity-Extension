@@ -2422,8 +2422,8 @@ async function handleCombatButton() {
         _pendingDeductionType = 'combat';
         injectPrompt('advance');
         updatePanel(_currentState, _turnCounter);
+        insertChatMessage('combat: ');
     }
-    insertChatMessage('combat: ');
 }
 
 function handleIntimacyButton() {
