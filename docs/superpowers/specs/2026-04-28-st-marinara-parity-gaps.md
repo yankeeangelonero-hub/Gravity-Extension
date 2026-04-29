@@ -23,13 +23,15 @@ Related: `2026-04-26-gravity-marinara-embedded-design.md` (the architectural spe
 - Inject agent slot architecture (extension point for maintenance nudges) ✓
 - Engine tick (advance-mode distance ticks) ✓
 
+> **Inject-agent baseline (verified against `inject-agent.ts` 2026-04-29):** the current inject renders exactly two things — `cache.stateView` and `buildNudge(mode, state)` — concatenated with a blank line between them. It does *not* render persona, character cards, lorebook entries, deduction templates, foreshadow nudges, or arrival sanity-checks. Several gaps below add slots to this rendering; sizing each gap should account for the fact that the inject pipeline is currently a two-line concatenation, not a slotted template.
+
 **What's missing:**
 - The rotating-schedule pick-a-check-this-turn logic in inject
 - FIFO cap on pressures
 - `demonstrated_traits` cap + maintenance nudge
 - Knowledge-asymmetry auto-prune
-- State-view filter for resolved/crashed collisions
-- OOC commands
+- State-view filter for resolved/crashed collisions — **owned by #6d below**, not duplicated here
+- OOC commands (note: ST's OOC surface spans more than maintenance — mode toggling overlaps #3, divination toggle overlaps #4, history dump is its own concern. Track OOC-command parity per owning gap, not exclusively under #1)
 
 **User-visible impact:** Over a long chat the state grows monotonically. demonstrated_traits balloons to 30+ per char. Resolved collisions still appear in the prompt. Eventually the prompt becomes prohibitively expensive and the director's signal-to-noise drops.
 
@@ -53,6 +55,8 @@ Related: `2026-04-26-gravity-marinara-embedded-design.md` (the architectural spe
 **Estimated scope:** Small — additive prompt edit to `gravity-ledger-director` template. Could ship as a single commit. Useful as a quick win even if #1 is deferred.
 
 **Note:** First-name-lowercase slug convention added to setup prompt in 2026-04-28-gravity-marinara-setup-design.md should reduce duplicate creation likelihood; this prompt rule is the second layer of defense.
+
+**Dependency on #5 — re-evaluate before finalizing:** the bug list above was captured on the 2026-04-28 smoke under the *weaker agent connection*. After #5 ships (chat connection → stronger model), re-run the setup smoke before writing this prompt edit. Some of these regressions (skipped PC init, wrong field name, full-name slugs, duplicate principals) may stop recurring without prompt-side guardrails, in which case the guardrails for them shouldn't be written at all. Finalize #2's prompt against the post-#5 failure set, not the pre-#5 one.
 
 ## 3. Mode controls (advance / combat / intimacy / integration buttons)
 
@@ -78,7 +82,13 @@ Related: `2026-04-26-gravity-marinara-embedded-design.md` (the architectural spe
 
 **User-visible impact:** Players can't initiate combat sessions, advance turns, or intimacy sessions. The whole "engine of escalation" loop that Gravity is built around is half-disabled.
 
-**Estimated scope:** Medium — UI work + per-mode deduction template port from ST + inject-agent nudge wiring + state-machine update if combat session has its own status ladder. ~1-2 weeks.
+**Estimated scope:** Medium-large — four sub-streams:
+- UI buttons + Marinara panel/store integration (no precedent in the work shipped so far; `gravity.store.ts` exists but panel-header button wiring hasn't been touched yet)
+- Per-mode deduction template ports from ST `index.js`
+- Inject-agent nudge wiring (extends the bare two-line render in #1's baseline note)
+- Combat-mode state-machine extension (combat sessions, wounds, distance-in-combat)
+
+Realistically 2-3 weeks of focused work, or split into sub-specs per stream so each can ship independently.
 
 ## 4. Divination systems
 
@@ -108,13 +118,12 @@ Related: `2026-04-26-gravity-marinara-embedded-design.md` (the architectural spe
 **Why this matters:** Setup runs once per chat. Cost isn't the constraint; quality is. The 2026-04-28 smoke confirmed: with a weaker agent model, the director skipped PC initialization, used the wrong field name on constraints (`character` vs `owner_id`), missed knowledge_asymmetry MS ops entirely, and generated full-name slugs instead of first-name slugs. A stronger model is more likely to follow the now-rewritten prompt's structural requirements first time.
 
 **What to change:**
-- `gravity.routes.ts` setup route: invert the resolution chain. Try `chat.connectionId` first; fall back to per-agent connectionId only if the chat has none configured.
-- Or: take the chat connection unconditionally for setup (simplest; matches the user's stated intent).
+- `gravity.routes.ts` setup route (lines 159-166 today): use `chat.connectionId` *unconditionally* for setup, and hard-error if it's unset. Rationale: a chat without a connection can't generate prose either, so an unset chat connection is a misconfigured state, not a fallback case worth supporting. Simpler than a fallback chain and matches user intent that setup is prose-grade work.
 - The director agent config's `promptTemplate` override should still be honored — only the connection/model resolution changes.
 
-**Scope:** Tiny — ~10 lines in the route's connection-resolution block, one commit. Could ship alongside or before the regular-director guardrails (#2).
+**Scope:** Tiny — ~10 lines in the route's connection-resolution block, one commit. Ship *before* #2 so the regular-director guardrails can be written against the post-#5 failure set (see #2's "Dependency on #5" note).
 
-**Related:** `2026-04-28-gravity-marinara-setup-design.md` §4.3 doesn't pin down the connection source; this clarifies that decision.
+**Related:** `2026-04-28-gravity-marinara-setup-design.md` §4.3 doesn't pin down the connection source; this clarifies that decision. Cross-references the first-name-lowercase slug convention in #2's note — both are setup-quality levers and should be evaluated together when re-running the smoke.
 
 ## 6. Collision-system engine of escalation (the heart of Gravity)
 
@@ -135,9 +144,9 @@ Sub-pieces:
 **Why this matters:** Gravity is named for collisions. The pitch is "narrative state machine that tracks pressures and forces them to converge." Without the engine of escalation, the system stores collisions but never makes them happen — collisions become free-form prose tags, indistinguishable from any other tracker. The whole loop loses its teeth.
 
 **What to build (consolidated):**
-- Wire `newArrivalIds` from director-agent's AgentResult into a one-shot inject the next turn (mirrors ST's `_arrival` slot). Track fired arrivals in `gravity_chat_state` (single column or JSON array) so the gate fires once per arrival.
-- Port the foreshadow check (read distances from state, inject `_foreshadow` text when collisions are SHORT/MEDIUM and ACTIVE).
-- State-view filter for `RESOLVED` and `CRASHED` collisions — keep them in transactions for replay; hide from prompt.
+- Wire `newArrivalIds` from director-agent's AgentResult into a one-shot inject the next turn (mirrors ST's `_arrival` slot). Persist fired arrivals as a JSON-array `text` column on `gravity_chat_state` (e.g., `firedArrivalIds`, parsed/serialized at the engine boundary) so the gate fires once per arrival *and survives server restarts* — ST's in-memory `Set` is fine for a single-page session but Marinara is server-side, and a process restart mid-chat would otherwise re-fire arrivals.
+- Port the foreshadow check (read distances from state, inject `_foreshadow` text **on band transition only** — i.e., when a collision crosses *into* SHORT or MEDIUM, not every turn while it's at that band). Track `lastForeshadowedDistance` (or `lastForeshadowedBand`) per collision to gate the trigger; without this discipline, foreshadow becomes spam every advance turn.
+- State-view filter for `RESOLVED` and `CRASHED` collisions — keep them in transactions for replay; hide from prompt. (This is the canonical home for the filter; #1 references it but doesn't re-implement.)
 - Mode controls (#3) so users can actually run advance turns.
 
 **Estimated scope:** Medium-large. Arrival gate + foreshadow are 1 sub-spec; state-view filter overlaps with #1 maintenance; full combat-collision subtype is its own thing. Probably 2-3 weeks across the bits.
@@ -152,18 +161,32 @@ These were called out in `2026-04-26-gravity-marinara-embedded-design.md` and ar
 - **Branching integration** (§6 of embedded spec, options B/C) — Marinara's chat branching doesn't carry Gravity rows under the new chat_id; the embedded spec deferred this.
 - **Phase-2 chat-export integration** (§8) — Phase 1 ships a separate `/api/gravity/export/:chatId`; chat-export integration is phase 2.
 - **Garbage collection of pending (unaccepted) transactions** (§6.1 of embedded spec) — phase-1 ships none; manual or scheduled GC is a phase-2/3 concern.
+- **Cross-agent self-correction loop** — ST's inject agent emits corrective nudges in response to malformed director output (slug drift, schema-violation patches, etc.). Phase-1 Marinara ships only the maintenance-style nudges captured under #1; the broader pattern of inject *reading the prior turn's director result and recovering from it* is not a phase-1 commitment. Re-evaluate after #1 ships.
 
 ## Suggested ordering
 
-If forced to pick a sequence:
+If forced to pick a sequence (this resolves the #6 ↔ #3 entanglement by splitting #6 into a mode-independent slice and a tick-reachable slice):
 
-1. **Setup uses main connection (#5)** first — tiny route change, materially improves setup quality immediately, no design work required.
-2. **Director over-emission guardrails (#2)** next — small additive prompt commit; reduces bundle bloat going forward.
-3. **Collision engine of escalation (#6)** — Gravity is named after collisions; without arrival gate + foreshadow + tick it's a tracker, not an engine. Highest narrative-impact gap.
-4. **Mode controls (#3)** — unlocks the gameplay loop (advance/combat/intimacy turns); also makes #6's tick reachable.
-5. **Ledger maintenance (#1)** — once the user is putting more turns through the system, the bloat becomes acute and maintenance is the obvious next investment.
-6. **Divination (#4)** — discrete creative-tool addition whenever it's wanted; doesn't block other work.
+1. **Setup uses main connection (#5)** — tiny route change, materially improves setup quality immediately, no design work required.
+2. **Re-run setup smoke** — capture which #2 regressions persist under the stronger model. This step *belongs to #5's verification*, not a separate spec.
+3. **Arrival gate + foreshadow (#6's mode-independent slice — #6b + #6c)** — these are inject-agent additions independent of mode UI. Highest narrative-impact-per-week ratio. Can be developed and shipped without #3.
+4. **Director over-emission guardrails (#2, finalized post-smoke)** — write the prompt edit against the post-#5 failure set, not the pre-#5 one.
+5. **Mode controls (#3)** — unlocks advance/combat/intimacy turns *and* makes the tick part of #6 reachable end-to-end.
+6. **Tick-reachable behavior verification (#6's remaining slice — #6a, plus the resolved/crashed state-view filter #6d)** — confirm tick → arrival gate → foreshadow chain works in a real advance-mode session.
+7. **Ledger maintenance (#1)** — once turn volume grows, the bloat becomes acute. References #6d's filter as already-shipped; doesn't re-implement.
+8. **Combat-collision subtype (#6e)** — folds into #3's combat-mode work or ships as a follow-up sub-spec.
+9. **Divination (#4)** — discrete creative-tool addition; orthogonal to all the above.
 
-Note: #3 and #6 are intertwined. Arrival gate + foreshadow (#6) can ship without #3 (they're inject-agent additions independent of mode UI). But the tick part of #6 is unreachable without #3's advance-mode button. Practical sequence: ship arrival gate + foreshadow first, then mode controls, which immediately makes the tick mechanism reachable end-to-end.
+Each of #1-#4 and #6 is its own spec → plan → implementation cycle, like the setup turn was. #5 is a single-commit fix; the post-#5 smoke step is part of #5's verification, not a separate spec.
 
-Each of #1-#4 and #6 is its own spec → plan → implementation cycle, like the setup turn was. #5 is a single-commit fix.
+**Parallel-safe pairings** (can be developed concurrently on sibling branches off `gravity-integration`):
+- #4 (divination) and #5 (setup connection) — disjoint code paths.
+- #6's mode-independent slice (#6b + #6c) and #4 — both touch inject-agent but in non-overlapping places (arrival/foreshadow slots vs. divination slot); coordinate at merge.
+
+**Must serialize:**
+- #1 (maintenance) and #3 (mode controls) — both rewrite inject-agent's render path significantly.
+- #2 must wait for #5's smoke re-run before its prompt is finalized.
+
+## Validation pattern
+
+Every gap above ships with: TS unit tests on the engine helpers it adds, placed under `packages/server/test/*.test.ts` (the existing `tsx --test` location used by tests like `lorebook-processing.test.ts`, `game-session-prompts.test.ts`, etc. — not co-located `*.test.ts` next to source); and a documented smoke-test scenario (chat configuration + expected director output) saved alongside the implementation, modeled on the 2026-04-28 setup-turn smoke. Re-run the relevant smoke before merging to `gravity-integration`. `pnpm check` is the baseline gate; `pnpm test` runs the unit suite; smokes are the feature-correctness gate.
