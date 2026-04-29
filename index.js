@@ -2109,9 +2109,10 @@ async function onMessageReceived(messageId) {
                 const tier = String(char?.tier || '').toUpperCase();
                 if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') continue;
                 if (relationships[`pc-${id}`]) continue;
+                const draw = drawDivination();
                 queueCorrections([{
                     raw: `[missing-relationship:char:${id}]`,
-                    error: `char:${id} is ${tier} but has no relationship:pc-${id}. Draw the card:\n  CREATE relationship:pc-${id} card="<major-arcana-slug>" orientation="upright|reversed" nuance="<one-sentence bond description>" distance="fresh|forming|established|deep|core" intensity="cold|simmering|active|electric" last_shift=null\n(last_shift must be null at birth)`,
+                    error: `char:${id} is ${tier} but has no relationship:pc-${id}. The engine drew: ${draw.label}. CREATE relationship:pc-${id} card="${draw.cardSlug || draw.label}" orientation="upright|reversed" nuance="<one-sentence bond description>" distance="fresh|forming|established|deep|core" intensity="cold|simmering|active|electric" last_shift=null\n(last_shift must be null at birth)`,
                 }]);
             }
             // 5b — missing relationship on TRACKED+ factions
@@ -2119,9 +2120,10 @@ async function onMessageReceived(messageId) {
                 const tier = String(f?.tier || '').toUpperCase();
                 if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') continue;
                 if (relationships[`pc-${id}`]) continue;
+                const draw = drawDivination();
                 queueCorrections([{
                     raw: `[missing-relationship:faction:${id}]`,
-                    error: `faction:${id} is ${tier} but has no relationship:pc-${id}. Draw the card:\n  CREATE relationship:pc-${id} card="<major-arcana-slug>" orientation="upright|reversed" nuance="<one-sentence bond description>" distance="fresh|forming|established|deep|core" intensity="cold|simmering|active|electric" last_shift=null`,
+                    error: `faction:${id} is ${tier} but has no relationship:pc-${id}. The engine drew: ${draw.label}. CREATE relationship:pc-${id} card="${draw.cardSlug || draw.label}" orientation="upright|reversed" nuance="<one-sentence bond description>" distance="fresh|forming|established|deep|core" intensity="cold|simmering|active|electric" last_shift=null`,
                 }]);
             }
 
@@ -2152,7 +2154,7 @@ async function onMessageReceived(messageId) {
                 if (alreadyPaired) continue;
                 queueCorrections([{
                     raw: `[missing-rel-update:${cid}]`,
-                    error: `collision:${cid} resolved but relationship:${relId} was not updated. Commit now:\n  SET relationship:${relId} field=card value="<slug>"\n  SET relationship:${relId} field=orientation value="upright|reversed"\n  SET relationship:${relId} field=nuance value="<updated expression>"\n  SET relationship:${relId} field=distance value="fresh|forming|established|deep|core"\n  SET relationship:${relId} field=intensity value="cold|simmering|active|electric"\n  SET relationship:${relId} field=last_shift value={tx, collision_id: "${cid}", from:{card,orientation,distance,intensity}, to:{card,orientation,distance,intensity}, reason}`,
+                    error: `collision:${cid} resolved but relationship:${relId} was not updated. Commit now:\n  SET relationship:${relId} field=orientation value="upright|reversed"\n  SET relationship:${relId} field=nuance value="<updated expression>"\n  SET relationship:${relId} field=distance value="fresh|forming|established|deep|core"\n  SET relationship:${relId} field=intensity value="cold|simmering|active|electric"\n  SET relationship:${relId} field=last_shift value={tx, collision_id: "${cid}", from:{card,orientation,distance,intensity}, to:{card,orientation,distance,intensity}, reason}`,
                 }]);
             }
 
