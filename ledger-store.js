@@ -111,6 +111,32 @@ async function append(transactions) {
 }
 
 /**
+ * Apply a pure compaction function to the in-memory transaction array, then persist.
+ * The compactFn must return an array (possibly shorter) of valid transaction objects.
+ * It is the caller's responsibility to verify replay equivalence before calling persist.
+ *
+ * @param {(transactions: Array) => Array} compactFn
+ * @returns {Promise<{before: number, after: number}>}
+ */
+async function compactTransactions(compactFn) {
+    const before = _transactions.length;
+    const result = compactFn(_transactions);
+    if (!Array.isArray(result)) {
+        throw new Error('compactFn must return an array');
+    }
+    if (result.length === before) {
+        return { before, after: before };  // no-op, skip persist
+    }
+    const data = getLedgerData();
+    if (!data.compactionMetrics) data.compactionMetrics = {};
+    data.compactionMetrics.lastSize = before;
+    data.compactionMetrics.lastRunAt = new Date().toISOString();
+    _transactions = result;
+    await persist();
+    return { before, after: _transactions.length };
+}
+
+/**
  * Get all transactions.
  * @returns {Array}
  */
@@ -252,6 +278,7 @@ export {
     reset,
     append,
     persist,
+    compactTransactions,
     getAllTransactions,
     getTransactionsSince,
     getTransactionsForEntity,
