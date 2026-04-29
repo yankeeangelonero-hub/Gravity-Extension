@@ -112,3 +112,4 @@ The ledger tracks: collisions, constraints, factions, places, pressure points, P
 - `Documentation/project_memory.md` is the active durable memory file.
 - Historical prose, handoff, planning, and audit docs live under `Deprecated/`.
 - Divination uses two random tables (Arcana/Classic) defined in `index.js`. Yi Jing (I Ching) has been removed.
+- **Divination ownership:** `divination.last_draw`, `divination.card`, `divination.orientation`, and `relationship.card` are engine-owned. The LLM must never `S` these fields — `consistency.js` rejects such writes. Cards are rolled by `drawDivination()` and committed by the engine on arrival, intimacy, advance, and challenge-action events. Relationship CR with a `card` field is allowed because the engine pre-rolls the card and embeds the slug in the correction message that prompted the CR.
