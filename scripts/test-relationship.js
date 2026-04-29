@@ -1035,6 +1035,37 @@ group('state-view — KNOWN roll-up', () => {
     });
 });
 
+group('AMEND validation', () => {
+    test('malformed AMEND (no op) is dropped silently', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'c1', d: { tier: 'TRACKED', name: 'Alice' } },
+            { tx: 2, op: 'AMEND', d: { target_tx: 1, correction: { e: 'char', id: 'c1' } } },
+        ];
+        const state = computeState(null, txs);
+        // Original CR survives because the AMEND was malformed and ignored.
+        assert(state.characters && state.characters.c1, 'character c1 must exist');
+        assertEqual(state.characters.c1.name, 'Alice', 'name must be original');
+    });
+
+    test('AMEND with invalid op is dropped', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'c1', d: { tier: 'TRACKED', name: 'Alice' } },
+            { tx: 2, op: 'AMEND', d: { target_tx: 1, correction: { op: 'XYZ', e: 'char', id: 'c1', d: { name: 'Bob' } } } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.c1.name, 'Alice', 'malformed AMEND must not apply');
+    });
+
+    test('AMEND with valid correction applies', () => {
+        const txs = [
+            { tx: 1, op: 'CR', e: 'char', id: 'c1', d: { tier: 'TRACKED', name: 'Alice' } },
+            { tx: 2, op: 'AMEND', d: { target_tx: 1, correction: { op: 'CR', e: 'char', id: 'c1', d: { tier: 'TRACKED', name: 'Bob' } } } },
+        ];
+        const state = computeState(null, txs);
+        assertEqual(state.characters.c1.name, 'Bob', 'valid AMEND must overwrite');
+    });
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

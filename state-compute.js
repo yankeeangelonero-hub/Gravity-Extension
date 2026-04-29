@@ -6,7 +6,7 @@
  */
 
 // NOTE: spec §2 uses state.chars as shorthand; codebase keeps state.characters (D1 decision).
-const CATEGORY_DISTANCES = { IMMEDIATE: 1, SHORT: 10, MEDIUM: 20, LONG: 50 };
+const CATEGORY_DISTANCES = { IMMEDIATE: 1, SHORT: 3, MEDIUM: 10, LONG: 15 };
 const MAX_COLLISION_ARCHIVE = 20;
 const CHARACTER_TAGS_MAX = 5;
 
@@ -639,6 +639,23 @@ function applyTransaction(state, tx) {
     return state;
 }
 
+const _VALID_AMEND_OPS = new Set(['CR', 'S', 'TR', 'A', 'R', 'MS', 'MR', 'D']);
+
+/**
+ * Guard against malformed AMEND correction payloads. A correction must have a
+ * valid op, a non-empty entity type (e), and a non-empty id. Optional d must be
+ * a non-null object if present. Any other shape is silently dropped.
+ */
+function isValidAmendCorrection(c) {
+    if (!c || typeof c !== 'object') return false;
+    if (typeof c.op !== 'string') return false;
+    if (!_VALID_AMEND_OPS.has(c.op)) return false;
+    if (typeof c.e !== 'string' || !c.e) return false;
+    if (typeof c.id !== 'string' || !c.id) return false;
+    if (c.d !== undefined && (typeof c.d !== 'object' || c.d === null)) return false;
+    return true;
+}
+
 /**
  * Compute full state from a snapshot plus transactions.
  */
@@ -654,9 +671,12 @@ function computeState(snapshot, transactions) {
     // First pass: collect amendments
     const amendments = new Map();
     for (const tx of transactions) {
-        if (tx.op === 'AMEND' && tx.d?.target_tx != null && tx.d?.correction) {
-            amendments.set(tx.d.target_tx, tx.d.correction);
+        if (tx.op !== 'AMEND') continue;
+        if (!isValidAmendCorrection(tx.d?.correction)) {
+            console.warn(`[GravityLedger] Dropping malformed AMEND tx=${tx.tx} (target=${tx.d?.target_tx}) — correction shape invalid.`);
+            continue;
         }
+        amendments.set(tx.d.target_tx, tx.d.correction);
     }
 
     // Second pass: apply
