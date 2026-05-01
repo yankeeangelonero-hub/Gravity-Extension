@@ -171,7 +171,7 @@ function checkPrincipalUniqueness(state, entityType, entityId, newTier) {
             return {
                 valid: false,
                 error: `A PRINCIPAL ${entityType} already exists: "${id}". Max one PRINCIPAL per entity type.`,
-                fix: `Demote ${id} to TRACKED first (TR ${entityType}:${id} field=tier from=PRINCIPAL to=TRACKED), then promote ${entityId}.`,
+                fix: `Drop this PRINCIPAL promotion — keep ${entityId} at tier=TRACKED instead. The existing PRINCIPAL ${entityType} "${id}" is author-locked; only the user can swap PRINCIPALs via OOC.`,
             };
         }
     }
