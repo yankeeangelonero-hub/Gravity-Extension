@@ -2382,25 +2382,21 @@ async function handleAdvanceButton() {
     // scope — extract locally so the reenable listener can wire and unwire.
     const { eventSource, event_types } = SillyTavern.getContext();
 
-    // Lock DOM button immediately; re-enable on next MESSAGE_RECEIVED OR after
-    // a 2-minute timeout (covers silent LLM failures, stream stalls, etc.).
-    const advBtn = document.getElementById('gl-input-advance');
-    let reenableAdvBtn;
-    if (advBtn) {
-        advBtn.disabled = true;
-        let timeoutId = null;
-        reenableAdvBtn = () => {
-            if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
-            advBtn.disabled = false;
-            _advanceLocked = false;
-            eventSource.off(event_types.MESSAGE_RECEIVED, reenableAdvBtn);
-        };
-        timeoutId = setTimeout(() => {
-            console.warn(`${LOG_PREFIX} Advance button timeout — re-enabling after 2min of no MESSAGE_RECEIVED.`);
-            reenableAdvBtn();
-        }, 120000);
-        eventSource.on(event_types.MESSAGE_RECEIVED, reenableAdvBtn);
-    }
+    // Release the lock on the next MESSAGE_RECEIVED OR after a 2-minute timeout
+    // (covers silent LLM failures, stream stalls, etc.). The panel button's
+    // disabled state is managed by ui-panel.js; this listener exists solely to
+    // clear `_advanceLocked` so a subsequent advance press isn't a silent no-op.
+    let timeoutId = null;
+    const releaseAdvanceLock = () => {
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+        _advanceLocked = false;
+        eventSource.off(event_types.MESSAGE_RECEIVED, releaseAdvanceLock);
+    };
+    timeoutId = setTimeout(() => {
+        console.warn(`${LOG_PREFIX} Advance lock timeout — releasing after 2min of no MESSAGE_RECEIVED.`);
+        releaseAdvanceLock();
+    }, 120000);
+    eventSource.on(event_types.MESSAGE_RECEIVED, releaseAdvanceLock);
 
     try {
     _pendingDeductionType = 'advance';
@@ -2436,8 +2432,7 @@ async function handleAdvanceButton() {
 
     } catch (err) {
         console.error(`${LOG_PREFIX} handleAdvanceButton error:`, err);
-        if (advBtn) { advBtn.disabled = false; }
-        _advanceLocked = false;
+        releaseAdvanceLock();
     }
 }
 
@@ -2702,10 +2697,29 @@ async function handleImportData(data) {
         if (_initialized) injectPrompt();
     });
 
+    // Quick-access Advance/Combat buttons above chat input
+    createInputButtons();
+
     // Intimacy clickable actions handled by st-clickable-actions extension
     // LLM outputs: <span class="act" data-value="intimate: action">Display</span>
 
     console.log(`${LOG_PREFIX} Extension registered.`);
     initialize().catch(err => console.error(`${LOG_PREFIX} Init error:`, err));
 })();
+
+function createInputButtons() {
+    const sendForm = document.getElementById('form_sheld');
+    if (!sendForm || document.getElementById('gl-input-bar')) return;
+
+    const bar = document.createElement('div');
+    bar.id = 'gl-input-bar';
+    bar.innerHTML = `
+        <button class="gl-input-btn" id="gl-input-advance" title="Advance — world takes a turn"><i class="fa-solid fa-play"></i> Advance</button>
+        <button class="gl-input-btn" id="gl-input-combat" title="Initiate combat"><i class="fa-solid fa-burst"></i> Combat</button>
+    `;
+    sendForm.insertBefore(bar, sendForm.firstChild);
+
+    document.getElementById('gl-input-advance').addEventListener('click', handleAdvanceButton);
+    document.getElementById('gl-input-combat').addEventListener('click', handleCombatButton);
+}
 

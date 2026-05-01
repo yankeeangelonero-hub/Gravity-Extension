@@ -247,8 +247,6 @@ function createPanel() {
         <div class="gl-cmd-bar" id="gl-cmd-bar">
             <button class="gl-cmd-btn" data-cmd="setup" title="New game setup (or cancel in-progress)"><i class="fa-solid fa-wand-magic-sparkles"></i> Setup</button>
             <button class="gl-cmd-btn" data-cmd="register" title="Register/promote NPC"><i class="fa-solid fa-user-plus"></i> Register</button>
-            <button class="gl-cmd-btn" data-cmd="advance" title="Yield initiative — let the world move"><i class="fa-solid fa-play"></i> Advance</button>
-            <button class="gl-cmd-btn" data-cmd="combat" title="Initiate combat — fight this"><i class="fa-solid fa-burst"></i> Combat</button>
             <label class="gl-d-row" style="display:inline-flex;align-items:center;gap:6px;margin:0 6px;" title="Combat difficulty mode">
                 <span style="font-size:11px;opacity:.8;">Difficulty</span>
                 <select class="gl-div-select" id="gl-cmd-combat-mode" style="height:26px;padding:2px 6px;">
@@ -295,8 +293,6 @@ function createPanel() {
         switch (cmd) {
             case 'setup': if (_onSetup) _onSetup(); break;
             case 'register': if (_onRegister) _onRegister(); break;
-            case 'advance': if (_onAdvance) _onAdvance(); break;
-            case 'combat': if (_onCombat) _onCombat(); break;
             case 'power_review': if (_onPowerReview) _onPowerReview(); break;
             case 'intimacy': if (_onIntimacy) _onIntimacy(); break;
             case 'good_turn': if (_onGoodTurn) _onGoodTurn(); break;
