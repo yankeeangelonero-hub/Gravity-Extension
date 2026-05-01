@@ -2122,13 +2122,21 @@ async function onMessageReceived(messageId) {
             // 5b — missing relationship on TRACKED+ chars
             // Note: queueCorrections deduplicates by raw key and drops after MAX_CORRECTION_ATTEMPTS;
             // calling it every turn lets the attempt counter increment naturally (no external gate needed).
+            // The card is rolled only on first queue and reused on retries — otherwise each turn
+            // would hand the LLM a new card for the same missing relationship, looking like a reroll.
             for (const [id, char] of Object.entries(_currentState.characters || {})) {
                 const tier = String(char?.tier || '').toUpperCase();
                 if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') continue;
                 if (relationships[`pc-${id}`]) continue;
+                const rawKey = `[missing-relationship:char:${id}]`;
+                const existing = _pendingCorrections.find(c => c.raw === rawKey);
+                if (existing) {
+                    queueCorrections([{ raw: rawKey, error: existing.error }]);
+                    continue;
+                }
                 const draw = drawDivination();
                 queueCorrections([{
-                    raw: `[missing-relationship:char:${id}]`,
+                    raw: rawKey,
                     error: `char:${id} is ${tier} but has no relationship:pc-${id}. The engine drew: ${draw.label}. CREATE relationship:pc-${id} card="${draw.cardSlug || draw.label}" orientation="upright|reversed" nuance="<one-sentence bond description>" distance="fresh|forming|established|deep|core" intensity="cold|simmering|active|electric" last_shift=null\n(last_shift must be null at birth)`,
                 }]);
             }
@@ -2137,9 +2145,15 @@ async function onMessageReceived(messageId) {
                 const tier = String(f?.tier || '').toUpperCase();
                 if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') continue;
                 if (relationships[`pc-${id}`]) continue;
+                const rawKey = `[missing-relationship:faction:${id}]`;
+                const existing = _pendingCorrections.find(c => c.raw === rawKey);
+                if (existing) {
+                    queueCorrections([{ raw: rawKey, error: existing.error }]);
+                    continue;
+                }
                 const draw = drawDivination();
                 queueCorrections([{
-                    raw: `[missing-relationship:faction:${id}]`,
+                    raw: rawKey,
                     error: `faction:${id} is ${tier} but has no relationship:pc-${id}. The engine drew: ${draw.label}. CREATE relationship:pc-${id} card="${draw.cardSlug || draw.label}" orientation="upright|reversed" nuance="<one-sentence bond description>" distance="fresh|forming|established|deep|core" intensity="cold|simmering|active|electric" last_shift=null`,
                 }]);
             }

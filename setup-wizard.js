@@ -187,7 +187,13 @@ If this character is combat-capable or likely to become a direct physical threat
 > SET char:name field=power value=[current_effective_rating]
 > SET char:name field=power_basis value="[why this rating is justified]"
 > APPEND char:name field=abilities value="[combat-relevant ability, training, gear edge, or limitation]"
-Build 3-4 constraints:
+
+REQUIRED — emit 3-4 constraints for the PRINCIPAL regardless of combat capability. A constraint is a load-bearing defense the character relies on to function — a coping mechanism, mask, vow, or operating principle. Under narrative pressure, integrity degrades STABLE→STRESSED→CRITICAL→BREACHED. When it breaches, the replacement kicks in (the new, costlier defense). Constraints shed in shedding_order: c1 first under pressure, c2 next, c3 deepest.
+  - prevents: what behavior the constraint blocks (specific, scene-testable; not "being vulnerable" but "showing exhaustion in front of subordinates").
+  - threshold: the specific kind of pressure that would break it (not "stress" — name the concrete scene condition).
+  - replacement: the costlier defense that takes over when this one breaks (not absence of defense — a worse one).
+  - replacement_type: regression (collapse to younger/cruder mode) | displacement (redirect into action/work/aggression) | depth_shift (acknowledge mask while insisting it's still needed) | sophistication (more elaborate mask).
+Build constraints the opening situation can credibly stress. Avoid generic traits ("kind", "smart"); name defenses tied to the specific story pressure.
 > CREATE constraint:c1-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=regression shedding_order=1
 > CREATE constraint:c2-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=displacement shedding_order=2
 > CREATE constraint:c3-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=depth_shift shedding_order=3
