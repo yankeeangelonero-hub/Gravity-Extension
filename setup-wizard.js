@@ -26,16 +26,21 @@ function cancelSetup() {
 }
 
 /**
- * Auto-complete setup once any character has been created.
+ * Auto-complete setup once the full initial block has been committed.
+ * Requires: at least one character, world_state populated, at least one place, at least one collision.
  */
 function checkPhaseCompletion(committedTxns, state) {
-    // Auto-complete setup after first successful commit with characters
     if (!_active) return;
     const hasChars = Object.keys(state.characters || {}).length > 0;
-    if (hasChars) {
+    const hasWorld = !!(state.world && state.world.world_state);
+    const hasPlaces = Object.keys(state.places || {}).length > 0;
+    const hasCollisions = Object.keys(state.collisions || {}).length > 0;
+    if (hasChars && hasWorld && hasPlaces && hasCollisions) {
         _active = false;
-        console.log(`${LOG_PREFIX} Setup complete - characters detected.`);
+        console.log(`${LOG_PREFIX} Setup complete - characters, world, places, and collisions detected.`);
         if (_onPhaseChange) _onPhaseChange(0);
+    } else {
+        console.log(`${LOG_PREFIX} Setup commit detected but block incomplete (chars/world/places/collisions) — staying active.`);
     }
 }
 
@@ -179,6 +184,7 @@ The PC is a SINGLETON entity (e=pc, no id). Author the PC's narrative footprint 
 > MAP_SET pc field=knowledge_asymmetry key=hiding_[short_topic_slug] value="[secret the PC actively conceals]"
 > APPEND pc field=demonstrated_traits value="[trait from persona description]"
 {{personaDescription}}
+(The text above describes the PC. It is NOT another character. Do NOT emit "CREATE char:..." for the PC. All of the PC's traits, knowledge_asymmetry, location, and agenda go on the pc singleton via the lines above — never as a char: entity.)
 ${answers.pc_power_base ? `> SET pc field=power_base value=${answers.pc_power_base} -- Normal earned combat level when healthy\n> SET pc field=power value=${answers.pc_power_base} -- Current effective combat level starts at base unless setup establishes impairment or a boost` : ''}${answers.pc_power_basis ? '\n> SET pc field=power_basis value="[why the PC deserves this rating]" -- Narrative justification for the rating' : ''}${answers.pc_abilities ? '\n> APPEND pc field=abilities value="[combat-relevant ability, training, gear edge, or limitation]" -- Repeat 2-4 times as needed' : ''}
 Read the persona description above. Extract demonstrated_traits (2-4 APPEND lines) from what it says about {{user}}. The PC has knowledge_asymmetry too — they know things, are blind to things, and conceal things just like NPCs do. Author at least 3 keys.
 
@@ -208,6 +214,10 @@ SHAPE — every constraint MUST be a single CREATE line carrying ALL fields belo
 > CREATE constraint:c3-<principal_id> name="[Name]" owner_id=<principal_id> integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=depth_shift shedding_order=3
 (Substitute <principal_id> with the actual slug used in the CREATE char: line above. If the PRINCIPAL is char:lacus, owner_id=lacus.)
 
+REQUIRED — also emit a relationship for the PRINCIPAL:
+> CREATE relationship:pc-<principal_id> card="[thematically fitting arcana slug, e.g. the-fool, the-tower, strength]" orientation="upright|reversed" nuance="[one-sentence bond description framing the PC's current dynamic with this character]" distance="fresh" intensity="active|simmering|cold" last_shift=null
+(card must be a kebab-case arcana slug matching the opening dynamic. Use distance="fresh" and last_shift=null at birth. This is REQUIRED — the engine will fire a correction every turn until it exists.)
+
 3. WORLD SETUP — both lines below are REQUIRED, emit them verbatim with your values:
 > SET world field=world_state value="[macro reality — the political/physical situation the story sits inside]"
 > SET world field=timeskip_scale value="HOURS"
@@ -215,7 +225,7 @@ SHAPE — every constraint MUST be a single CREATE line carrying ALL fields belo
 ${answers.power_scale ? '\nOptional power-ladder lines (emit if relevant to the genre):\n> SET world field=power_scale value="[power ladder summary]" -- What each combat rating means in this story\n' : ''}${answers.power_ceiling ? '> SET world field=power_ceiling value=[highest_rating] -- Highest credible direct-combat level in this setting\n' : ''}${answers.power_notes ? '> SET world field=power_notes value="[caveats about range, magic, armor, or combat realism]" -- World combat caveats\n' : ''}
 
 4. FACTIONS (at least 2 with opposing agendas):
-> CREATE faction:name name="[Name]" state="[active/weakened/ascendant/dormant]"
+> CREATE faction:name name="[Name]" tier=TRACKED state="[active/weakened/ascendant/dormant]"
 > SET faction:name field=agenda value="[the overarching direction — a narrative compass, not a task list]"
 > APPEND faction:name field=members value=char:[char-id]
 > APPEND faction:name field=territory value=place:[place-id]
@@ -223,16 +233,19 @@ ${answers.power_scale ? '\nOptional power-ladder lines (emit if relevant to the 
 > MAP_SET faction:name field=knowledge_asymmetry key=unknown_[topic] value="[critical gap they haven't detected]"
 > MAP_SET faction:name field=knowledge_asymmetry key=hiding_[topic] value="[information the faction is concealing]"
 > MAP_SET faction:name field=knowledge_asymmetry key=misreading_[topic] value="[false assumption they operate on]"
+> CREATE relationship:pc-<faction-id> card="[thematically fitting arcana slug, e.g. the-hierophant, justice, the-tower]" orientation="upright|reversed" nuance="[one-sentence framing of the PC's standing with this faction]" distance="fresh" intensity="cold|simmering|active" last_shift=null
+(REQUIRED for every TRACKED+ faction. Use a kebab-case arcana slug matching the faction's role in the story. distance="fresh" and last_shift=null at birth. The engine fires a correction every turn until this exists.)
 
 5. COLLISIONS (at least 1 ACTIVE; each must be a compact narrative thread with live pressure, not just a label):
 > CREATE collision:slug name="[short descriptive label]" distance_category=MEDIUM forces="force1 vs force2 — what narrative pressures are driving this collision" involved_chars=[pc,char:principal-id] location=place:[place-id]
+(In involved_chars, "pc" is the bare literal token for the PC singleton — it is not a "char:" prefix and not a slug. Use "pc" exactly when the PC is involved in the collision. NPCs use "char:<id>" as shown.)
 
 6. PLACES (at least 1 for the opening scene; more if the PC, PRINCIPAL, or factions are anchored elsewhere):
 > CREATE place:[slug] name="[Display name]" reach=LOCAL state="[safe/contested/hostile/unknown]" description="[one or two sentences — what this place is and what makes it notable]"
 
 7. PRESSURE POINTS (2-3 seams where the world is about to break; raw narrative seeds, capped at 5 FIFO):
-> CREATE pressure:[slug] name="[seam that could later tighten into a collision]" source="[PC|char:id|faction:id|place:id]" related_to=[collision-id]
-(related_to is an array of collision ids; omit the field or use related_to=[] when there is no echoing thread.)
+> CREATE pressure:[slug] name="[seam that could later tighten into a collision]" source="[pc|char:id|faction:id|place:id]" related_to=[collision:slug, collision:slug2]
+(related_to is an array of collision-prefixed ids — ALWAYS prefix with "collision:". Omit the field or use related_to=[] when there is no echoing thread. Do NOT put char: or faction: refs in related_to — that's what source is for.)
 
 8. Any scenario NPCs as KNOWN:
 > CREATE char:npc-slug name="[NPC Name]" tier=KNOWN
@@ -249,6 +262,8 @@ POWER AUTHORING RULES:
 - power = current effective combat level.
 - Start power equal to power_base unless setup already establishes a wound, impairment, missing gear, or temporary boost.
 - Use the world power scale and power ceiling consistently.
+
+TURN-STAMP & REASON: Every transaction in this setup block AND in every future turn must include t="[Day N — HH:MM]" (the in-fiction time) and r="[short why — 3-8 words]". These fields stick the ledger to narrative time and intent; do not omit them.
 
 After the ledger block, write the OPENING SCENE with full deduction. The story begins.]`;
 }

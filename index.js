@@ -2147,11 +2147,16 @@ async function onMessageReceived(messageId) {
             // calling it every turn lets the attempt counter increment naturally (no external gate needed).
             // The card is rolled only on first queue and reused on retries — otherwise each turn
             // would hand the LLM a new card for the same missing relationship, looking like a reroll.
+            // Active-clear: clearMatchedCorrections cannot match these because the satisfying tx
+            // is CR relationship:pc-<id>, whose entity token does not appear in the raw key.
             for (const [id, char] of Object.entries(_currentState.characters || {})) {
                 const tier = String(char?.tier || '').toUpperCase();
                 if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') continue;
-                if (relationships[`pc-${id}`]) continue;
                 const rawKey = `[missing-relationship:char:${id}]`;
+                if (relationships[`pc-${id}`]) {
+                    _pendingCorrections = _pendingCorrections.filter(c => c.raw !== rawKey);
+                    continue;
+                }
                 const existing = _pendingCorrections.find(c => c.raw === rawKey);
                 if (existing) {
                     queueCorrections([{ raw: rawKey, error: existing.error }]);
@@ -2167,8 +2172,11 @@ async function onMessageReceived(messageId) {
             for (const [id, f] of Object.entries(_currentState.factions || {})) {
                 const tier = String(f?.tier || '').toUpperCase();
                 if (tier !== 'TRACKED' && tier !== 'PRINCIPAL') continue;
-                if (relationships[`pc-${id}`]) continue;
                 const rawKey = `[missing-relationship:faction:${id}]`;
+                if (relationships[`pc-${id}`]) {
+                    _pendingCorrections = _pendingCorrections.filter(c => c.raw !== rawKey);
+                    continue;
+                }
                 const existing = _pendingCorrections.find(c => c.raw === rawKey);
                 if (existing) {
                     queueCorrections([{ raw: rawKey, error: existing.error }]);
@@ -2183,7 +2191,12 @@ async function onMessageReceived(messageId) {
 
             // 5c — orphaned relational collisions + missing rel update
             for (const [cid, col] of Object.entries(_currentState.collisions || {})) {
-                if (col?.ignition_class !== 'relational') continue;
+                const orphanKey = `[orphan-relational:${cid}]`;
+                if (col?.ignition_class !== 'relational') {
+                    // Collision changed away from relational — any stale orphan-relational correction is satisfied.
+                    _pendingCorrections = _pendingCorrections.filter(c => c.raw !== orphanKey);
+                    continue;
+                }
                 const status = String(col?.status || '').toUpperCase();
                 if (status !== 'RESOLVED' && status !== 'CRASHED') continue;
                 const involved = Array.isArray(col.involved_chars) ? col.involved_chars : [];
@@ -2195,19 +2208,28 @@ async function onMessageReceived(messageId) {
                 const rel = relationships[relId];
                 if (!rel) {
                     queueCorrections([{
-                        raw: `[orphan-relational:${cid}]`,
+                        raw: orphanKey,
                         error: `collision:${cid} is tagged ignition_class=relational and ${status.toLowerCase()}, but no relationship:${relId} exists. Either:\n  (A) CREATE the missing relationship:${relId} card="..." orientation="..." nuance="..." distance="fresh|forming|established|deep|core" intensity="cold|simmering|active|electric" last_shift=null\n  (B) If mislabeled, SET collision:${cid} field=ignition_class value=environmental`,
                     }]);
                     continue;
                 }
-                // Relationship exists — was it updated to reference this collision?
-                if (rel.last_shift && rel.last_shift.collision_id === cid) continue;
+                // Relationship exists — orphan-relational is satisfied; active-clear any stale entry.
+                _pendingCorrections = _pendingCorrections.filter(c => c.raw !== orphanKey);
+                // Was the relationship updated to reference this collision?
+                const updateKey = `[missing-rel-update:${cid}]`;
+                if (rel.last_shift && rel.last_shift.collision_id === cid) {
+                    _pendingCorrections = _pendingCorrections.filter(c => c.raw !== updateKey);
+                    continue;
+                }
                 const histKey = `relationship:${relId}:last_shift`;
                 const history = _currentState._history?.[histKey] || [];
                 const alreadyPaired = history.some(e => e && e.to && typeof e.to === 'object' && e.to.collision_id === cid);
-                if (alreadyPaired) continue;
+                if (alreadyPaired) {
+                    _pendingCorrections = _pendingCorrections.filter(c => c.raw !== updateKey);
+                    continue;
+                }
                 queueCorrections([{
-                    raw: `[missing-rel-update:${cid}]`,
+                    raw: updateKey,
                     error: `collision:${cid} resolved but relationship:${relId} was not updated. Commit now:\n  SET relationship:${relId} field=orientation value="upright|reversed"\n  SET relationship:${relId} field=nuance value="<updated expression>"\n  SET relationship:${relId} field=distance value="fresh|forming|established|deep|core"\n  SET relationship:${relId} field=intensity value="cold|simmering|active|electric"\n  SET relationship:${relId} field=last_shift value={tx, collision_id: "${cid}", from:{card,orientation,distance,intensity}, to:{card,orientation,distance,intensity}, reason}`,
                 }]);
             }

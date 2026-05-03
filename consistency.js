@@ -704,6 +704,20 @@ function validateTransaction(tx, state, pendingCreations = null) {
             }
         }
     }
+    // PC double-storage guard: reject CR char:<pc-slug> when the char id matches the PC singleton's name.
+    if (state && tx.op === 'CR' && tx.e === 'char') {
+        const pcName = state.pc?.name;
+        if (typeof pcName === 'string' && pcName.trim() !== '') {
+            const pcSlug = pcName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            if (typeof tx.id === 'string' && tx.id.toLowerCase() === pcSlug) {
+                violations.push({
+                    field: 'id',
+                    message: `char:${tx.id} duplicates the PC singleton (pc.name="${pcName}"). The PC is a singleton entity — author its dossier on "pc", not as a char.`,
+                    fix: `Drop this CR. Move agenda/location/knowledge_asymmetry/traits to "pc" via SET pc field=... and MAP_SET pc field=knowledge_asymmetry ... lines.`,
+                });
+            }
+        }
+    }
     // CR relationship: target must exist and be TRACKED+
     // Forward-ref tolerance: if target is CR'd later in the same block,
     // check the pending CR's tier instead of demanding shadow presence.
@@ -781,6 +795,10 @@ function validateBlock(txs, baseState) {
 
     const applyTransaction = _applyTransactionFromCompute;
     for (const tx of txs) {
+        // shadow-tracks pc.name from same-block S op so CR char:<pc-slug> check sees it
+        if (tx.op === 'S' && tx.e === 'pc' && tx.d?.f === 'name' && typeof tx.d?.v === 'string') {
+            shadow.pc = { ...shadow.pc, name: tx.d.v };
+        }
         const perTx = validateTransaction(tx, shadow, pendingCreations);
         if (!perTx.valid) {
             violations.push(...perTx.violations.map(v => ({ ...v, tx: tx.tx })));
