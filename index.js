@@ -190,6 +190,8 @@ const MODE_LOREBOOK_KEYS = Object.freeze({
     // prose modulation keys (fired alongside mode gameplay keys)
     proseRegular: 'gravity_prose_regular',
     proseIntimacy: 'gravity_prose_intimacy',
+    // CoT add-on keys (fire only when state warrants)
+    cotCostOverlap: 'gravity_hint_cost_overlap',
 });
 
 function getCollectionForEntityType(state, entityType) {
@@ -1498,7 +1500,18 @@ Gravity tracks what prose can't: asymmetries, pressures, distances, reads-over-t
         // Fire regular prose trigger on regular turns only
         // (combat/intimacy/advance fire their own prose triggers via _ooc)
         if (isRegular && !challengeSessionLocked) {
-            nudgeText += `\n\n[WORLD INFO TRIGGERS - DO NOT ECHO:\n${MODE_LOREBOOK_KEYS.proseRegular}\n]`;
+            const triggerKeys = [MODE_LOREBOOK_KEYS.proseRegular];
+            // Cost-overlap CoT add-on fires when ≥2 non-IMMEDIATE active collisions exist
+            // (the bullet was lifted out of the regular CoT to keep the default thinking pass short).
+            if (_currentState) {
+                const activeNonImmediate = Object.values(_currentState.collisions || {})
+                    .filter(c => (c.status || '').toUpperCase() === 'ACTIVE'
+                        && c.distance_category !== 'IMMEDIATE').length;
+                if (activeNonImmediate >= 2) {
+                    triggerKeys.push(MODE_LOREBOOK_KEYS.cotCostOverlap);
+                }
+            }
+            nudgeText += `\n\n[WORLD INFO TRIGGERS - DO NOT ECHO:\n${triggerKeys.join('\n')}\n]`;
         }
 
         _setPrompt(`${MODULE_NAME}_nudge`, nudgeText);
@@ -1652,6 +1665,11 @@ async function onMessageReceived(messageId) {
                 ? `${_pendingReinforcement}\n${challengeCorrection}`
                 : challengeCorrection;
         }
+        // Advance tick is engine-owned bookkeeping and must fire on every advance turn,
+        // even when the LLM emitted no state block. Otherwise collisions never tick down.
+        if (_lastCompletedMode === 'advance') {
+            await applyAdvanceTick();
+        }
         injectPrompt();
         updatePanel(_currentState, _turnCounter);
         return;
@@ -1679,6 +1697,11 @@ async function onMessageReceived(messageId) {
             _pendingReinforcement = _pendingReinforcement
                 ? `${_pendingReinforcement}\n${challengeCorrection}`
                 : challengeCorrection;
+        }
+        // Advance tick is engine-owned bookkeeping and must fire on every advance turn,
+        // even when the LLM emitted no committable transactions. Otherwise collisions never tick down.
+        if (_lastCompletedMode === 'advance') {
+            await applyAdvanceTick();
         }
         injectPrompt();
         updatePanel(_currentState, _turnCounter);

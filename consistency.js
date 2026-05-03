@@ -216,6 +216,29 @@ function validateFormat(tx, index) {
                 });
             }
         }
+        // MS/MR map keys must be non-empty strings — otherwise the LLM can write
+        // a literal "" key into knowledge_asymmetry / intimate_history maps and
+        // clutter the dossier with junk entries that survive replay.
+        if ((tx.op === 'MS' || tx.op === 'MR') && tx.d.k !== undefined) {
+            if (typeof tx.d.k !== 'string' || tx.d.k.trim() === '') {
+                errors.push({
+                    field: `${prefix}.d.k`,
+                    message: `${prefix}: "${tx.op}" requires a non-empty key in d.k`,
+                    fix: `Set d.k to a meaningful key string (e.g. "knows_evidence"). Drop the transaction if there's nothing to record.`,
+                });
+            }
+        }
+        // MS map values must also be non-empty — empty value means "nothing to set",
+        // which should be expressed as MR (map delete) instead.
+        if (tx.op === 'MS' && tx.d.v !== undefined) {
+            if (typeof tx.d.v === 'string' && tx.d.v.trim() === '') {
+                errors.push({
+                    field: `${prefix}.d.v`,
+                    message: `${prefix}: "MS" requires a non-empty value in d.v`,
+                    fix: `Provide content for d.v, or use MR (map delete) if the goal is to remove the key.`,
+                });
+            }
+        }
     } else if (required.includes('d')) {
         errors.push({
             field: `${prefix}.d`,
@@ -642,6 +665,28 @@ function validateTransaction(tx, state, pendingCreations = null) {
             if (v !== null && v !== '' && v !== undefined) {
                 if (typeof v !== 'string' || !v.startsWith('place:') || v.length <= 'place:'.length) {
                     violations.push({ field: 'current_place_id', message: `current_place_id must be "place:<id>", got "${v}"`, fix: 'Use the fully-qualified place id (e.g., place:bridge).' });
+                } else {
+                    const bareId = v.slice('place:'.length);
+                    const exists = Boolean(state?.places?.[bareId]) || Boolean(pendingCreations?.place?.has(bareId));
+                    if (state && !exists) {
+                        violations.push({ field: 'current_place_id', message: `current_place_id "${v}" references a non-existent place`, fix: `CREATE place:${bareId} first, or use an existing place id.` });
+                    }
+                }
+            }
+        }
+    }
+    // char.location must reference a real place (matches the pc.current_place_id rule).
+    // Catches LLM-invented sentinels like "place:off-ship" that never get CR'd.
+    if (tx.e === 'char' && state) {
+        let locRef = null;
+        if (tx.op === 'CR' && typeof tx.d?.location === 'string') locRef = tx.d.location;
+        else if (tx.op === 'S' && tx.d?.f === 'location') locRef = tx.d?.v;
+        if (typeof locRef === 'string' && locRef !== '' && locRef.startsWith('place:')) {
+            const bareId = locRef.slice('place:'.length);
+            if (bareId.length > 0) {
+                const exists = Boolean(state.places?.[bareId]) || Boolean(pendingCreations?.place?.has(bareId));
+                if (!exists) {
+                    violations.push({ field: 'location', message: `char:${tx.id} location "${locRef}" references a non-existent place`, fix: `CREATE place:${bareId} first, or use an existing place id.` });
                 }
             }
         }

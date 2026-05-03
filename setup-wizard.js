@@ -168,11 +168,19 @@ IMPORTANT: The PC (player character) is {{user}}, derived from the user's person
 EMIT ALL OF THE FOLLOWING in one ---LEDGER--- block:
 
 1. PC (the player — {{user}}, from the persona):
+The PC is a SINGLETON entity (e=pc, no id). Author the PC's narrative footprint here, NOT as a char: entity. DO NOT emit "CREATE char:{{user}}" or any "char:<pc-slug>" CR. The PC's location, agenda, knowledge_asymmetry, and traits all live on the pc singleton.
 > SET pc field=name value="{{user}}"
+> SET pc field=current_place_id value=place:[opening-place-id] -- Where the PC stands at scene open. Must be a place: id created in §6.
+> SET pc field=current_scene value="[one or two sentences describing the immediate scene from the PC's vantage — lighting, who is nearby, what they hear/see]"
+> SET pc field=agenda value="[the PC's narrative compass — what they are working toward in this opening; the direction that will generate collision seeds]"
+> APPEND pc field=scene_cast value=char:[principal-id] -- Repeat for every TRACKED+ character on stage at scene open. Do NOT include the PC themselves; the PC is implicit.
+> MAP_SET pc field=knowledge_asymmetry key=knows_[short_topic_slug] value="[fact the PC knows — intel they could act on]"
+> MAP_SET pc field=knowledge_asymmetry key=unknown_[short_topic_slug] value="[important blind spot the PC has]"
+> MAP_SET pc field=knowledge_asymmetry key=hiding_[short_topic_slug] value="[secret the PC actively conceals]"
 > APPEND pc field=demonstrated_traits value="[trait from persona description]"
 {{personaDescription}}
 ${answers.pc_power_base ? `> SET pc field=power_base value=${answers.pc_power_base} -- Normal earned combat level when healthy\n> SET pc field=power value=${answers.pc_power_base} -- Current effective combat level starts at base unless setup establishes impairment or a boost` : ''}${answers.pc_power_basis ? '\n> SET pc field=power_basis value="[why the PC deserves this rating]" -- Narrative justification for the rating' : ''}${answers.pc_abilities ? '\n> APPEND pc field=abilities value="[combat-relevant ability, training, gear edge, or limitation]" -- Repeat 2-4 times as needed' : ''}
-Read the persona description above. Extract demonstrated_traits (2-4 APPEND lines) from what it says about {{user}}.
+Read the persona description above. Extract demonstrated_traits (2-4 APPEND lines) from what it says about {{user}}. The PC has knowledge_asymmetry too — they know things, are blind to things, and conceal things just like NPCs do. Author at least 3 keys.
 
 2. PRINCIPAL CHARACTER ({{char}} — the character card NPC, NOT the PC):
 > CREATE char:name name="[Full Name from character card]" tier=PRINCIPAL
@@ -194,13 +202,17 @@ REQUIRED — emit 3-4 constraints for the PRINCIPAL regardless of combat capabil
   - replacement: the costlier defense that takes over when this one breaks (not absence of defense — a worse one).
   - replacement_type: regression (collapse to younger/cruder mode) | displacement (redirect into action/work/aggression) | depth_shift (acknowledge mask while insisting it's still needed) | sophistication (more elaborate mask).
 Build constraints the opening situation can credibly stress. Avoid generic traits ("kind", "smart"); name defenses tied to the specific story pressure.
-> CREATE constraint:c1-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=regression shedding_order=1
-> CREATE constraint:c2-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=displacement shedding_order=2
-> CREATE constraint:c3-slug name="[Name]" owner_id=name integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=depth_shift shedding_order=3
+SHAPE — every constraint MUST be a single CREATE line carrying ALL fields below. Do NOT split into separate SET lines (e.g. "SET constraint:c1-slug field=name ..." then "SET ... field=description ..."). Do NOT use the field "description" — the canonical fields are name, owner_id, integrity, prevents, threshold, replacement, replacement_type, shedding_order. owner_id is the PRINCIPAL's bare id slug (e.g. "lacus", not "char:lacus", not the literal word "name").
+> CREATE constraint:c1-<principal_id> name="[Name]" owner_id=<principal_id> integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=regression shedding_order=1
+> CREATE constraint:c2-<principal_id> name="[Name]" owner_id=<principal_id> integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=displacement shedding_order=2
+> CREATE constraint:c3-<principal_id> name="[Name]" owner_id=<principal_id> integrity=STABLE prevents="[what]" threshold="[breaks when]" replacement="[new defense]" replacement_type=depth_shift shedding_order=3
+(Substitute <principal_id> with the actual slug used in the CREATE char: line above. If the PRINCIPAL is char:lacus, owner_id=lacus.)
 
-3. WORLD SETUP:
-${answers.power_scale ? '> SET world field=power_scale value="[power ladder summary]" -- What each combat rating means in this story\n' : ''}${answers.power_ceiling ? '> SET world field=power_ceiling value=[highest_rating] -- Highest credible direct-combat level in this setting\n' : ''}${answers.power_notes ? '> SET world field=power_notes value="[caveats about range, magic, armor, or combat realism]" -- World combat caveats\n' : ''}> SET world field=world_state value="[macro reality]" -- World state
-> SET world field=timeskip_scale value="HOURS" -- Default tick scale for the first Advance; set to HOURS/DAYS/WEEKS/MONTHS on any turn that yields initiative
+3. WORLD SETUP — both lines below are REQUIRED, emit them verbatim with your values:
+> SET world field=world_state value="[macro reality — the political/physical situation the story sits inside]"
+> SET world field=timeskip_scale value="HOURS"
+(timeskip_scale must be one of HOURS|DAYS|WEEKS|MONTHS. The engine reads this on every advance turn to tick collisions; omitting it leaves the world frozen between scenes.)
+${answers.power_scale ? '\nOptional power-ladder lines (emit if relevant to the genre):\n> SET world field=power_scale value="[power ladder summary]" -- What each combat rating means in this story\n' : ''}${answers.power_ceiling ? '> SET world field=power_ceiling value=[highest_rating] -- Highest credible direct-combat level in this setting\n' : ''}${answers.power_notes ? '> SET world field=power_notes value="[caveats about range, magic, armor, or combat realism]" -- World combat caveats\n' : ''}
 
 4. FACTIONS (at least 2 with opposing agendas):
 > CREATE faction:name name="[Name]" state="[active/weakened/ascendant/dormant]"
